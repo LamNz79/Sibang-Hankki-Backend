@@ -9,8 +9,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@WebMvcTest(HealthController.class)
-class HealthControllerTest {
+@WebMvcTest({HealthController.class, RestaurantController.class})
+class ApiControllerTest {
 
     @Autowired
     private MockMvc mockMvc;
@@ -20,5 +20,29 @@ class HealthControllerTest {
         mockMvc.perform(get("/api/health"))
                 .andExpect(status().isOk())
                 .andExpect(content().json("{\"status\":\"ok\"}"));
+    }
+
+    @Test
+    void listsRestaurants() throws Exception {
+        mockMvc.perform(get("/api/restaurants"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith("application/json"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.length()").value(6))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$[0].slug").value("anan-saigon"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$[0].slotMatrix").doesNotExist());
+    }
+
+    @Test
+    void returnsRestaurantDetailsIncludingSlots() throws Exception {
+        mockMvc.perform(get("/api/restaurants/anan-saigon"))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.name").value("Anan Saigon"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.slotMatrix").isMap());
+    }
+
+    @Test
+    void returnsNotFoundForUnknownRestaurant() throws Exception {
+        mockMvc.perform(get("/api/restaurants/unknown"))
+                .andExpect(status().isNotFound());
     }
 }
