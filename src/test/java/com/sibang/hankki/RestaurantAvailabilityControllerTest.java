@@ -27,7 +27,8 @@ class RestaurantAvailabilityControllerTest {
                 .andExpect(jsonPath("$.restaurantSlug").value("anan-saigon"))
                 .andExpect(jsonPath("$.date").value(LocalDate.now().toString()))
                 .andExpect(jsonPath("$.partySize").value(2))
-                .andExpect(jsonPath("$.slots").isArray());
+                .andExpect(jsonPath("$.slots").isArray())
+                .andExpect(jsonPath("$.requiresRestaurantConfirmation").value(false));
     }
 
     @Test
@@ -39,15 +40,36 @@ class RestaurantAvailabilityControllerTest {
     }
 
     @Test
-    void rejectsPartySizeThree() throws Exception {
+    void acceptsPartySizeThreeWithoutRounding() throws Exception {
         mockMvc.perform(get("/api/restaurants/anan-saigon/availability")
                 .param("date", "2026-09-15")
                 .param("partySize", "3"))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.partySize").value(3))
+                .andExpect(jsonPath("$.requiresRestaurantConfirmation").value(false));
     }
 
     @Test
-    void rejectsMissingDateAndMissingOrNonNumericPartySize() throws Exception {
+    void returnsEmptySlotsForGroupsWithoutMockCapacity() throws Exception {
+        for (int partySize : new int[] {7, 10}) {
+            mockMvc.perform(get("/api/restaurants/anan-saigon/availability")
+                    .param("date", "2026-09-15")
+                    .param("partySize", String.valueOf(partySize)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.slots").isEmpty())
+                    .andExpect(jsonPath("$.requiresRestaurantConfirmation").value(false));
+        }
+
+        mockMvc.perform(get("/api/restaurants/anan-saigon/availability")
+                .param("date", "2026-09-15")
+                .param("partySize", "11"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.slots").isEmpty())
+                .andExpect(jsonPath("$.requiresRestaurantConfirmation").value(true));
+    }
+
+    @Test
+    void rejectsMissingDateAndInvalidPartySizes() throws Exception {
         mockMvc.perform(get("/api/restaurants/anan-saigon/availability")
                 .param("partySize", "2"))
                 .andExpect(status().isBadRequest());
@@ -59,6 +81,16 @@ class RestaurantAvailabilityControllerTest {
         mockMvc.perform(get("/api/restaurants/anan-saigon/availability")
                 .param("date", "2026-09-15")
                 .param("partySize", "two"))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(get("/api/restaurants/anan-saigon/availability")
+                .param("date", "2026-09-15")
+                .param("partySize", "0"))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(get("/api/restaurants/anan-saigon/availability")
+                .param("date", "2026-09-15")
+                .param("partySize", "-1"))
                 .andExpect(status().isBadRequest());
     }
 

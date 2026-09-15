@@ -6,5 +6,6 @@ public record RestaurantAvailabilityResponse(
         String restaurantSlug,
         String date,
         int partySize,
-        List<String> slots) {
+        List<String> slots,
+        boolean requiresRestaurantConfirmation) {
 }
