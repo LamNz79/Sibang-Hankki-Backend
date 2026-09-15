@@ -39,10 +39,26 @@ class RestaurantAvailabilityControllerTest {
     }
 
     @Test
-    void rejectsUnsupportedPartySize() throws Exception {
+    void rejectsPartySizeThree() throws Exception {
         mockMvc.perform(get("/api/restaurants/anan-saigon/availability")
                 .param("date", "2026-09-15")
                 .param("partySize", "3"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void rejectsMissingDateAndMissingOrNonNumericPartySize() throws Exception {
+        mockMvc.perform(get("/api/restaurants/anan-saigon/availability")
+                .param("partySize", "2"))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(get("/api/restaurants/anan-saigon/availability")
+                .param("date", "2026-09-15"))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(get("/api/restaurants/anan-saigon/availability")
+                .param("date", "2026-09-15")
+                .param("partySize", "two"))
                 .andExpect(status().isBadRequest());
     }
 
