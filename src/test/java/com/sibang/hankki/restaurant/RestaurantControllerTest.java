@@ -1,4 +1,4 @@
-package com.sibang.hankki;
+package com.sibang.hankki.restaurant;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -8,38 +8,32 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@WebMvcTest({HealthController.class, RestaurantController.class})
+@WebMvcTest(RestaurantController.class)
 @Import(RestaurantAvailabilityService.class)
-class ApiControllerTest {
+class RestaurantControllerTest {
 
     @Autowired
     private MockMvc mockMvc;
 
     @Test
-    void returnsOkStatus() throws Exception {
-        mockMvc.perform(get("/api/health"))
-                .andExpect(status().isOk())
-                .andExpect(content().json("{\"status\":\"ok\"}"));
-    }
-
-    @Test
-    void listsRestaurants() throws Exception {
+    void listsRestaurantsWithoutSlots() throws Exception {
         mockMvc.perform(get("/api/restaurants"))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith("application/json"))
-                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.length()").value(6))
-                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$[0].slug").value("anan-saigon"))
-                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$[0].slotMatrix").doesNotExist());
+                .andExpect(jsonPath("$.length()").value(6))
+                .andExpect(jsonPath("$[0].slug").value("anan-saigon"))
+                .andExpect(jsonPath("$[0].slotMatrix").doesNotExist());
     }
 
     @Test
     void returnsRestaurantDetailsIncludingSlots() throws Exception {
         mockMvc.perform(get("/api/restaurants/anan-saigon"))
                 .andExpect(status().isOk())
-                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.name").value("Anan Saigon"))
-                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.slotMatrix").isMap());
+                .andExpect(jsonPath("$.name").value("Anan Saigon"))
+                .andExpect(jsonPath("$.slotMatrix").isMap());
     }
 
     @Test

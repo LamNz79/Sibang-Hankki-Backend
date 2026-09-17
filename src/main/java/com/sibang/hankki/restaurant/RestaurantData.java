@@ -1,4 +1,4 @@
-package com.sibang.hankki;
+package com.sibang.hankki.restaurant;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;

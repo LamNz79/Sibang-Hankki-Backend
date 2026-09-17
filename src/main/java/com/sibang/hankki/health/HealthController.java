@@ -1,4 +1,4 @@
-package com.sibang.hankki;
+package com.sibang.hankki.health;
 
 import java.util.Map;
 import org.springframework.web.bind.annotation.GetMapping;
