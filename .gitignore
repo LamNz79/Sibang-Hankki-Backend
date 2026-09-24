@@ -1,2 +1,3 @@
 target/
 localTest/
+.env
