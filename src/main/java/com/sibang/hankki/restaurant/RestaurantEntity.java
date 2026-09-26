@@ -31,8 +31,14 @@ public class RestaurantEntity {
     @Column(length = 160)
     private String cuisineType;
 
+    @Column(length = 160)
+    private String cuisineLabel;
+
     @Column(nullable = false, length = 160)
     private String citySlug;
+
+    @Column(length = 160)
+    private String area;
 
     @Column(length = 160)
     private String district;
@@ -66,5 +72,49 @@ public class RestaurantEntity {
     private Instant updatedAt;
 
     protected RestaurantEntity() {
+    }
+
+    UUID getId() {
+        return id;
+    }
+
+    String getSlug() {
+        return slug;
+    }
+
+    String getName() {
+        return name;
+    }
+
+    String getDescription() {
+        return description;
+    }
+
+    String getCuisineType() {
+        return cuisineType;
+    }
+
+    String getCuisineLabel() {
+        return cuisineLabel;
+    }
+
+    String getCitySlug() {
+        return citySlug;
+    }
+
+    String getArea() {
+        return area;
+    }
+
+    String getDistrict() {
+        return district;
+    }
+
+    String getAddress() {
+        return address;
+    }
+
+    String getPriceRange() {
+        return priceRange;
     }
 }
