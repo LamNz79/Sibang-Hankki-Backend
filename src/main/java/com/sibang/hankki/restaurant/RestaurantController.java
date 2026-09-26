@@ -12,24 +12,24 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/restaurants")
 class RestaurantController {
 
+    private final RestaurantCatalogService catalogService;
     private final RestaurantAvailabilityService availabilityService;
 
-    RestaurantController(RestaurantAvailabilityService availabilityService) {
+    RestaurantController(
+            RestaurantCatalogService catalogService,
+            RestaurantAvailabilityService availabilityService) {
+        this.catalogService = catalogService;
         this.availabilityService = availabilityService;
     }
 
     @GetMapping
     List<RestaurantSummaryResponse> restaurants() {
-        return RestaurantData.RESTAURANTS.stream()
-                .map(RestaurantSummaryResponse::from)
-                .toList();
+        return catalogService.restaurants();
     }
 
     @GetMapping("/{slug}")
     ResponseEntity<RestaurantResponse> restaurant(@PathVariable String slug) {
-        return RestaurantData.RESTAURANTS.stream()
-                .filter(restaurant -> restaurant.slug().equals(slug))
-                .findFirst()
+        return catalogService.restaurant(slug)
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
