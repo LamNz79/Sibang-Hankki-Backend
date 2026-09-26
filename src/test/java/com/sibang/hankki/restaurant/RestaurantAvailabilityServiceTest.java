@@ -16,15 +16,14 @@ class RestaurantAvailabilityServiceTest {
     @Test
     void mapsGuestCountsOneThroughSixToCapacityBuckets() {
         String date = LocalDate.now().toString();
-        RestaurantResponse restaurant = RestaurantData.RESTAURANTS.get(0);
-
         for (int partySize = 1; partySize <= 6; partySize++) {
             String bucket = partySize <= 2 ? "2" : partySize <= 4 ? "4" : "6";
             RestaurantAvailabilityResponse availability = service.availability("anan-saigon", date, partySize);
 
             assertEquals("anan-saigon", availability.restaurantSlug());
             assertEquals(partySize, availability.partySize());
-            assertEquals(restaurant.slotMatrix().get(date).get(bucket), availability.slots());
+            assertEquals(RestaurantAvailabilityMockData.slotMatrix("anan-saigon").get(date).get(bucket),
+                    availability.slots());
         }
     }
 

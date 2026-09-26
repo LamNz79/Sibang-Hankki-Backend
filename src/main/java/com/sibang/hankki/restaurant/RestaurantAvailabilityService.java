@@ -17,12 +17,11 @@ class RestaurantAvailabilityService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "partySize must be positive");
         }
 
-        RestaurantResponse restaurant = RestaurantData.RESTAURANTS.stream()
-                .filter(candidate -> candidate.slug().equals(slug))
-                .findFirst()
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Restaurant not found"));
+        if (RestaurantAvailabilityMockData.forSlug(slug) == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Restaurant not found");
+        }
         String capacityBucket = partySize <= 2 ? "2" : partySize <= 4 ? "4" : partySize <= 6 ? "6" : null;
-        List<String> slots = capacityBucket == null ? List.of() : restaurant.slotMatrix()
+        List<String> slots = capacityBucket == null ? List.of() : RestaurantAvailabilityMockData.slotMatrix(slug)
                 .getOrDefault(date.toString(), Map.of())
                 .getOrDefault(capacityBucket, List.of());
 
