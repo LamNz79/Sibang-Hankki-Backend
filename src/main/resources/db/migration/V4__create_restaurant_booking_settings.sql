@@ -34,7 +34,11 @@ create table restaurant_booking_settings (
         confirmation_mode in ('AUTO', 'MANUAL', 'HYBRID')
     ),
     constraint restaurant_booking_settings_manual_confirmation_check check (
-        (confirmation_mode = 'HYBRID' and manual_confirmation_min_party_size > 0)
-        or (confirmation_mode in ('AUTO', 'MANUAL') and manual_confirmation_min_party_size is null)
+        case
+            when confirmation_mode = 'HYBRID' then manual_confirmation_min_party_size is not null
+                and manual_confirmation_min_party_size > 0
+            when confirmation_mode in ('AUTO', 'MANUAL') then manual_confirmation_min_party_size is null
+            else false
+        end
     )
 );

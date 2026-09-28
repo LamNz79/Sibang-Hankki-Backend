@@ -97,9 +97,15 @@ class RestaurantBookingSettingsPersistenceTest {
     }
 
     @Test
-    void reportsMissingSettings() {
+    void reportsSettingsNotConfiguredForExistingRestaurant() {
         assertThrows(BookingSettingsNotConfiguredException.class,
-                () -> service.getByRestaurantId(UUID.randomUUID()));
+                () -> service.getByRestaurantSlug("anan-saigon"));
+    }
+
+    @Test
+    void reportsRestaurantNotFoundBySlug() {
+        assertThrows(RestaurantNotFoundException.class,
+                () -> service.getByRestaurantSlug("unknown"));
     }
 
     private RestaurantBookingSettings settings(ConfirmationMode mode, Short threshold) {

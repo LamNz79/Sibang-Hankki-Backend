@@ -22,9 +22,9 @@ class RestaurantBookingSettingsService {
     }
 
     RestaurantBookingSettings getByRestaurantSlug(String slug) {
-        return restaurantRepository.findActiveBySlug(slug)
+        UUID restaurantId = restaurantRepository.findActiveBySlug(slug)
                 .map(RestaurantEntity::getId)
-                .map(this::getByRestaurantId)
-                .orElseThrow(BookingSettingsNotConfiguredException::new);
+                .orElseThrow(RestaurantNotFoundException::new);
+        return getByRestaurantId(restaurantId);
     }
 }
