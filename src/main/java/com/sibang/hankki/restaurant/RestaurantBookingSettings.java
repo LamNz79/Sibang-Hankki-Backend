@@ -105,6 +105,22 @@ public class RestaurantBookingSettings {
         return confirmationMode;
     }
 
+    int getGuestCapacity() {
+        return guestCapacity;
+    }
+
+    short getBookingIntervalMinutes() {
+        return bookingIntervalMinutes;
+    }
+
+    short getDiningDurationMinutes() {
+        return diningDurationMinutes;
+    }
+
+    short getBookingWindowDays() {
+        return bookingWindowDays;
+    }
+
     Short getManualConfirmationMinPartySize() {
         return manualConfirmationMinPartySize;
     }
