@@ -36,6 +36,7 @@ class RestaurantBookingSettingsPersistenceTest {
     void findPrototypeRestaurant() {
         restaurantId = jdbcTemplate.queryForObject(
                 "select id from restaurants where slug = 'anan-saigon'", UUID.class);
+        jdbcTemplate.update("delete from restaurant_booking_settings where restaurant_id = ?", restaurantId);
     }
 
     @Test
