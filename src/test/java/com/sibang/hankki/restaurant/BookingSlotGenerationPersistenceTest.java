@@ -91,9 +91,9 @@ class BookingSlotGenerationPersistenceTest {
     @Test
     void runningGenerationAgainDoesNotOverwriteExistingCapacityValues() {
         settingsRepository.saveAndFlush(settings(20));
-        Instant startsAt = generationService.generateSlots(restaurantId, generationDate, generationDate)
-                .get(0)
-                .getStartsAt();
+        List<BookingSlot> generated = generationService.generateSlots(restaurantId, generationDate, generationDate);
+        entityManager.flush();
+        Instant startsAt = generated.get(0).getStartsAt();
         assertEquals(1, jdbcTemplate.update("""
                 update booking_slots
                 set capacity_total = 99, capacity_reserved = 5
