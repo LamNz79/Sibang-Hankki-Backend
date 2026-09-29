@@ -35,6 +35,17 @@ class RestaurantCatalogRepository {
                 .findFirst();
     }
 
+    Optional<RestaurantEntity> findActiveById(UUID id) {
+        return entityManager.createQuery("""
+                select restaurant from RestaurantEntity restaurant
+                where restaurant.id = :id and restaurant.deletedAt is null
+                """, RestaurantEntity.class)
+                .setParameter("id", id)
+                .getResultList()
+                .stream()
+                .findFirst();
+    }
+
     List<RestaurantTagEntity> findTagsByRestaurantIds(Collection<UUID> restaurantIds) {
         return entityManager.createQuery("""
                 select tag from RestaurantTagEntity tag
