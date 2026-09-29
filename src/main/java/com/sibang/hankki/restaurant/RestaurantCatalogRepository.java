@@ -19,7 +19,7 @@ class RestaurantCatalogRepository {
     List<RestaurantEntity> findAllActive() {
         return entityManager.createQuery("""
                 select restaurant from RestaurantEntity restaurant
-                where restaurant.deletedAt is null
+                where restaurant.deletedAt is null and restaurant.approvalStatus = 'ACTIVE'
                 order by restaurant.id
                 """, RestaurantEntity.class).getResultList();
     }
@@ -27,7 +27,9 @@ class RestaurantCatalogRepository {
     Optional<RestaurantEntity> findActiveBySlug(String slug) {
         return entityManager.createQuery("""
                 select restaurant from RestaurantEntity restaurant
-                where restaurant.slug = :slug and restaurant.deletedAt is null
+                where restaurant.slug = :slug
+                    and restaurant.deletedAt is null
+                    and restaurant.approvalStatus = 'ACTIVE'
                 """, RestaurantEntity.class)
                 .setParameter("slug", slug)
                 .getResultList()
@@ -38,7 +40,9 @@ class RestaurantCatalogRepository {
     Optional<RestaurantEntity> findActiveById(UUID id) {
         return entityManager.createQuery("""
                 select restaurant from RestaurantEntity restaurant
-                where restaurant.id = :id and restaurant.deletedAt is null
+                where restaurant.id = :id
+                    and restaurant.deletedAt is null
+                    and restaurant.approvalStatus = 'ACTIVE'
                 """, RestaurantEntity.class)
                 .setParameter("id", id)
                 .getResultList()
