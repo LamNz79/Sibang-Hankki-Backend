@@ -1,3 +1,8 @@
 target/
 localTest/
 .env
+
+# Local AWS CLI installer artifacts
+/aws/
+/awscliv2.zip
+/cliv2.zip
