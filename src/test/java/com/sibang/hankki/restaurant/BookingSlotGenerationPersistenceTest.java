@@ -3,6 +3,7 @@ package com.sibang.hankki.restaurant;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
@@ -52,8 +53,8 @@ class BookingSlotGenerationPersistenceTest {
         restaurantId = jdbcTemplate.queryForObject(
                 "select id from restaurants where slug = 'anan-saigon'", UUID.class);
         generationDate = GENERATION_DATE;
-        Instant start = generationDate.atStartOfDay(BookingSlotGenerationService.RESTAURANT_TIME_ZONE).toInstant();
-        Instant end = generationDate.plusDays(1).atStartOfDay(BookingSlotGenerationService.RESTAURANT_TIME_ZONE).toInstant();
+        OffsetDateTime start = timestamp(generationDate.atStartOfDay(BookingSlotGenerationService.RESTAURANT_TIME_ZONE).toInstant());
+        OffsetDateTime end = timestamp(generationDate.plusDays(1).atStartOfDay(BookingSlotGenerationService.RESTAURANT_TIME_ZONE).toInstant());
         jdbcTemplate.update("delete from booking_slots where restaurant_id = ? and starts_at >= ? and starts_at < ?",
                 restaurantId, start, end);
         jdbcTemplate.update("delete from restaurant_booking_settings where restaurant_id = ?", restaurantId);
@@ -93,16 +94,16 @@ class BookingSlotGenerationPersistenceTest {
                 update booking_slots
                 set capacity_total = 99, capacity_reserved = 5
                 where restaurant_id = ? and starts_at = ?
-                """, restaurantId, startsAt);
+                """, restaurantId, timestamp(startsAt));
 
         generationService.generateSlots(restaurantId, generationDate, generationDate);
 
         Integer capacityTotal = jdbcTemplate.queryForObject(
                 "select capacity_total from booking_slots where restaurant_id = ? and starts_at = ?",
-                Integer.class, restaurantId, startsAt);
+                Integer.class, restaurantId, timestamp(startsAt));
         Integer capacityReserved = jdbcTemplate.queryForObject(
                 "select capacity_reserved from booking_slots where restaurant_id = ? and starts_at = ?",
-                Integer.class, restaurantId, startsAt);
+                Integer.class, restaurantId, timestamp(startsAt));
         assertEquals(99, capacityTotal);
         assertEquals(5, capacityReserved);
     }
@@ -130,6 +131,10 @@ class BookingSlotGenerationPersistenceTest {
         return new RestaurantBookingSettings(
                 restaurantId, capacity, (short) 60, (short) 90, (short) 10, 30, ConfirmationMode.AUTO, null,
                 (short) 30, (short) 1, (short) 6, (short) 7, 120, 15);
+    }
+
+    private OffsetDateTime timestamp(Instant instant) {
+        return instant.atOffset(ZoneOffset.UTC);
     }
 
     @TestConfiguration(proxyBeanMethods = false)
