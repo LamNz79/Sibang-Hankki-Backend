@@ -24,6 +24,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SpringBootTest
 @Import(RestaurantAvailabilityPersistenceTest.FixedClockConfiguration.class)
@@ -46,6 +47,9 @@ class RestaurantAvailabilityPersistenceTest {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private RestaurantCatalogRepository restaurantRepository;
 
     private UUID restaurantId;
 
@@ -109,6 +113,41 @@ class RestaurantAvailabilityPersistenceTest {
         assertEquals(404, exception.getStatusCode().value());
     }
 
+    @Test
+    void treatsOnlyApprovedAndNonDeletedRestaurantsAsActive() {
+        TestRestaurant active = insertRestaurant("ACTIVE", false);
+        List<TestRestaurant> inactive = List.of(
+                insertRestaurant("DRAFT", false),
+                insertRestaurant("PENDING", false),
+                insertRestaurant("CHANGES_REQUESTED", false),
+                insertRestaurant("SUSPENDED", false),
+                insertRestaurant("ACTIVE", true));
+
+        List<UUID> activeIds = restaurantRepository.findAllActive().stream().map(RestaurantEntity::getId).toList();
+        assertTrue(activeIds.contains(active.id()));
+        for (TestRestaurant restaurant : inactive) {
+            assertTrue(restaurantRepository.findActiveById(restaurant.id()).isEmpty());
+            assertTrue(restaurantRepository.findActiveBySlug(restaurant.slug()).isEmpty());
+            assertTrue(!activeIds.contains(restaurant.id()));
+        }
+    }
+
+    @Test
+    void doesNotExposeAvailabilityForInactiveRestaurants() {
+        List<TestRestaurant> inactive = List.of(
+                insertRestaurant("DRAFT", false),
+                insertRestaurant("PENDING", false),
+                insertRestaurant("CHANGES_REQUESTED", false),
+                insertRestaurant("SUSPENDED", false),
+                insertRestaurant("ACTIVE", true));
+
+        for (TestRestaurant restaurant : inactive) {
+            ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                    () -> availabilityService.availability(restaurant.slug(), DATE.toString(), 2));
+            assertEquals(404, exception.getStatusCode().value());
+        }
+    }
+
     private RestaurantBookingSettings settings(ConfirmationMode mode, Short manualConfirmationMinPartySize) {
         return new RestaurantBookingSettings(
                 restaurantId, 20, (short) 60, (short) 90, (short) 10, 30, mode,
@@ -129,6 +168,26 @@ class RestaurantAvailabilityPersistenceTest {
 
     private OffsetDateTime timestamp(Instant instant) {
         return instant.atOffset(ZoneOffset.UTC);
+    }
+
+    private TestRestaurant insertRestaurant(String approvalStatus, boolean deleted) {
+        UUID id = UUID.randomUUID();
+        String slug = "availability-test-" + id;
+        if (deleted) {
+            jdbcTemplate.update("""
+                    insert into restaurants (id, slug, name, city_slug, approval_status, deleted_at)
+                    values (?, ?, ?, ?, ?, current_timestamp)
+                    """, id, slug, "Availability Test", "ho-chi-minh-city", approvalStatus);
+        } else {
+            jdbcTemplate.update("""
+                    insert into restaurants (id, slug, name, city_slug, approval_status)
+                    values (?, ?, ?, ?, ?)
+                    """, id, slug, "Availability Test", "ho-chi-minh-city", approvalStatus);
+        }
+        return new TestRestaurant(id, slug);
+    }
+
+    private record TestRestaurant(UUID id, String slug) {
     }
 
     @TestConfiguration(proxyBeanMethods = false)

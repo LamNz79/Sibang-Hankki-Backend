@@ -37,15 +37,15 @@ class RestaurantAvailabilityService {
         if (partySize <= 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "partySize must be positive");
         }
+        LocalDate today = LocalDate.now(clock.withZone(BookingSlotGenerationService.RESTAURANT_TIME_ZONE));
+        if (date.isBefore(today)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Date must not be in the past");
+        }
         UUID restaurantId = restaurantRepository.findActiveBySlug(slug)
                 .map(RestaurantEntity::getId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Restaurant not found"));
         RestaurantBookingSettings settings = settingsRepository.findById(restaurantId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "Booking settings not configured"));
-        LocalDate today = LocalDate.now(clock.withZone(BookingSlotGenerationService.RESTAURANT_TIME_ZONE));
-        if (date.isBefore(today)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Date must not be in the past");
-        }
         if (date.isAfter(today.plusDays(settings.getBookingWindowDays() - 1L))) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Date exceeds booking window");
         }

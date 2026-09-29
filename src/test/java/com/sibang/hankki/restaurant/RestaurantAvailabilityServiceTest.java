@@ -19,6 +19,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 class RestaurantAvailabilityServiceTest {
 
@@ -70,11 +71,17 @@ class RestaurantAvailabilityServiceTest {
     }
 
     @Test
-    void rejectsInvalidPastAndOutOfWindowDates() {
+    void rejectsInvalidAndOutOfWindowDates() {
         assertBad(() -> service.availability("anan-saigon", "28-09-2026", 2));
-        assertBad(() -> service.availability("anan-saigon", TODAY.minusDays(1).toString(), 2));
         assertEquals(List.of(), service.availability("anan-saigon", TODAY.plusDays(29).toString(), 2).slots());
         assertBad(() -> service.availability("anan-saigon", TODAY.plusDays(30).toString(), 2));
+    }
+
+    @Test
+    void rejectsPastDateBeforeRestaurantAndSettingsLookup() {
+        assertBad(() -> service.availability("anan-saigon", TODAY.minusDays(1).toString(), 2));
+
+        verifyNoInteractions(restaurantRepository, settingsRepository, slotRepository);
     }
 
     @Test
