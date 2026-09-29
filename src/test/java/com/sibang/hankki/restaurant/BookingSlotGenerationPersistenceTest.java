@@ -1,5 +1,6 @@
 package com.sibang.hankki.restaurant;
 
+import jakarta.persistence.EntityManager;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -44,6 +45,9 @@ class BookingSlotGenerationPersistenceTest {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private EntityManager entityManager;
 
     private UUID restaurantId;
     private LocalDate generationDate;
@@ -90,11 +94,12 @@ class BookingSlotGenerationPersistenceTest {
         Instant startsAt = generationService.generateSlots(restaurantId, generationDate, generationDate)
                 .get(0)
                 .getStartsAt();
-        jdbcTemplate.update("""
+        assertEquals(1, jdbcTemplate.update("""
                 update booking_slots
                 set capacity_total = 99, capacity_reserved = 5
                 where restaurant_id = ? and starts_at = ?
-                """, restaurantId, timestamp(startsAt));
+                """, restaurantId, timestamp(startsAt)));
+        entityManager.clear();
 
         generationService.generateSlots(restaurantId, generationDate, generationDate);
 
