@@ -84,6 +84,21 @@ class BookingSlotGenerationServiceTest {
     }
 
     @Test
+    void deduplicatesSlotsFromOverlappingBusinessHourPeriods() {
+        configure((short) 30, (short) 30, List.of(
+                hours(1, "10:00", "11:00"),
+                hours(1, "10:30", "11:30")));
+
+        List<BookingSlot> slots = service.generateSlots(restaurantId, TODAY, TODAY);
+
+        assertEquals(List.of(
+                        Instant.parse("2026-09-28T03:00:00Z"),
+                        Instant.parse("2026-09-28T03:30:00Z"),
+                        Instant.parse("2026-09-28T04:00:00Z")),
+                slots.stream().map(BookingSlot::getStartsAt).toList());
+    }
+
+    @Test
     void returnsNoSlotsOnDayWithoutBusinessHours() {
         configure((short) 15, (short) 30, List.of(hours(2, "10:00", "11:00")));
 
@@ -113,11 +128,34 @@ class BookingSlotGenerationServiceTest {
     }
 
     @Test
-    void rejectsRangeBeyondBookingWindowDays() {
+    void acceptsLastDateInBookingWindow() {
+        LocalDate lastAllowedDate = TODAY.plusDays(29);
+        configure((short) 15, (short) 30, List.of(hours(lastAllowedDate.getDayOfWeek().getValue(), "10:00", "10:30")));
+
+        assertEquals(1, service.generateSlots(restaurantId, lastAllowedDate, lastAllowedDate).size());
+    }
+
+    @Test
+    void rejectsOneDayBeyondBookingWindow() {
         configure((short) 15, (short) 30, List.of());
 
         assertThrows(IllegalArgumentException.class,
-                () -> service.generateSlots(restaurantId, TODAY, TODAY.plusDays(30)));
+                () -> service.generateSlots(restaurantId, TODAY.plusDays(30), TODAY.plusDays(30)));
+    }
+
+    @Test
+    void rejectsSingleDayRequestFarBeyondBookingWindow() {
+        configure((short) 15, (short) 30, List.of());
+
+        assertThrows(IllegalArgumentException.class,
+                () -> service.generateSlots(restaurantId, TODAY.plusDays(365), TODAY.plusDays(365)));
+    }
+
+    @Test
+    void acceptsMultiDayRangeInsideBookingWindow() {
+        configure((short) 15, (short) 30, List.of());
+
+        assertEquals(List.of(), service.generateSlots(restaurantId, TODAY.plusDays(5), TODAY.plusDays(9)));
     }
 
     @Test

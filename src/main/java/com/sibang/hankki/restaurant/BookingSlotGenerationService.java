@@ -5,7 +5,6 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
-import java.time.temporal.ChronoUnit;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -41,14 +40,16 @@ class BookingSlotGenerationService {
         if (fromDate.isAfter(toDate)) {
             throw new IllegalArgumentException("fromDate must not be after toDate");
         }
-        if (fromDate.isBefore(LocalDate.now(clock.withZone(RESTAURANT_TIME_ZONE)))) {
+        LocalDate today = LocalDate.now(clock.withZone(RESTAURANT_TIME_ZONE));
+        if (fromDate.isBefore(today)) {
             throw new IllegalArgumentException("Cannot generate slots before today");
         }
 
         restaurantRepository.findActiveById(restaurantId).orElseThrow(RestaurantNotFoundException::new);
         RestaurantBookingSettings settings = settingsRepository.findById(restaurantId)
                 .orElseThrow(BookingSettingsNotConfiguredException::new);
-        if (ChronoUnit.DAYS.between(fromDate, toDate) + 1 > settings.getBookingWindowDays()) {
+        LocalDate latestAllowedDate = today.plusDays(settings.getBookingWindowDays() - 1L);
+        if (toDate.isAfter(latestAllowedDate)) {
             throw new IllegalArgumentException("Requested range exceeds booking window");
         }
 
@@ -63,11 +64,12 @@ class BookingSlotGenerationService {
 
         List<RestaurantBusinessHourEntity> businessHours = restaurantRepository
                 .findBusinessHoursByRestaurantIds(List.of(restaurantId));
+        Set<Instant> generatedStarts = new HashSet<>();
         List<BookingSlot> missingSlots = fromDate.datesUntil(toDate.plusDays(1))
                 .flatMap(date -> businessHours.stream()
                         .filter(hours -> hours.getDayOfWeek() == date.getDayOfWeek().getValue())
                         .flatMap(hours -> slotsForPeriod(restaurantId, date, hours, settings).stream()))
-                .filter(slot -> !existingStarts.contains(slot.getStartsAt()))
+                .filter(slot -> !existingStarts.contains(slot.getStartsAt()) && generatedStarts.add(slot.getStartsAt()))
                 .toList();
 
         if (!missingSlots.isEmpty()) {
