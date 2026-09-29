@@ -121,6 +121,18 @@ public class RestaurantBookingSettings {
         return bookingWindowDays;
     }
 
+    short getMinimumPartySize() {
+        return minimumPartySize;
+    }
+
+    short getMaximumOnlinePartySize() {
+        return maximumOnlinePartySize;
+    }
+
+    short getLargePartyThreshold() {
+        return largePartyThreshold;
+    }
+
     Short getManualConfirmationMinPartySize() {
         return manualConfirmationMinPartySize;
     }
