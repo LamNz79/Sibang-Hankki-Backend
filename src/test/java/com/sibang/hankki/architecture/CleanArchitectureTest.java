@@ -64,6 +64,11 @@ class CleanArchitectureTest {
                     "..restaurant.adapter.in.web..", "..restaurant.adapter.in.scheduling..");
 
     @ArchTest
+    static final ArchRule inboundAdaptersDoNotDependOnOutboundAdapters = noClasses()
+            .that().resideInAnyPackage("..restaurant.adapter.in..")
+            .should().dependOnClassesThat().resideInAnyPackage("..restaurant.adapter.out..");
+
+    @ArchTest
     static final ArchRule persistenceDoesNotDependOnWebAdapters = noClasses()
             .that().resideInAnyPackage("..restaurant.adapter.out.persistence..")
             .should().dependOnClassesThat().resideInAnyPackage("..restaurant.adapter.in.web..");
