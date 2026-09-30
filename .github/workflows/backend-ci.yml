@@ -42,12 +42,12 @@ jobs:
       BOOKING_SLOT_GENERATION_ENABLED: "false"
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
           cache: maven
-      - name: Test and package
-        run: mvn --batch-mode --no-transfer-progress clean package
+      - name: Test and verify
+        run: mvn --batch-mode --no-transfer-progress clean verify
