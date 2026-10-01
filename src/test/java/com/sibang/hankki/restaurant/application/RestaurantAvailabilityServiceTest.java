@@ -6,6 +6,9 @@ import com.sibang.hankki.restaurant.adapter.out.persistence.repository.BookingSl
 import com.sibang.hankki.restaurant.adapter.out.persistence.repository.RestaurantBookingSettingsRepository;
 import com.sibang.hankki.restaurant.adapter.out.persistence.repository.RestaurantCatalogRepository;
 import com.sibang.hankki.restaurant.application.booking.BookingSlotGenerationService;
+import com.sibang.hankki.restaurant.application.exception.BookingSettingsNotConfiguredException;
+import com.sibang.hankki.restaurant.application.exception.InvalidBookingRequestException;
+import com.sibang.hankki.restaurant.application.exception.RestaurantNotFoundException;
 import com.sibang.hankki.restaurant.application.model.RestaurantAvailabilityResponse;
 import com.sibang.hankki.restaurant.domain.model.ConfirmationMode;
 
@@ -19,8 +22,6 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.http.HttpStatus;
-import org.springframework.web.server.ResponseStatusException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -98,6 +99,7 @@ class RestaurantAvailabilityServiceTest {
         given(settingsRepository.findById(restaurantId)).willReturn(Optional.of(settings(ConfirmationMode.AUTO, null, 2, 4, 5)));
         givenSlots(slot("11:30", 10, 0));
 
+        assertBad(() -> service.availability("anan-saigon", TODAY.toString(), 0));
         assertBad(() -> service.availability("anan-saigon", TODAY.toString(), 1));
         RestaurantAvailabilityResponse response = service.availability("anan-saigon", TODAY.toString(), 5);
         assertEquals(List.of(), response.slots());
@@ -120,10 +122,10 @@ class RestaurantAvailabilityServiceTest {
     @Test
     void reportsUnknownRestaurantAndMissingSettings() {
         given(restaurantRepository.findActiveBySlug("unknown")).willReturn(Optional.empty());
-        assertStatus(HttpStatus.NOT_FOUND, () -> service.availability("unknown", TODAY.toString(), 2));
+        assertThrows(RestaurantNotFoundException.class, () -> service.availability("unknown", TODAY.toString(), 2));
 
         given(settingsRepository.findById(restaurantId)).willReturn(Optional.empty());
-        assertStatus(HttpStatus.CONFLICT, () -> service.availability("anan-saigon", TODAY.toString(), 2));
+        assertThrows(BookingSettingsNotConfiguredException.class, () -> service.availability("anan-saigon", TODAY.toString(), 2));
     }
 
     private void givenSlots(BookingSlot... slots) {
@@ -146,11 +148,6 @@ class RestaurantAvailabilityServiceTest {
     }
 
     private void assertBad(Runnable action) {
-        assertStatus(HttpStatus.BAD_REQUEST, action);
-    }
-
-    private void assertStatus(HttpStatus status, Runnable action) {
-        ResponseStatusException exception = assertThrows(ResponseStatusException.class, action::run);
-        assertEquals(status, exception.getStatusCode());
+        assertThrows(InvalidBookingRequestException.class, action::run);
     }
 }

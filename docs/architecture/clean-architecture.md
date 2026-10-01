@@ -1,41 +1,35 @@
-# Clean Architecture — Phase 1
+# Clean Architecture — Phase 2
 
 ## Target package structure
 
-The backend is evolving as a modular monolith. Each feature follows an inbound adapter → application → domain direction. Persistence is an outbound adapter.
+The backend is a modular monolith. Restaurant dependencies flow from inbound adapters to application orchestration and then to pure domain rules; persistence remains an outbound adapter.
 
 ```text
 com.sibang.hankki
 ├── health/adapter/in/web
-├── restaurant/domain/model
+├── restaurant/domain/{booking,model}
 ├── restaurant/application/{booking,exception,model,prototype}
 ├── restaurant/adapter/in/{web,scheduling}
 ├── restaurant/adapter/out/persistence/{entity,repository}
 └── user/{domain,application,adapter/out/persistence/entity}
 ```
 
-## Responsibilities and dependency direction
+## Phase 2 completed
 
-- `adapter.in.web` owns HTTP controllers and translates HTTP requests/responses.
-- `adapter.in.scheduling` owns scheduled and application-ready triggers.
-- `application` coordinates use cases. In Phase 1 it still reads persistence repositories directly.
-- `domain` contains framework-independent business concepts. It must not depend on application or adapters.
-- `adapter.out.persistence.entity` contains JPA entities; `adapter.out.persistence.repository` contains Spring Data and JPA repositories.
+`restaurant.domain.booking` is pure Java. It contains typed booking policy, business-period, slot-capacity, and slot-candidate models plus rules for booking dates/windows, party-size limits, confirmation mode, capacity, and slot generation. The domain has JUnit-only tests and imports no Spring, HTTP, JPA, database, or repository types.
 
-ArchUnit guards these boundaries: domain isolation, no application dependency on inbound adapters, no persistence dependency on web, no reverse dependency into web controllers, adapter placement for controllers/schedulers/entities/repositories, and no restaurant package cycle.
+The application layer now loads JPA data, maps it to domain inputs, invokes domain rules, and maps results back to application responses or persistence entities. `RestaurantAvailabilityService` has no HTTP concern. It throws explicit application exceptions for invalid booking requests, missing restaurants, and missing booking settings.
 
-## Phase 1 limitation and intentional debt
+`adapter.in.web` owns HTTP status mapping through `RestaurantExceptionHandler`: invalid requests map to 400, unknown restaurants to 404, and missing settings to 409. Spring MVC continues to reject missing or non-numeric query parameters with 400.
 
-This phase is package/file refactoring plus guardrails only. It preserves the existing API, JSON, scheduling behavior, database schema, and Flyway V1–V6 migrations. The application layer still depends directly on JPA entities and repositories, and `RestaurantAvailabilityService` still uses `ResponseStatusException`. These are intentionally not hidden by ArchUnit exclusions.
+## Guardrails
 
-The move requires public visibility for application services invoked by web/scheduling adapters, persistence repositories and entities consumed across the new package boundaries, their required constructors/accessors, application response models/prototype data, and booking-generation job/time-zone constant. This is mechanical visibility for the current modular-monolith boundaries; it is not a public HTTP API change.
+ArchUnit protects domain isolation, inbound/application/persistence direction, the ban on inbound-to-outbound dependencies, application’s ban on Spring HTTP/web dependencies, and the placement of controller advice and exception handlers in inbound web adapters. Phase 1 controller, scheduler, entity, repository, reverse-web-dependency, and cycle rules remain active.
 
-## Roadmap
+## Intentional Phase 3 debt
 
-### Phase 2
+Application services still import JPA entities and Spring Data/JPA repositories. Phase 3 will introduce inbound use-case interfaces and outbound repository ports, with persistence adapters implementing those ports, so application code no longer depends on persistence implementations.
 
-Extract pure-Java booking domain logic with unit tests that use neither Spring nor a database. Replace `ResponseStatusException` in application/domain code with application errors; map those errors to HTTP in the web adapter.
+## Compatibility
 
-### Phase 3
-
-Define inbound use-case interfaces and outbound repository ports. Implement the ports in persistence adapters so application code no longer imports JPA entities, Spring Data repositories, or persistence implementation details.
+Phase 2 preserves existing endpoints, successful JSON responses, Asia/Ho_Chi_Minh timezone behavior, scheduler behavior, availability’s read-only behavior, database schema, and Flyway V1–V6 migrations.

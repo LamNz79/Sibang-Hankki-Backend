@@ -1,13 +1,18 @@
 package com.sibang.hankki.restaurant.application;
-import com.sibang.hankki.restaurant.adapter.out.persistence.entity.BookingSlot;
+
 import com.sibang.hankki.restaurant.adapter.out.persistence.entity.RestaurantBookingSettings;
 import com.sibang.hankki.restaurant.adapter.out.persistence.entity.RestaurantEntity;
 import com.sibang.hankki.restaurant.adapter.out.persistence.repository.BookingSlotRepository;
 import com.sibang.hankki.restaurant.adapter.out.persistence.repository.RestaurantBookingSettingsRepository;
 import com.sibang.hankki.restaurant.adapter.out.persistence.repository.RestaurantCatalogRepository;
-import com.sibang.hankki.restaurant.application.booking.BookingSlotGenerationService;
+import com.sibang.hankki.restaurant.application.exception.BookingSettingsNotConfiguredException;
+import com.sibang.hankki.restaurant.application.exception.InvalidBookingRequestException;
+import com.sibang.hankki.restaurant.application.exception.RestaurantNotFoundException;
 import com.sibang.hankki.restaurant.application.model.RestaurantAvailabilityResponse;
-
+import com.sibang.hankki.restaurant.domain.booking.BookingPolicy;
+import com.sibang.hankki.restaurant.domain.booking.BookingRuleViolationException;
+import com.sibang.hankki.restaurant.domain.booking.BookingSlotCapacity;
+import com.sibang.hankki.restaurant.domain.booking.BookingTime;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -15,9 +20,7 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.UUID;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class RestaurantAvailabilityService {
@@ -42,68 +45,64 @@ public class RestaurantAvailabilityService {
 
     public RestaurantAvailabilityResponse availability(String slug, String dateValue, int partySize) {
         LocalDate date = parseDate(dateValue);
-        if (partySize <= 0) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "partySize must be positive");
-        }
-        LocalDate today = LocalDate.now(clock.withZone(BookingSlotGenerationService.RESTAURANT_TIME_ZONE));
-        if (date.isBefore(today)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Date must not be in the past");
-        }
+        LocalDate today = LocalDate.now(clock.withZone(BookingTime.RESTAURANT_TIME_ZONE));
+        validateBasicRequest(date, today, partySize);
+
         UUID restaurantId = restaurantRepository.findActiveBySlug(slug)
                 .map(RestaurantEntity::getId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Restaurant not found"));
+                .orElseThrow(RestaurantNotFoundException::new);
         RestaurantBookingSettings settings = settingsRepository.findById(restaurantId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "Booking settings not configured"));
-        if (date.isAfter(today.plusDays(settings.getBookingWindowDays() - 1L))) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Date exceeds booking window");
-        }
-        if (partySize < settings.getMinimumPartySize()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "partySize is below the minimum");
-        }
+                .orElseThrow(BookingSettingsNotConfiguredException::new);
+        BookingPolicy policy = BookingDomainMapper.policy(settings);
+        validateAvailabilityRequest(policy, date, today, partySize);
 
-        List<String> slots = partySize > settings.getMaximumOnlinePartySize()
-                ? List.of()
-                : availableSlots(restaurantId, date, partySize);
+        List<String> slots = policy.supportsOnlineAvailability(partySize)
+                ? availableSlots(restaurantId, date, policy, partySize)
+                : List.of();
         return new RestaurantAvailabilityResponse(
                 slug,
                 date.toString(),
                 partySize,
                 slots,
-                requiresRestaurantConfirmation(settings, partySize));
+                policy.requiresRestaurantConfirmation(partySize));
     }
 
-    private List<String> availableSlots(UUID restaurantId, LocalDate date, int partySize) {
-        Instant start = date.atStartOfDay(BookingSlotGenerationService.RESTAURANT_TIME_ZONE).toInstant();
-        Instant end = date.plusDays(1).atStartOfDay(BookingSlotGenerationService.RESTAURANT_TIME_ZONE).toInstant();
-        return slotRepository.findByRestaurantIdAndStartsAtGreaterThanEqualAndStartsAtLessThanOrderByStartsAt(
-                        restaurantId, start, end)
-                .stream()
-                .filter(slot -> slot.getCapacityTotal() > 0
-                        && slot.getCapacityTotal() - slot.getCapacityReserved() >= partySize)
-                .map(BookingSlot::getStartsAt)
-                .map(instant -> TIME.format(instant.atZone(BookingSlotGenerationService.RESTAURANT_TIME_ZONE)))
+    private List<String> availableSlots(UUID restaurantId, LocalDate date, BookingPolicy policy, int partySize) {
+        Instant start = date.atStartOfDay(BookingTime.RESTAURANT_TIME_ZONE).toInstant();
+        Instant end = date.plusDays(1).atStartOfDay(BookingTime.RESTAURANT_TIME_ZONE).toInstant();
+        List<BookingSlotCapacity> capacities = BookingDomainMapper.slotCapacities(
+                slotRepository.findByRestaurantIdAndStartsAtGreaterThanEqualAndStartsAtLessThanOrderByStartsAt(
+                        restaurantId, start, end));
+        return policy.availableSlots(capacities, partySize).stream()
+                .map(BookingSlotCapacity::startsAt)
+                .map(instant -> TIME.format(instant.atZone(BookingTime.RESTAURANT_TIME_ZONE)))
                 .toList();
     }
 
-    private boolean requiresRestaurantConfirmation(RestaurantBookingSettings settings, int partySize) {
-        if (partySize >= settings.getLargePartyThreshold()) {
-            return true;
+    private void validateBasicRequest(LocalDate date, LocalDate today, int partySize) {
+        try {
+            BookingPolicy.validateBasicRequest(date, today, partySize);
+        } catch (BookingRuleViolationException exception) {
+            throw new InvalidBookingRequestException(exception.getMessage(), exception);
         }
-        return switch (settings.getConfirmationMode()) {
-            case AUTO -> false;
-            case MANUAL -> true;
-            case HYBRID -> partySize >= settings.getManualConfirmationMinPartySize();
-        };
+    }
+
+    private void validateAvailabilityRequest(BookingPolicy policy, LocalDate date, LocalDate today, int partySize) {
+        try {
+            policy.validateAvailabilityRequest(date, today, partySize);
+        } catch (BookingRuleViolationException exception) {
+            throw new InvalidBookingRequestException(exception.getMessage(), exception);
+        }
     }
 
     private LocalDate parseDate(String dateValue) {
         if (dateValue == null || !dateValue.matches("\\d{4}-\\d{2}-\\d{2}")) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid date");
+            throw new InvalidBookingRequestException("Invalid date");
         }
         try {
             return LocalDate.parse(dateValue, DateTimeFormatter.ISO_LOCAL_DATE);
         } catch (DateTimeParseException exception) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid date");
+            throw new InvalidBookingRequestException("Invalid date", exception);
         }
     }
 }
