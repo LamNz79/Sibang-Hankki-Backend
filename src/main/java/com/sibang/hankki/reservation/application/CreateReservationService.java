@@ -142,7 +142,7 @@ public class CreateReservationService implements CreateReservationUseCase {
         Reservation saved = reservationPersistencePort.save(reservation);
         appendEvent(saved, ReservationEventType.REQUESTED, fingerprint, now);
         if (status == ReservationStatus.CONFIRMED) {
-            appendEvent(saved, ReservationEventType.CONFIRMED, fingerprint, now);
+            appendEvent(saved, ReservationEventType.CONFIRMED, fingerprint, now.plusNanos(1_000));
         }
         return new CreateReservationResult(saved, restaurant.slug(), date, time, requiresConfirmation, false);
     }

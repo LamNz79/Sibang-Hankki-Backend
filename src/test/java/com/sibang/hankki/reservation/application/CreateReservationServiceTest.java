@@ -95,6 +95,8 @@ class CreateReservationServiceTest {
         verify(reservationEventPersistencePort, org.mockito.Mockito.times(2)).append(eventCaptor.capture());
         assertThat(eventCaptor.getAllValues()).extracting(event -> event.eventType())
                 .containsExactly(ReservationEventType.REQUESTED, ReservationEventType.CONFIRMED);
+        assertThat(eventCaptor.getAllValues().get(1).createdAt())
+                .isEqualTo(eventCaptor.getAllValues().get(0).createdAt().plusNanos(1_000));
     }
 
     @Test
