@@ -72,6 +72,12 @@ class CleanArchitectureTest {
             .should().dependOnClassesThat().resideInAnyPackage("..restaurant.adapter.out..");
 
     @ArchTest
+    static final ArchRule restaurantApplicationDoesNotDependOnPersistenceFrameworks = noClasses()
+            .that().resideInAnyPackage("..restaurant.application..")
+            .should().dependOnClassesThat().resideInAnyPackage(
+                    "jakarta.persistence..", "org.springframework.data..", "org.springframework.orm.jpa..", "org.hibernate..");
+
+    @ArchTest
     static final ArchRule inboundAdaptersDoNotDependOnApplicationServices = noClasses()
             .that().resideInAnyPackage("..restaurant.adapter.in..")
             .should().dependOnClassesThat().areAnnotatedWith(Service.class);
