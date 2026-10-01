@@ -100,14 +100,35 @@ class ReservationPersistenceAdapterTest {
     }
 
     @Test
-    void supportsGuestReservationsWithoutCustomerId() {
+    void supportsGuestReservationsWithoutCustomerIdOrBookingSlot() {
         Reservation saved = reservationAdapter.save(reservation(
                 UUID.randomUUID(), "RSV-GUEST-1", "idempotency-guest-1", PROTOTYPE_RESTAURANT_ID,
                 null, null, ReservationStatus.PENDING, null, false, null));
 
         assertNull(saved.customerId());
+        assertNull(saved.bookingSlotId());
         assertEquals(ReservationStatus.PENDING, saved.status());
         assertNull(saved.visitStatus());
+    }
+
+    @Test
+    void rejectsBookingSlotFromAnotherRestaurant() {
+        UUID anotherRestaurantId = insertRestaurant();
+        UUID bookingSlotId = insertBookingSlot(anotherRestaurantId, STARTS_AT, ENDS_AT);
+
+        assertThrows(DataIntegrityViolationException.class, () -> reservationAdapter.save(reservation(
+                UUID.randomUUID(), "RSV-WRONG-RESTAURANT", "idempotency-wrong-restaurant", PROTOTYPE_RESTAURANT_ID,
+                bookingSlotId, null, ReservationStatus.PENDING, null, false, null)));
+    }
+
+    @Test
+    void rejectsBookingSlotWithMismatchedStartOrEndTime() {
+        UUID bookingSlotId = insertBookingSlot(PROTOTYPE_RESTAURANT_ID, STARTS_AT, ENDS_AT);
+
+        assertDatabaseRejects(() -> insertRawReservationWithSlot(
+                bookingSlotId, PROTOTYPE_RESTAURANT_ID, STARTS_AT.plusSeconds(60), ENDS_AT));
+        assertDatabaseRejects(() -> insertRawReservationWithSlot(
+                bookingSlotId, PROTOTYPE_RESTAURANT_ID, STARTS_AT, ENDS_AT.plusSeconds(60)));
     }
 
     @Test
@@ -306,6 +327,19 @@ class ReservationPersistenceAdapterTest {
                 partySize, status, visitStatus, capacityOverride, checkInTokenHash);
     }
 
+    private void insertRawReservationWithSlot(
+            UUID bookingSlotId, UUID restaurantId, Instant startsAt, Instant endsAt) {
+        UUID id = UUID.randomUUID();
+        jdbcTemplate.update("""
+                insert into reservations (
+                    id, reference, idempotency_key, request_fingerprint, restaurant_id, booking_slot_id,
+                    customer_name, customer_phone, starts_at, ends_at, party_size, status, capacity_override
+                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', false)
+                """, id, "RAW-SLOT-" + id.toString().substring(0, 8), "raw-slot-idempotency-" + id,
+                "d".repeat(64), restaurantId, bookingSlotId, "Raw reservation", "0900000002",
+                databaseTimestamp(startsAt), databaseTimestamp(endsAt), 2);
+    }
+
     private void assertDatabaseRejects(Runnable operation) {
         String savepoint = "reservation_constraint_check";
         jdbcTemplate.execute("savepoint " + savepoint);
@@ -339,11 +373,15 @@ class ReservationPersistenceAdapterTest {
     }
 
     private UUID insertBookingSlot(UUID restaurantId) {
+        return insertBookingSlot(restaurantId, STARTS_AT, ENDS_AT);
+    }
+
+    private UUID insertBookingSlot(UUID restaurantId, Instant startsAt, Instant endsAt) {
         UUID id = UUID.randomUUID();
         jdbcTemplate.update("""
                 insert into booking_slots (id, restaurant_id, starts_at, ends_at, capacity_total, capacity_reserved)
                 values (?, ?, ?, ?, ?, ?)
-                """, id, restaurantId, databaseTimestamp(STARTS_AT), databaseTimestamp(ENDS_AT), 10, 0);
+                """, id, restaurantId, databaseTimestamp(startsAt), databaseTimestamp(endsAt), 10, 0);
         return id;
     }
 

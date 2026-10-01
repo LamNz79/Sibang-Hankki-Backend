@@ -1,10 +1,13 @@
+alter table booking_slots
+    add constraint booking_slots_id_restaurant_time_unique unique (id, restaurant_id, starts_at, ends_at);
+
 create table reservations (
     id uuid primary key,
     reference varchar(32) not null unique,
     idempotency_key varchar(255) not null unique,
     request_fingerprint varchar(64) not null,
     restaurant_id uuid not null references restaurants (id) on delete restrict,
-    booking_slot_id uuid references booking_slots (id) on delete restrict,
+    booking_slot_id uuid,
     customer_id uuid references users (id) on delete restrict,
     customer_name varchar(120) not null,
     customer_email varchar(320),
@@ -37,7 +40,10 @@ create table reservations (
     ),
     constraint reservations_capacity_override_check check (
         capacity_override = false or status = 'CONFIRMED'
-    )
+    ),
+    constraint reservations_booking_slot_match_fkey foreign key (
+        booking_slot_id, restaurant_id, starts_at, ends_at
+    ) references booking_slots (id, restaurant_id, starts_at, ends_at) on delete restrict
 );
 
 create index reservations_restaurant_starts_at_idx on reservations (restaurant_id, starts_at);
