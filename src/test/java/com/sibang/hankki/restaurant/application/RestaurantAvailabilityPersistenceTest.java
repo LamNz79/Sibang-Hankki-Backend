@@ -6,6 +6,8 @@ import com.sibang.hankki.restaurant.adapter.out.persistence.repository.BookingSl
 import com.sibang.hankki.restaurant.adapter.out.persistence.repository.RestaurantBookingSettingsRepository;
 import com.sibang.hankki.restaurant.adapter.out.persistence.repository.RestaurantCatalogRepository;
 import com.sibang.hankki.restaurant.application.booking.BookingSlotGenerationService;
+import com.sibang.hankki.restaurant.application.exception.BookingSettingsNotConfiguredException;
+import com.sibang.hankki.restaurant.application.exception.RestaurantNotFoundException;
 import com.sibang.hankki.restaurant.application.model.RestaurantAvailabilityResponse;
 import com.sibang.hankki.restaurant.domain.model.ConfirmationMode;
 
@@ -29,7 +31,6 @@ import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.annotation.Rollback;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -108,18 +109,14 @@ class RestaurantAvailabilityPersistenceTest {
 
     @Test
     void reportsMissingSettingsForAnExistingRestaurant() {
-        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+        assertThrows(BookingSettingsNotConfiguredException.class,
                 () -> availabilityService.availability("anan-saigon", DATE.toString(), 2));
-
-        assertEquals(409, exception.getStatusCode().value());
     }
 
     @Test
     void reportsUnknownRestaurant() {
-        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+        assertThrows(RestaurantNotFoundException.class,
                 () -> availabilityService.availability("missing-restaurant", DATE.toString(), 2));
-
-        assertEquals(404, exception.getStatusCode().value());
     }
 
     @Test
@@ -151,9 +148,8 @@ class RestaurantAvailabilityPersistenceTest {
                 insertRestaurant("ACTIVE", true));
 
         for (TestRestaurant restaurant : inactive) {
-            ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+            assertThrows(RestaurantNotFoundException.class,
                     () -> availabilityService.availability(restaurant.slug(), DATE.toString(), 2));
-            assertEquals(404, exception.getStatusCode().value());
         }
     }
 

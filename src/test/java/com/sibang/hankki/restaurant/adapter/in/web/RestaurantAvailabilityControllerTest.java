@@ -1,16 +1,17 @@
 package com.sibang.hankki.restaurant.adapter.in.web;
+
 import com.sibang.hankki.restaurant.application.RestaurantAvailabilityService;
 import com.sibang.hankki.restaurant.application.RestaurantCatalogService;
+import com.sibang.hankki.restaurant.application.exception.BookingSettingsNotConfiguredException;
+import com.sibang.hankki.restaurant.application.exception.InvalidBookingRequestException;
+import com.sibang.hankki.restaurant.application.exception.RestaurantNotFoundException;
 import com.sibang.hankki.restaurant.application.model.RestaurantAvailabilityResponse;
-
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.http.HttpStatus;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.web.server.ResponseStatusException;
 
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -46,14 +47,36 @@ class RestaurantAvailabilityControllerTest {
     }
 
     @Test
-    void returnsServiceErrorsWithoutChangingEndpointShape() throws Exception {
+    void mapsInvalidBookingRequestToBadRequest() throws Exception {
+        given(availabilityService.availability("anan-saigon", "invalid", 2))
+                .willThrow(new InvalidBookingRequestException("Invalid date"));
+
+        mockMvc.perform(get("/api/restaurants/anan-saigon/availability")
+                .param("date", "invalid")
+                .param("partySize", "2"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void mapsRestaurantNotFoundToNotFound() throws Exception {
         given(availabilityService.availability("unknown", "2026-10-05", 2))
-                .willThrow(new ResponseStatusException(HttpStatus.NOT_FOUND, "Restaurant not found"));
+                .willThrow(new RestaurantNotFoundException());
 
         mockMvc.perform(get("/api/restaurants/unknown/availability")
                 .param("date", "2026-10-05")
                 .param("partySize", "2"))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void mapsMissingBookingSettingsToConflict() throws Exception {
+        given(availabilityService.availability("anan-saigon", "2026-10-05", 2))
+                .willThrow(new BookingSettingsNotConfiguredException());
+
+        mockMvc.perform(get("/api/restaurants/anan-saigon/availability")
+                .param("date", "2026-10-05")
+                .param("partySize", "2"))
+                .andExpect(status().isConflict());
     }
 
     @Test
