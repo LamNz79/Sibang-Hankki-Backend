@@ -1,0 +1,20 @@
+package com.sibang.hankki.reservation.domain.model;
+
+public enum ReservationEventType {
+    REQUESTED,
+    CONFIRMED,
+    DECLINED,
+    PENDING_EXPIRED,
+    REOPENED,
+    ALTERNATIVE_PROPOSED,
+    ALTERNATIVE_ACCEPTED,
+    ALTERNATIVE_DECLINED,
+    ANOTHER_TIME_REQUESTED,
+    CANCELLED_BY_CUSTOMER,
+    CANCELLED_BY_RESTAURANT,
+    RESCHEDULED,
+    CHECKED_IN,
+    SEATED,
+    COMPLETED,
+    NO_SHOW
+}
