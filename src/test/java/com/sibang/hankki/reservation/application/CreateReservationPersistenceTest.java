@@ -28,6 +28,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.Callable;
+import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -156,11 +157,18 @@ class CreateReservationPersistenceTest {
     void concurrentIdenticalIdempotencyRequestsReserveOnlyOnce() throws Exception {
         BookingSlot slot = slotAt("21:30", 4);
         ExecutorService executor = Executors.newFixedThreadPool(2);
+        CyclicBarrier startTogether = new CyclicBarrier(2);
         try {
             Callable<com.sibang.hankki.reservation.application.port.in.CreateReservationResult> first =
-                    () -> service.create(command("same-concurrent-key", 2, "21:30"));
+                    () -> {
+                        startTogether.await();
+                        return service.create(command("same-concurrent-key", 2, "21:30"));
+                    };
             Callable<com.sibang.hankki.reservation.application.port.in.CreateReservationResult> second =
-                    () -> service.create(command("same-concurrent-key", 2, "21:30"));
+                    () -> {
+                        startTogether.await();
+                        return service.create(command("same-concurrent-key", 2, "21:30"));
+                    };
             List<Future<com.sibang.hankki.reservation.application.port.in.CreateReservationResult>> results =
                     executor.invokeAll(List.of(first, second));
             var firstResult = results.get(0).get();
@@ -175,7 +183,9 @@ class CreateReservationPersistenceTest {
         UUID reservationId = jdbcTemplate.queryForObject(
                 "select id from reservations where restaurant_id = ? and booking_slot_id = ?", UUID.class,
                 restaurantId, slot.getId());
-        assertEquals(2, eventRepository.findByReservationIdOrderByCreatedAtAscIdAsc(reservationId).size());
+        assertEquals(List.of("REQUESTED", "CONFIRMED"), eventRepository
+                .findByReservationIdOrderByCreatedAtAscIdAsc(reservationId).stream()
+                .map(event -> event.getEventType().name()).toList());
     }
 
     private boolean createConcurrently(String key) {
