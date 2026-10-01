@@ -7,15 +7,24 @@ import com.sibang.hankki.reservation.domain.model.Reservation;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 @Component
 public class ReservationPersistenceAdapter implements ReservationPersistencePort {
 
     private final ReservationJpaRepository repository;
+    private final JdbcTemplate jdbcTemplate;
 
-    public ReservationPersistenceAdapter(ReservationJpaRepository repository) {
+    public ReservationPersistenceAdapter(ReservationJpaRepository repository, JdbcTemplate jdbcTemplate) {
         this.repository = repository;
+        this.jdbcTemplate = jdbcTemplate;
+    }
+
+    @Override
+    public void lockIdempotencyKey(String idempotencyKey) {
+        jdbcTemplate.queryForObject(
+                "select pg_advisory_xact_lock(hashtextextended(?, 0))", Object.class, idempotencyKey);
     }
 
     @Override

@@ -73,6 +73,7 @@ public class CreateReservationService implements CreateReservationUseCase {
         validateRequired(command);
         String fingerprint = fingerprint(command);
 
+        reservationPersistencePort.lockIdempotencyKey(command.idempotencyKey());
         Reservation previous = reservationPersistencePort.findByIdempotencyKey(command.idempotencyKey()).orElse(null);
         if (previous != null) {
             if (!previous.requestFingerprint().equals(fingerprint)) {
@@ -100,6 +101,9 @@ public class CreateReservationService implements CreateReservationUseCase {
         }
 
         Instant startsAt = date.atTime(time).atZone(BookingTime.RESTAURANT_TIME_ZONE).toInstant();
+        if (!startsAt.isAfter(Instant.now(clock))) {
+            throw new InvalidReservationRequestException("Reservation time must be in the future");
+        }
         BookingSlotData slot = bookingSlotPort.findByRestaurantIdAndStartsAt(restaurant.id(), startsAt)
                 .orElseThrow(ReservationSlotNotFoundException::new);
         boolean requiresConfirmation = policy.requiresRestaurantConfirmation(command.partySize());

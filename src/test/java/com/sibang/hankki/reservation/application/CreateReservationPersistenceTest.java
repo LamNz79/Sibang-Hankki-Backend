@@ -152,6 +152,32 @@ class CreateReservationPersistenceTest {
                 restaurantId, smallSlot.getId()));
     }
 
+    @Test
+    void concurrentIdenticalIdempotencyRequestsReserveOnlyOnce() throws Exception {
+        BookingSlot slot = slotAt("21:30", 4);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Callable<com.sibang.hankki.reservation.application.port.in.CreateReservationResult> first =
+                    () -> service.create(command("same-concurrent-key", 2, "21:30"));
+            Callable<com.sibang.hankki.reservation.application.port.in.CreateReservationResult> second =
+                    () -> service.create(command("same-concurrent-key", 2, "21:30"));
+            List<Future<com.sibang.hankki.reservation.application.port.in.CreateReservationResult>> results =
+                    executor.invokeAll(List.of(first, second));
+            var firstResult = results.get(0).get();
+            var secondResult = results.get(1).get();
+
+            assertEquals(firstResult.reservation().id(), secondResult.reservation().id());
+            assertTrue(firstResult.idempotentReplay() != secondResult.idempotentReplay());
+        } finally {
+            executor.shutdownNow();
+        }
+        assertEquals(2, slotRepository.findById(slot.getId()).orElseThrow().getCapacityReserved());
+        UUID reservationId = jdbcTemplate.queryForObject(
+                "select id from reservations where restaurant_id = ? and booking_slot_id = ?", UUID.class,
+                restaurantId, slot.getId());
+        assertEquals(2, eventRepository.findByReservationIdOrderByCreatedAtAscIdAsc(reservationId).size());
+    }
+
     private boolean createConcurrently(String key) {
         try {
             service.create(command(key, 2, "20:30"));

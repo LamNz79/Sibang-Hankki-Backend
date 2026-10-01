@@ -173,6 +173,18 @@ class CreateReservationServiceTest {
                 .isInstanceOf(ReservationSlotNotFoundException.class);
     }
 
+    @Test
+    void rejectsEarlierTimeOnTheCurrentLocalDate() {
+        givenSettings(ConfirmationMode.AUTO, null);
+
+        assertThatThrownBy(() -> service.create(new CreateReservationCommand(
+                "same-day-past", "anan-saigon", "2026-10-01", "09:30", 2,
+                "Minh Lam", "0900000000", null, null, null)))
+                .isInstanceOf(InvalidReservationRequestException.class);
+
+        verify(bookingSlotPort, never()).findByRestaurantIdAndStartsAt(eq(RESTAURANT_ID), any());
+    }
+
     private void givenSettings(ConfirmationMode mode, Integer manualThreshold) {
         when(bookingSettingsPort.findByRestaurantId(RESTAURANT_ID)).thenReturn(Optional.of(new BookingSettings(
                 RESTAURANT_ID, 20, 60, 90, mode, manualThreshold, 30, 1, 10, 11)));
