@@ -63,8 +63,16 @@ public class BookingSlot {
         return restaurantId;
     }
 
+    public UUID getId() {
+        return id;
+    }
+
     public Instant getStartsAt() {
         return startsAt;
+    }
+
+    public Instant getEndsAt() {
+        return endsAt;
     }
 
     public int getCapacityTotal() {
