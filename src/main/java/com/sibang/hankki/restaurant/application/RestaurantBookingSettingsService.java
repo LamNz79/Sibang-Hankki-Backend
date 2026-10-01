@@ -1,35 +1,34 @@
 package com.sibang.hankki.restaurant.application;
-import com.sibang.hankki.restaurant.adapter.out.persistence.entity.RestaurantBookingSettings;
-import com.sibang.hankki.restaurant.adapter.out.persistence.entity.RestaurantEntity;
-import com.sibang.hankki.restaurant.adapter.out.persistence.repository.RestaurantBookingSettingsRepository;
-import com.sibang.hankki.restaurant.adapter.out.persistence.repository.RestaurantCatalogRepository;
+
 import com.sibang.hankki.restaurant.application.exception.BookingSettingsNotConfiguredException;
 import com.sibang.hankki.restaurant.application.exception.RestaurantNotFoundException;
-
+import com.sibang.hankki.restaurant.application.port.out.BookingSettings;
+import com.sibang.hankki.restaurant.application.port.out.BookingSettingsPort;
+import com.sibang.hankki.restaurant.application.port.out.RestaurantCatalogPort;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 
 @Service
 class RestaurantBookingSettingsService {
 
-    private final RestaurantBookingSettingsRepository settingsRepository;
-    private final RestaurantCatalogRepository restaurantRepository;
+    private final BookingSettingsPort bookingSettingsPort;
+    private final RestaurantCatalogPort restaurantCatalogPort;
 
     RestaurantBookingSettingsService(
-            RestaurantBookingSettingsRepository settingsRepository,
-            RestaurantCatalogRepository restaurantRepository) {
-        this.settingsRepository = settingsRepository;
-        this.restaurantRepository = restaurantRepository;
+            BookingSettingsPort bookingSettingsPort,
+            RestaurantCatalogPort restaurantCatalogPort) {
+        this.bookingSettingsPort = bookingSettingsPort;
+        this.restaurantCatalogPort = restaurantCatalogPort;
     }
 
-    RestaurantBookingSettings getByRestaurantId(UUID restaurantId) {
-        return settingsRepository.findById(restaurantId)
+    BookingSettings getByRestaurantId(UUID restaurantId) {
+        return bookingSettingsPort.findByRestaurantId(restaurantId)
                 .orElseThrow(BookingSettingsNotConfiguredException::new);
     }
 
-    RestaurantBookingSettings getByRestaurantSlug(String slug) {
-        UUID restaurantId = restaurantRepository.findActiveBySlug(slug)
-                .map(RestaurantEntity::getId)
+    BookingSettings getByRestaurantSlug(String slug) {
+        UUID restaurantId = restaurantCatalogPort.findActiveRestaurantBySlug(slug)
+                .map(restaurant -> restaurant.id())
                 .orElseThrow(RestaurantNotFoundException::new);
         return getByRestaurantId(restaurantId);
     }

@@ -5,6 +5,7 @@ import com.sibang.hankki.restaurant.adapter.out.persistence.repository.BookingSl
 import com.sibang.hankki.restaurant.adapter.out.persistence.repository.RestaurantBookingSettingsRepository;
 import com.sibang.hankki.restaurant.application.exception.BookingSettingsNotConfiguredException;
 import com.sibang.hankki.restaurant.application.exception.RestaurantNotFoundException;
+import com.sibang.hankki.restaurant.domain.booking.BookingSlotCandidate;
 import com.sibang.hankki.restaurant.domain.model.ConfirmationMode;
 
 import jakarta.persistence.EntityManager;
@@ -75,20 +76,21 @@ class BookingSlotGenerationPersistenceTest {
     void generatesPersistedSlotsWithConfiguredCapacity() {
         settingsRepository.saveAndFlush(settings(20));
 
-        List<BookingSlot> generated = generationService.generateSlots(restaurantId, generationDate, generationDate);
+        List<BookingSlotCandidate> generated = generationService.generateSlots(restaurantId, generationDate, generationDate);
+        List<BookingSlot> persisted = slotsInRange();
 
         assertEquals(10, generated.size());
-        assertEquals(20, generated.get(0).getCapacityTotal());
-        assertEquals(0, generated.get(0).getCapacityReserved());
-        assertEquals(10, slotsInRange().size());
+        assertEquals(10, persisted.size());
+        assertEquals(20, persisted.get(0).getCapacityTotal());
+        assertEquals(0, persisted.get(0).getCapacityReserved());
     }
 
     @Test
     void runningGenerationTwiceDoesNotCreateDuplicates() {
         settingsRepository.saveAndFlush(settings(20));
 
-        List<BookingSlot> firstRun = generationService.generateSlots(restaurantId, generationDate, generationDate);
-        List<BookingSlot> secondRun = generationService.generateSlots(restaurantId, generationDate, generationDate);
+        List<BookingSlotCandidate> firstRun = generationService.generateSlots(restaurantId, generationDate, generationDate);
+        List<BookingSlotCandidate> secondRun = generationService.generateSlots(restaurantId, generationDate, generationDate);
 
         assertEquals(10, firstRun.size());
         assertEquals(List.of(), secondRun);
@@ -98,9 +100,9 @@ class BookingSlotGenerationPersistenceTest {
     @Test
     void runningGenerationAgainDoesNotOverwriteExistingCapacityValues() {
         settingsRepository.saveAndFlush(settings(20));
-        List<BookingSlot> generated = generationService.generateSlots(restaurantId, generationDate, generationDate);
+        List<BookingSlotCandidate> generated = generationService.generateSlots(restaurantId, generationDate, generationDate);
         entityManager.flush();
-        Instant startsAt = generated.get(0).getStartsAt();
+        Instant startsAt = generated.get(0).startsAt();
         assertEquals(1, jdbcTemplate.update("""
                 update booking_slots
                 set capacity_total = 99, capacity_reserved = 5

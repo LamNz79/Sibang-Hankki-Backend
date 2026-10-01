@@ -1,13 +1,13 @@
 package com.sibang.hankki.restaurant.application.booking;
-import com.sibang.hankki.restaurant.adapter.out.persistence.entity.BookingSlot;
-import com.sibang.hankki.restaurant.adapter.out.persistence.entity.RestaurantBookingSettings;
-import com.sibang.hankki.restaurant.adapter.out.persistence.entity.RestaurantBusinessHourEntity;
-import com.sibang.hankki.restaurant.adapter.out.persistence.entity.RestaurantEntity;
-import com.sibang.hankki.restaurant.adapter.out.persistence.repository.BookingSlotRepository;
-import com.sibang.hankki.restaurant.adapter.out.persistence.repository.RestaurantBookingSettingsRepository;
-import com.sibang.hankki.restaurant.adapter.out.persistence.repository.RestaurantCatalogRepository;
-import com.sibang.hankki.restaurant.domain.model.ConfirmationMode;
 
+import com.sibang.hankki.restaurant.application.port.out.BookingSettings;
+import com.sibang.hankki.restaurant.application.port.out.BookingSettingsPort;
+import com.sibang.hankki.restaurant.application.port.out.BookingSlotPort;
+import com.sibang.hankki.restaurant.application.port.out.RestaurantBusinessHourData;
+import com.sibang.hankki.restaurant.application.port.out.RestaurantCatalogPort;
+import com.sibang.hankki.restaurant.application.port.out.RestaurantData;
+import com.sibang.hankki.restaurant.domain.booking.BookingSlotCandidate;
+import com.sibang.hankki.restaurant.domain.model.ConfirmationMode;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
@@ -33,94 +34,90 @@ class BookingSlotGenerationServiceTest {
     private static final LocalDate TODAY = LocalDate.of(2026, 9, 28);
 
     private final UUID restaurantId = UUID.randomUUID();
-    private RestaurantCatalogRepository restaurantRepository;
-    private RestaurantBookingSettingsRepository settingsRepository;
-    private BookingSlotRepository slotRepository;
+    private RestaurantCatalogPort restaurantCatalogPort;
+    private BookingSettingsPort bookingSettingsPort;
+    private BookingSlotPort bookingSlotPort;
     private BookingSlotGenerationService service;
 
     @BeforeEach
     void setUp() {
-        restaurantRepository = mock(RestaurantCatalogRepository.class);
-        settingsRepository = mock(RestaurantBookingSettingsRepository.class);
-        slotRepository = mock(BookingSlotRepository.class);
+        restaurantCatalogPort = mock(RestaurantCatalogPort.class);
+        bookingSettingsPort = mock(BookingSettingsPort.class);
+        bookingSlotPort = mock(BookingSlotPort.class);
         service = new BookingSlotGenerationService(
-                restaurantRepository,
-                settingsRepository,
-                slotRepository,
+                restaurantCatalogPort,
+                bookingSettingsPort,
+                bookingSlotPort,
                 Clock.fixed(TODAY.atStartOfDay().toInstant(ZoneOffset.UTC), ZoneOffset.UTC));
     }
 
     @Test
     void generatesSlotsUsingBookingIntervalAndDiningDuration() {
-        configure((short) 15, (short) 30, List.of(hours(1, "10:00", "11:00")));
+        configure(15, 30, List.of(hours(1, "10:00", "11:00")));
 
-        List<BookingSlot> slots = service.generateSlots(restaurantId, TODAY, TODAY);
+        List<BookingSlotCandidate> slots = service.generateSlots(restaurantId, TODAY, TODAY);
 
         assertEquals(List.of(
                         Instant.parse("2026-09-28T03:00:00Z"),
                         Instant.parse("2026-09-28T03:15:00Z"),
                         Instant.parse("2026-09-28T03:30:00Z")),
-                slots.stream().map(BookingSlot::getStartsAt).toList());
+                slots.stream().map(BookingSlotCandidate::startsAt).toList());
     }
 
     @Test
     void doesNotGenerateSlotWhoseDiningPeriodEndsAfterClosing() {
-        configure((short) 15, (short) 30, List.of(hours(1, "10:00", "10:45")));
+        configure(15, 30, List.of(hours(1, "10:00", "10:45")));
 
-        List<BookingSlot> slots = service.generateSlots(restaurantId, TODAY, TODAY);
+        List<BookingSlotCandidate> slots = service.generateSlots(restaurantId, TODAY, TODAY);
 
         assertEquals(List.of(
                         Instant.parse("2026-09-28T03:00:00Z"),
                         Instant.parse("2026-09-28T03:15:00Z")),
-                slots.stream().map(BookingSlot::getStartsAt).toList());
+                slots.stream().map(BookingSlotCandidate::startsAt).toList());
     }
 
     @Test
     void supportsSplitLunchAndDinnerPeriods() {
-        configure((short) 30, (short) 30, List.of(
-                hours(1, "11:00", "12:00"),
-                hours(1, "17:00", "18:00")));
+        configure(30, 30, List.of(hours(1, "11:00", "12:00"), hours(1, "17:00", "18:00")));
 
-        List<BookingSlot> slots = service.generateSlots(restaurantId, TODAY, TODAY);
+        List<BookingSlotCandidate> slots = service.generateSlots(restaurantId, TODAY, TODAY);
 
         assertEquals(List.of(
                         Instant.parse("2026-09-28T04:00:00Z"),
                         Instant.parse("2026-09-28T04:30:00Z"),
                         Instant.parse("2026-09-28T10:00:00Z"),
                         Instant.parse("2026-09-28T10:30:00Z")),
-                slots.stream().map(BookingSlot::getStartsAt).toList());
+                slots.stream().map(BookingSlotCandidate::startsAt).toList());
     }
 
     @Test
     void deduplicatesSlotsFromOverlappingBusinessHourPeriods() {
-        configure((short) 30, (short) 30, List.of(
-                hours(1, "10:00", "11:00"),
-                hours(1, "10:30", "11:30")));
+        configure(30, 30, List.of(hours(1, "10:00", "11:00"), hours(1, "10:30", "11:30")));
 
-        List<BookingSlot> slots = service.generateSlots(restaurantId, TODAY, TODAY);
+        List<BookingSlotCandidate> slots = service.generateSlots(restaurantId, TODAY, TODAY);
 
         assertEquals(List.of(
                         Instant.parse("2026-09-28T03:00:00Z"),
                         Instant.parse("2026-09-28T03:30:00Z"),
                         Instant.parse("2026-09-28T04:00:00Z")),
-                slots.stream().map(BookingSlot::getStartsAt).toList());
+                slots.stream().map(BookingSlotCandidate::startsAt).toList());
     }
 
     @Test
     void returnsNoSlotsOnDayWithoutBusinessHours() {
-        configure((short) 15, (short) 30, List.of(hours(2, "10:00", "11:00")));
+        configure(15, 30, List.of(hours(2, "10:00", "11:00")));
 
         assertEquals(List.of(), service.generateSlots(restaurantId, TODAY, TODAY));
-        verify(slotRepository, never()).saveAll(anyList());
+        verify(bookingSlotPort, never()).saveGeneratedSlots(any(), anyList(), anyInt());
     }
 
     @Test
     void convertsLocalBusinessHoursUsingHoChiMinhTimezone() {
-        configure((short) 30, (short) 30, List.of(hours(1, "11:30", "12:00")));
+        configure(30, 30, List.of(hours(1, "11:30", "12:00")));
 
-        List<BookingSlot> slots = service.generateSlots(restaurantId, TODAY, TODAY);
+        List<BookingSlotCandidate> slots = service.generateSlots(restaurantId, TODAY, TODAY);
 
-        assertEquals(Instant.parse("2026-09-28T04:30:00Z"), slots.get(0).getStartsAt());
+        assertEquals(Instant.parse("2026-09-28T04:30:00Z"), slots.get(0).startsAt());
     }
 
     @Test
@@ -138,14 +135,14 @@ class BookingSlotGenerationServiceTest {
     @Test
     void acceptsLastDateInBookingWindow() {
         LocalDate lastAllowedDate = TODAY.plusDays(29);
-        configure((short) 15, (short) 30, List.of(hours(lastAllowedDate.getDayOfWeek().getValue(), "10:00", "10:30")));
+        configure(15, 30, List.of(hours(lastAllowedDate.getDayOfWeek().getValue(), "10:00", "10:30")));
 
         assertEquals(1, service.generateSlots(restaurantId, lastAllowedDate, lastAllowedDate).size());
     }
 
     @Test
     void rejectsOneDayBeyondBookingWindow() {
-        configure((short) 15, (short) 30, List.of());
+        configure(15, 30, List.of());
 
         assertThrows(IllegalArgumentException.class,
                 () -> service.generateSlots(restaurantId, TODAY.plusDays(30), TODAY.plusDays(30)));
@@ -153,7 +150,7 @@ class BookingSlotGenerationServiceTest {
 
     @Test
     void rejectsSingleDayRequestFarBeyondBookingWindow() {
-        configure((short) 15, (short) 30, List.of());
+        configure(15, 30, List.of());
 
         assertThrows(IllegalArgumentException.class,
                 () -> service.generateSlots(restaurantId, TODAY.plusDays(365), TODAY.plusDays(365)));
@@ -161,36 +158,34 @@ class BookingSlotGenerationServiceTest {
 
     @Test
     void acceptsMultiDayRangeInsideBookingWindow() {
-        configure((short) 15, (short) 30, List.of());
+        configure(15, 30, List.of());
 
         assertEquals(List.of(), service.generateSlots(restaurantId, TODAY.plusDays(5), TODAY.plusDays(9)));
     }
 
     @Test
     void rejectsRequiredInputs() {
-        assertThrows(IllegalArgumentException.class,
-                () -> service.generateSlots(null, TODAY, TODAY));
-        assertThrows(IllegalArgumentException.class,
-                () -> service.generateSlots(restaurantId, null, TODAY));
-        assertThrows(IllegalArgumentException.class,
-                () -> service.generateSlots(restaurantId, TODAY, null));
+        assertThrows(IllegalArgumentException.class, () -> service.generateSlots(null, TODAY, TODAY));
+        assertThrows(IllegalArgumentException.class, () -> service.generateSlots(restaurantId, null, TODAY));
+        assertThrows(IllegalArgumentException.class, () -> service.generateSlots(restaurantId, TODAY, null));
     }
 
-    private void configure(short interval, short duration, List<RestaurantBusinessHourEntity> hours) {
-        given(restaurantRepository.findActiveById(restaurantId)).willReturn(Optional.of(new RestaurantEntity()));
-        given(settingsRepository.findById(restaurantId)).willReturn(Optional.of(new RestaurantBookingSettings(
-                restaurantId, 20, interval, duration, (short) 10, 30, ConfirmationMode.AUTO, null,
-                (short) 30, (short) 1, (short) 6, (short) 7, 120, 15)));
-        given(restaurantRepository.findBusinessHoursByRestaurantIds(List.of(restaurantId))).willReturn(hours);
-        given(slotRepository.findByRestaurantIdAndStartsAtGreaterThanEqualAndStartsAtLessThanOrderByStartsAt(
-                org.mockito.ArgumentMatchers.eq(restaurantId), any(), any())).willReturn(List.of());
+    private void configure(int interval, int duration, List<RestaurantBusinessHourData> hours) {
+        given(restaurantCatalogPort.findActiveRestaurantById(restaurantId))
+                .willReturn(Optional.of(restaurant()));
+        given(bookingSettingsPort.findByRestaurantId(restaurantId)).willReturn(Optional.of(new BookingSettings(
+                restaurantId, 20, interval, duration, ConfirmationMode.AUTO, null, 30, 1, 6, 7)));
+        given(restaurantCatalogPort.findBusinessHoursByRestaurantIds(List.of(restaurantId))).willReturn(hours);
+        given(bookingSlotPort.findSlotCapacities(org.mockito.ArgumentMatchers.eq(restaurantId), any(), any()))
+                .willReturn(List.of());
     }
 
-    private RestaurantBusinessHourEntity hours(int dayOfWeek, String opensAt, String closesAt) {
-        RestaurantBusinessHourEntity hours = mock(RestaurantBusinessHourEntity.class);
-        given(hours.getDayOfWeek()).willReturn((short) dayOfWeek);
-        given(hours.getOpensAt()).willReturn(LocalTime.parse(opensAt));
-        given(hours.getClosesAt()).willReturn(LocalTime.parse(closesAt));
-        return hours;
+    private RestaurantBusinessHourData hours(int dayOfWeek, String opensAt, String closesAt) {
+        return new RestaurantBusinessHourData(
+                restaurantId, (short) dayOfWeek, LocalTime.parse(opensAt), LocalTime.parse(closesAt));
+    }
+
+    private RestaurantData restaurant() {
+        return new RestaurantData(restaurantId, "anan-saigon", "", "", "", "", "", "", "", "", "");
     }
 }
