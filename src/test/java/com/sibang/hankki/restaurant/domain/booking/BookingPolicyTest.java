@@ -1,10 +1,13 @@
 package com.sibang.hankki.restaurant.domain.booking;
 
 import com.sibang.hankki.restaurant.domain.model.ConfirmationMode;
+import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.function.Executable;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -82,6 +85,93 @@ class BookingPolicyTest {
                 () -> policy.validateGenerationRange(TODAY.minusDays(1), TODAY, TODAY));
         assertThrows(BookingRuleViolationException.class,
                 () -> policy.validateGenerationRange(TODAY.plusDays(30), TODAY.plusDays(30), TODAY));
+    }
+
+    @Test
+    void rejectsNonPositiveGuestCapacity() {
+        assertViolation("guestCapacity must be positive",
+                () -> bookingPolicy(0, 30, 30, ConfirmationMode.AUTO, null, 30, 1, 6, 7));
+    }
+
+    @Test
+    void rejectsZeroOrNegativeBookingIntervalWithoutInvokingTheGenerator() {
+        assertViolation("bookingIntervalMinutes must be positive",
+                () -> bookingPolicy(20, 0, 30, ConfirmationMode.AUTO, null, 30, 1, 6, 7));
+        assertViolation("bookingIntervalMinutes must be positive",
+                () -> bookingPolicy(20, -1, 30, ConfirmationMode.AUTO, null, 30, 1, 6, 7));
+    }
+
+    @Test
+    void rejectsNonPositiveDiningDuration() {
+        assertViolation("diningDurationMinutes must be positive",
+                () -> bookingPolicy(20, 30, 0, ConfirmationMode.AUTO, null, 30, 1, 6, 7));
+    }
+
+    @Test
+    void rejectsNonPositiveBookingWindow() {
+        assertViolation("bookingWindowDays must be positive",
+                () -> bookingPolicy(20, 30, 30, ConfirmationMode.AUTO, null, 0, 1, 6, 7));
+    }
+
+    @Test
+    void rejectsNonPositiveMinimumPartySize() {
+        assertViolation("minimumPartySize must be positive",
+                () -> bookingPolicy(20, 30, 30, ConfirmationMode.AUTO, null, 30, 0, 6, 7));
+    }
+
+    @Test
+    void rejectsMaximumOnlinePartySizeBelowMinimum() {
+        assertViolation("maximumOnlinePartySize must be greater than or equal to minimumPartySize",
+                () -> bookingPolicy(20, 30, 30, ConfirmationMode.AUTO, null, 30, 3, 2, 3));
+    }
+
+    @Test
+    void rejectsLargePartyThresholdBelowMaximumOnlinePartySize() {
+        assertViolation("largePartyThreshold must be greater than or equal to maximumOnlinePartySize",
+                () -> bookingPolicy(20, 30, 30, ConfirmationMode.AUTO, null, 30, 1, 6, 5));
+    }
+
+    @Test
+    void rejectsMissingOrNonPositiveHybridManualConfirmationThreshold() {
+        assertViolation("HYBRID confirmationMode requires manualConfirmationMinPartySize",
+                () -> bookingPolicy(20, 30, 30, ConfirmationMode.HYBRID, null, 30, 1, 6, 7));
+        assertViolation("manualConfirmationMinPartySize must be positive for HYBRID confirmationMode",
+                () -> bookingPolicy(20, 30, 30, ConfirmationMode.HYBRID, 0, 30, 1, 6, 7));
+    }
+
+    @Test
+    void rejectsManualConfirmationThresholdForAutoAndManualModes() {
+        assertViolation("AUTO and MANUAL confirmationMode must not define manualConfirmationMinPartySize",
+                () -> bookingPolicy(20, 30, 30, ConfirmationMode.AUTO, 4, 30, 1, 6, 7));
+        assertViolation("AUTO and MANUAL confirmationMode must not define manualConfirmationMinPartySize",
+                () -> bookingPolicy(20, 30, 30, ConfirmationMode.MANUAL, 4, 30, 1, 6, 7));
+    }
+
+    @Test
+    void rejectsBusinessPeriodWhoseOpeningTimeIsNotBeforeClosingTime() {
+        assertViolation("opensAt must be before closesAt",
+                () -> new BusinessPeriod(DayOfWeek.MONDAY, LocalTime.of(10, 0), LocalTime.of(10, 0)));
+        assertViolation("opensAt must be before closesAt",
+                () -> new BusinessPeriod(DayOfWeek.MONDAY, LocalTime.of(11, 0), LocalTime.of(10, 0)));
+    }
+
+    private void assertViolation(String expectedMessage, Executable action) {
+        BookingRuleViolationException exception = assertThrows(BookingRuleViolationException.class, action);
+        assertEquals(expectedMessage, exception.getMessage());
+    }
+
+    private BookingPolicy bookingPolicy(
+            int guestCapacity,
+            int interval,
+            int duration,
+            ConfirmationMode mode,
+            Integer hybridThreshold,
+            int windowDays,
+            int minimum,
+            int maximumOnline,
+            int largeThreshold) {
+        return new BookingPolicy(
+                guestCapacity, interval, duration, mode, hybridThreshold, windowDays, minimum, maximumOnline, largeThreshold);
     }
 
     private BookingPolicy policy(

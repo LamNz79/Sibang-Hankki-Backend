@@ -2,13 +2,21 @@ package com.sibang.hankki.restaurant.domain.booking;
 
 import java.time.DayOfWeek;
 import java.time.LocalTime;
-import java.util.Objects;
 
 public record BusinessPeriod(DayOfWeek dayOfWeek, LocalTime opensAt, LocalTime closesAt) {
 
     public BusinessPeriod {
-        Objects.requireNonNull(dayOfWeek, "dayOfWeek is required");
-        Objects.requireNonNull(opensAt, "opensAt is required");
-        Objects.requireNonNull(closesAt, "closesAt is required");
+        if (dayOfWeek == null) {
+            throw new BookingRuleViolationException("dayOfWeek is required");
+        }
+        if (opensAt == null) {
+            throw new BookingRuleViolationException("opensAt is required");
+        }
+        if (closesAt == null) {
+            throw new BookingRuleViolationException("closesAt is required");
+        }
+        if (!opensAt.isBefore(closesAt)) {
+            throw new BookingRuleViolationException("opensAt must be before closesAt");
+        }
     }
 }

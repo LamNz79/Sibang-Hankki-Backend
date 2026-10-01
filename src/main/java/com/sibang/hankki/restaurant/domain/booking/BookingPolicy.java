@@ -3,7 +3,6 @@ package com.sibang.hankki.restaurant.domain.booking;
 import com.sibang.hankki.restaurant.domain.model.ConfirmationMode;
 import java.time.LocalDate;
 import java.util.List;
-import java.util.Objects;
 
 public record BookingPolicy(
         int guestCapacity,
@@ -17,7 +16,45 @@ public record BookingPolicy(
         int largePartyThreshold) {
 
     public BookingPolicy {
-        Objects.requireNonNull(confirmationMode, "confirmationMode is required");
+        if (guestCapacity <= 0) {
+            throw new BookingRuleViolationException("guestCapacity must be positive");
+        }
+        if (bookingIntervalMinutes <= 0) {
+            throw new BookingRuleViolationException("bookingIntervalMinutes must be positive");
+        }
+        if (diningDurationMinutes <= 0) {
+            throw new BookingRuleViolationException("diningDurationMinutes must be positive");
+        }
+        if (confirmationMode == null) {
+            throw new BookingRuleViolationException("confirmationMode is required");
+        }
+        if (bookingWindowDays <= 0) {
+            throw new BookingRuleViolationException("bookingWindowDays must be positive");
+        }
+        if (minimumPartySize <= 0) {
+            throw new BookingRuleViolationException("minimumPartySize must be positive");
+        }
+        if (maximumOnlinePartySize < minimumPartySize) {
+            throw new BookingRuleViolationException(
+                    "maximumOnlinePartySize must be greater than or equal to minimumPartySize");
+        }
+        if (largePartyThreshold < maximumOnlinePartySize) {
+            throw new BookingRuleViolationException(
+                    "largePartyThreshold must be greater than or equal to maximumOnlinePartySize");
+        }
+        if (confirmationMode == ConfirmationMode.HYBRID) {
+            if (manualConfirmationMinPartySize == null) {
+                throw new BookingRuleViolationException(
+                        "HYBRID confirmationMode requires manualConfirmationMinPartySize");
+            }
+            if (manualConfirmationMinPartySize <= 0) {
+                throw new BookingRuleViolationException(
+                        "manualConfirmationMinPartySize must be positive for HYBRID confirmationMode");
+            }
+        } else if (manualConfirmationMinPartySize != null) {
+            throw new BookingRuleViolationException(
+                    "AUTO and MANUAL confirmationMode must not define manualConfirmationMinPartySize");
+        }
     }
 
     public void validateAvailabilityRequest(LocalDate date, LocalDate today, int partySize) {
@@ -31,8 +68,12 @@ public record BookingPolicy(
     }
 
     public static void validateBasicRequest(LocalDate date, LocalDate today, int partySize) {
-        Objects.requireNonNull(date, "date is required");
-        Objects.requireNonNull(today, "today is required");
+        if (date == null) {
+            throw new BookingRuleViolationException("date is required");
+        }
+        if (today == null) {
+            throw new BookingRuleViolationException("today is required");
+        }
         if (partySize <= 0) {
             throw new BookingRuleViolationException("partySize must be positive");
         }
