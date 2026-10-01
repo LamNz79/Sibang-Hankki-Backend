@@ -1,6 +1,6 @@
 package com.sibang.hankki.restaurant.adapter.in.web;
-import com.sibang.hankki.restaurant.application.RestaurantAvailabilityService;
-import com.sibang.hankki.restaurant.application.RestaurantCatalogService;
+import com.sibang.hankki.restaurant.application.port.in.RestaurantAvailabilityUseCase;
+import com.sibang.hankki.restaurant.application.port.in.RestaurantCatalogUseCase;
 import com.sibang.hankki.restaurant.application.model.RestaurantResponse;
 import com.sibang.hankki.restaurant.application.model.RestaurantSummaryResponse;
 
@@ -27,10 +27,10 @@ class RestaurantControllerTest {
     private MockMvc mockMvc;
 
     @MockitoBean
-    private RestaurantCatalogService catalogService;
+    private RestaurantCatalogUseCase catalogService;
 
     @MockitoBean
-    private RestaurantAvailabilityService availabilityService;
+    private RestaurantAvailabilityUseCase availabilityService;
 
     @Test
     void listsRestaurantsWithoutSlots() throws Exception {

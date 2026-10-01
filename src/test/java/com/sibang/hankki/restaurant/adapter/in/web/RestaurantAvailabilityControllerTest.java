@@ -1,7 +1,7 @@
 package com.sibang.hankki.restaurant.adapter.in.web;
 
-import com.sibang.hankki.restaurant.application.RestaurantAvailabilityService;
-import com.sibang.hankki.restaurant.application.RestaurantCatalogService;
+import com.sibang.hankki.restaurant.application.port.in.RestaurantAvailabilityUseCase;
+import com.sibang.hankki.restaurant.application.port.in.RestaurantCatalogUseCase;
 import com.sibang.hankki.restaurant.application.exception.BookingSettingsNotConfiguredException;
 import com.sibang.hankki.restaurant.application.exception.InvalidBookingRequestException;
 import com.sibang.hankki.restaurant.application.exception.RestaurantNotFoundException;
@@ -25,10 +25,10 @@ class RestaurantAvailabilityControllerTest {
     private MockMvc mockMvc;
 
     @MockitoBean
-    private RestaurantCatalogService catalogService;
+    private RestaurantCatalogUseCase catalogService;
 
     @MockitoBean
-    private RestaurantAvailabilityService availabilityService;
+    private RestaurantAvailabilityUseCase availabilityService;
 
     @Test
     void preservesAvailabilityResponseContract() throws Exception {

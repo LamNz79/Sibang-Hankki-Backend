@@ -1,10 +1,10 @@
 package com.sibang.hankki.restaurant.adapter.in.web;
-import com.sibang.hankki.restaurant.application.RestaurantAvailabilityService;
-import com.sibang.hankki.restaurant.application.RestaurantCatalogService;
+
 import com.sibang.hankki.restaurant.application.model.RestaurantAvailabilityResponse;
 import com.sibang.hankki.restaurant.application.model.RestaurantResponse;
 import com.sibang.hankki.restaurant.application.model.RestaurantSummaryResponse;
-
+import com.sibang.hankki.restaurant.application.port.in.RestaurantAvailabilityUseCase;
+import com.sibang.hankki.restaurant.application.port.in.RestaurantCatalogUseCase;
 import java.util.List;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -17,24 +17,24 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/restaurants")
 class RestaurantController {
 
-    private final RestaurantCatalogService catalogService;
-    private final RestaurantAvailabilityService availabilityService;
+    private final RestaurantCatalogUseCase catalogUseCase;
+    private final RestaurantAvailabilityUseCase availabilityUseCase;
 
     RestaurantController(
-            RestaurantCatalogService catalogService,
-            RestaurantAvailabilityService availabilityService) {
-        this.catalogService = catalogService;
-        this.availabilityService = availabilityService;
+            RestaurantCatalogUseCase catalogUseCase,
+            RestaurantAvailabilityUseCase availabilityUseCase) {
+        this.catalogUseCase = catalogUseCase;
+        this.availabilityUseCase = availabilityUseCase;
     }
 
     @GetMapping
     List<RestaurantSummaryResponse> restaurants() {
-        return catalogService.restaurants();
+        return catalogUseCase.restaurants();
     }
 
     @GetMapping("/{slug}")
     ResponseEntity<RestaurantResponse> restaurant(@PathVariable String slug) {
-        return catalogService.restaurant(slug)
+        return catalogUseCase.restaurant(slug)
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
@@ -44,6 +44,6 @@ class RestaurantController {
             @PathVariable String slug,
             @RequestParam String date,
             @RequestParam int partySize) {
-        return availabilityService.availability(slug, date, partySize);
+        return availabilityUseCase.availability(slug, date, partySize);
     }
 }

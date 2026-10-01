@@ -72,15 +72,4 @@ public class RestaurantCatalogRepository {
                 .setParameter("restaurantIds", restaurantIds)
                 .getResultList();
     }
-
-    public List<Object[]> countActiveImagesByRestaurantIds(Collection<UUID> restaurantIds) {
-        return entityManager.createQuery("""
-                select image.restaurantId, count(image)
-                from RestaurantImageEntity image
-                where image.restaurantId in :restaurantIds and image.deletedAt is null
-                group by image.restaurantId
-                """, Object[].class)
-                .setParameter("restaurantIds", restaurantIds)
-                .getResultList();
-    }
 }

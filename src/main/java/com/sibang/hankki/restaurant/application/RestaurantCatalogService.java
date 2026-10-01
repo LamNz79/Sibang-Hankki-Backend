@@ -1,13 +1,15 @@
 package com.sibang.hankki.restaurant.application;
-import com.sibang.hankki.restaurant.adapter.out.persistence.entity.RestaurantBusinessHourEntity;
-import com.sibang.hankki.restaurant.adapter.out.persistence.entity.RestaurantEntity;
-import com.sibang.hankki.restaurant.adapter.out.persistence.entity.RestaurantTagEntity;
-import com.sibang.hankki.restaurant.adapter.out.persistence.repository.RestaurantCatalogRepository;
+
 import com.sibang.hankki.restaurant.application.model.RestaurantResponse;
 import com.sibang.hankki.restaurant.application.model.RestaurantSummaryResponse;
+import com.sibang.hankki.restaurant.application.port.in.RestaurantCatalogUseCase;
+import com.sibang.hankki.restaurant.application.port.out.RestaurantBusinessHourData;
+import com.sibang.hankki.restaurant.application.port.out.RestaurantCatalogPort;
+import com.sibang.hankki.restaurant.application.port.out.RestaurantData;
+import com.sibang.hankki.restaurant.application.port.out.RestaurantGalleryCount;
+import com.sibang.hankki.restaurant.application.port.out.RestaurantTagData;
 import com.sibang.hankki.restaurant.application.prototype.RestaurantAvailabilityMockData;
 import com.sibang.hankki.restaurant.application.prototype.RestaurantPrototypePresentation;
-
 import java.time.format.DateTimeFormatter;
 import java.util.Collection;
 import java.util.HashMap;
@@ -21,90 +23,92 @@ import java.util.regex.Pattern;
 import org.springframework.stereotype.Service;
 
 @Service
-public class RestaurantCatalogService {
+public class RestaurantCatalogService implements RestaurantCatalogUseCase {
 
     private static final Pattern FIRST_NUMBER = Pattern.compile("\\d+");
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm");
 
-    private final RestaurantCatalogRepository repository;
+    private final RestaurantCatalogPort catalogPort;
 
-    public RestaurantCatalogService(RestaurantCatalogRepository repository) {
-        this.repository = repository;
+    public RestaurantCatalogService(RestaurantCatalogPort catalogPort) {
+        this.catalogPort = catalogPort;
     }
 
+    @Override
     public List<RestaurantSummaryResponse> restaurants() {
-        return responses(repository.findAllActive(), false).stream()
+        return responses(catalogPort.findAllActiveRestaurants(), false).stream()
                 .map(RestaurantSummaryResponse::from)
                 .toList();
     }
 
+    @Override
     public Optional<RestaurantResponse> restaurant(String slug) {
-        return repository.findActiveBySlug(slug)
+        return catalogPort.findActiveRestaurantBySlug(slug)
                 .map(restaurant -> responses(List.of(restaurant), true).get(0));
     }
 
-    private List<RestaurantResponse> responses(List<RestaurantEntity> restaurants, boolean includeSlotMatrix) {
+    private List<RestaurantResponse> responses(List<RestaurantData> restaurants, boolean includeSlotMatrix) {
         if (restaurants.isEmpty()) {
             return List.of();
         }
-        List<UUID> ids = restaurants.stream().map(RestaurantEntity::getId).toList();
-        Map<UUID, List<RestaurantTagEntity>> tags = groupByRestaurant(
-                repository.findTagsByRestaurantIds(ids), RestaurantTagEntity::getRestaurantId);
-        Map<UUID, List<RestaurantBusinessHourEntity>> hours = groupByRestaurant(
-                repository.findBusinessHoursByRestaurantIds(ids), RestaurantBusinessHourEntity::getRestaurantId);
-        Map<UUID, Long> galleryCounts = galleryCounts(repository.countActiveImagesByRestaurantIds(ids));
+        List<UUID> ids = restaurants.stream().map(RestaurantData::id).toList();
+        Map<UUID, List<RestaurantTagData>> tags = groupByRestaurant(
+                catalogPort.findTagsByRestaurantIds(ids), RestaurantTagData::restaurantId);
+        Map<UUID, List<RestaurantBusinessHourData>> hours = groupByRestaurant(
+                catalogPort.findBusinessHoursByRestaurantIds(ids), RestaurantBusinessHourData::restaurantId);
+        Map<UUID, Long> galleryCounts = galleryCounts(catalogPort.countActiveImagesByRestaurantIds(ids));
 
         return restaurants.stream()
-                .map(restaurant -> response(restaurant, tags.getOrDefault(restaurant.getId(), List.of()),
-                        hours.getOrDefault(restaurant.getId(), List.of()), galleryCounts.getOrDefault(restaurant.getId(), 0L),
+                .map(restaurant -> response(restaurant, tags.getOrDefault(restaurant.id(), List.of()),
+                        hours.getOrDefault(restaurant.id(), List.of()), galleryCounts.getOrDefault(restaurant.id(), 0L),
                         includeSlotMatrix))
                 .toList();
     }
 
     private RestaurantResponse response(
-            RestaurantEntity restaurant,
-            List<RestaurantTagEntity> restaurantTags,
-            List<RestaurantBusinessHourEntity> businessHours,
+            RestaurantData restaurant,
+            List<RestaurantTagData> restaurantTags,
+            List<RestaurantBusinessHourData> businessHours,
             long galleryCount,
             boolean includeSlotMatrix) {
         RestaurantPrototypePresentation.Presentation presentation = RestaurantPrototypePresentation.forSlug(
-                restaurant.getSlug());
+                restaurant.slug());
         RestaurantAvailabilityMockData.Availability availability = RestaurantAvailabilityMockData.forSlug(
-                restaurant.getSlug());
+                restaurant.slug());
         List<String> benefits = restaurantTags.stream()
-                .filter(RestaurantTagEntity::isShowInBenefits)
-                .map(RestaurantTagEntity::getTag)
+                .filter(RestaurantTagData::showInBenefits)
+                .map(RestaurantTagData::tag)
                 .toList();
         if (availability != null && availability.showInBenefits()) {
             benefits = availability.availableFirst() ? prepend(benefits, "available") : append(benefits, "available");
         }
-        List<String> tags = restaurantTags.stream().map(RestaurantTagEntity::getTag).map(this::tagLabel).toList();
+        List<String> tags = restaurantTags.stream().map(RestaurantTagData::tag).map(this::tagLabel).toList();
         if (availability != null && availability.showInTags()) {
             tags = prepend(tags, "Available");
         }
 
         return new RestaurantResponse(
-                restaurant.getSlug(),
-                restaurant.getName(),
-                restaurant.getCitySlug(),
-                restaurant.getArea(),
-                restaurant.getDistrict(),
-                restaurant.getCuisineLabel(),
-                restaurant.getCuisineType(),
+                restaurant.slug(),
+                restaurant.name(),
+                restaurant.citySlug(),
+                restaurant.area(),
+                restaurant.district(),
+                restaurant.cuisineLabel(),
+                restaurant.cuisineType(),
                 presentation.rating(),
                 presentation.ratingCount(),
-                restaurant.getPriceRange(),
+                restaurant.priceRange(),
                 presentation.heroAccent(),
                 openHours(businessHours),
-                restaurant.getAddress(),
+                restaurant.address(),
                 availability == null ? "Availability unavailable" : "Available today from " + availability.availableFrom(),
                 availability == null ? null : availability.availableFrom(),
-                priceKey(restaurant.getPriceRange()),
+                priceKey(restaurant.priceRange()),
                 benefits,
                 tags,
                 Math.toIntExact(galleryCount),
-                restaurant.getDescription(),
-                includeSlotMatrix ? RestaurantAvailabilityMockData.slotMatrix(restaurant.getSlug()) : Map.of());
+                restaurant.description(),
+                includeSlotMatrix ? RestaurantAvailabilityMockData.slotMatrix(restaurant.slug()) : Map.of());
     }
 
     private <T> Map<UUID, List<T>> groupByRestaurant(List<T> values, Function<T, UUID> restaurantId) {
@@ -115,20 +119,20 @@ public class RestaurantCatalogService {
         return grouped;
     }
 
-    private Map<UUID, Long> galleryCounts(Collection<Object[]> rows) {
+    private Map<UUID, Long> galleryCounts(Collection<RestaurantGalleryCount> rows) {
         Map<UUID, Long> counts = new HashMap<>();
-        for (Object[] row : rows) {
-            counts.put((UUID) row[0], ((Number) row[1]).longValue());
+        for (RestaurantGalleryCount row : rows) {
+            counts.put(row.restaurantId(), row.count());
         }
         return counts;
     }
 
-    private String openHours(List<RestaurantBusinessHourEntity> businessHours) {
+    private String openHours(List<RestaurantBusinessHourData> businessHours) {
         return businessHours.stream()
-                .filter(hour -> hour.getDayOfWeek() == 1)
+                .filter(hour -> hour.dayOfWeek() == 1)
                 .findFirst()
                 .or(() -> businessHours.stream().findFirst())
-                .map(hour -> TIME.format(hour.getOpensAt()) + " - " + TIME.format(hour.getClosesAt()))
+                .map(hour -> TIME.format(hour.opensAt()) + " - " + TIME.format(hour.closesAt()))
                 .orElse("");
     }
 

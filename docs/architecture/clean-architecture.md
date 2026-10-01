@@ -1,35 +1,41 @@
-# Clean Architecture — Phase 2
+# Clean Architecture — Phase 3
 
-## Target package structure
+## Dependency direction
 
-The backend is a modular monolith. Restaurant dependencies flow from inbound adapters to application orchestration and then to pure domain rules; persistence remains an outbound adapter.
+The backend is a modular monolith. Restaurant dependencies are now enforced as:
+
+```text
+adapter.in → application.port.in
+application service/job → application.port.out + domain
+adapter.out.persistence → application.port.out + domain/application read models
+domain → Java only
+```
 
 ```text
 com.sibang.hankki
 ├── health/adapter/in/web
 ├── restaurant/domain/{booking,model}
-├── restaurant/application/{booking,exception,model,prototype}
+├── restaurant/application/{booking,exception,model,port,prototype}
+│   └── port/{in,out}
 ├── restaurant/adapter/in/{web,scheduling}
 ├── restaurant/adapter/out/persistence/{entity,repository}
 └── user/{domain,application,adapter/out/persistence/entity}
 ```
 
-## Phase 2 completed
+## Phase 3 completed
 
-`restaurant.domain.booking` is pure Java. It contains typed booking policy, business-period, slot-capacity, and slot-candidate models plus rules for booking dates/windows, party-size limits, confirmation mode, capacity, and slot generation. The domain has JUnit-only tests and imports no Spring, HTTP, JPA, database, or repository types.
+Inbound adapters depend on use-case interfaces only. `RestaurantController` uses catalog and availability ports; `BookingSlotGenerationScheduler` uses the scheduled slot-generation port.
 
-The application layer now loads JPA data, maps it to domain inputs, invokes domain rules, and maps results back to application responses or persistence entities. `RestaurantAvailabilityService` has no HTTP concern. It throws explicit application exceptions for invalid booking requests, missing restaurants, and missing booking settings.
+Application services use persistence-neutral outbound ports and read models. Catalog reads use typed restaurant, tag, business-hour, and gallery-count models. Booking availability and generation use typed booking settings plus domain slot/capacity types. `BookingDomainMapper` maps only application models to domain models.
 
-`adapter.in.web` owns HTTP status mapping through `RestaurantExceptionHandler`: invalid requests map to 400, unknown restaurants to 404, and missing settings to 409. Spring MVC continues to reject missing or non-numeric query parameters with 400.
+Persistence adapters implement the catalog, booking-settings, and booking-slot ports. JPA entities, Spring Data repositories, JPQL, and `EntityManager` are confined to `adapter.out.persistence`. Gallery counts use a typed `RestaurantGalleryCount` record rather than an `Object[]` projection. Slot generation remains transactional in the application service; the persistence adapter maps generated domain slots to JPA entities when saving.
 
 ## Guardrails
 
-ArchUnit protects domain isolation, inbound/application/persistence direction, the ban on inbound-to-outbound dependencies, application’s ban on Spring HTTP/web dependencies, and the placement of controller advice and exception handlers in inbound web adapters. Phase 1 controller, scheduler, entity, repository, reverse-web-dependency, and cycle rules remain active.
+ArchUnit retains all Phase 1 and Phase 2 rules and additionally prevents application code from depending on outbound adapters and inbound adapters from depending on concrete Spring `@Service` classes. This keeps adapters on port interfaces and keeps persistence implementation details outside the application layer.
 
-## Intentional Phase 3 debt
+## Compatibility and next work
 
-Application services still import JPA entities and Spring Data/JPA repositories. Phase 3 will introduce inbound use-case interfaces and outbound repository ports, with persistence adapters implementing those ports, so application code no longer depends on persistence implementations.
+Phase 3 preserves existing endpoints, successful JSON responses, exception-to-HTTP mapping, Asia/Ho_Chi_Minh behavior, scheduler behavior, GET availability's read-only behavior, schema, and Flyway V1–V6 migrations.
 
-## Compatibility
-
-Phase 2 preserves existing endpoints, successful JSON responses, Asia/Ho_Chi_Minh timezone behavior, scheduler behavior, availability’s read-only behavior, database schema, and Flyway V1–V6 migrations.
+Clean Architecture refactoring is complete for the restaurant module. The next focused scope is the reservation MVP; it will add reservation use cases and ports without weakening these boundaries.

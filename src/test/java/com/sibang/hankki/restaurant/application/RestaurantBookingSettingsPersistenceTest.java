@@ -48,8 +48,8 @@ class RestaurantBookingSettingsPersistenceTest {
     void persistsAndReadsValidSettingsByIdAndSlug() {
         repository.saveAndFlush(settings(ConfirmationMode.AUTO, null));
 
-        assertEquals(restaurantId, service.getByRestaurantId(restaurantId).getRestaurantId());
-        assertEquals(ConfirmationMode.AUTO, service.getByRestaurantSlug("anan-saigon").getConfirmationMode());
+        assertEquals(restaurantId, service.getByRestaurantId(restaurantId).restaurantId());
+        assertEquals(ConfirmationMode.AUTO, service.getByRestaurantSlug("anan-saigon").confirmationMode());
     }
 
     @Test

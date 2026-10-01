@@ -11,6 +11,7 @@ import com.tngtech.archunit.library.dependencies.SliceIdentifier;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Repository;
+import org.springframework.stereotype.Service;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -64,6 +65,22 @@ class CleanArchitectureTest {
             .that().resideInAnyPackage("..restaurant.application..")
             .should().dependOnClassesThat().resideInAnyPackage(
                     "..restaurant.adapter.in.web..", "..restaurant.adapter.in.scheduling..");
+
+    @ArchTest
+    static final ArchRule restaurantApplicationDoesNotDependOnOutboundAdapters = noClasses()
+            .that().resideInAnyPackage("..restaurant.application..")
+            .should().dependOnClassesThat().resideInAnyPackage("..restaurant.adapter.out..");
+
+    @ArchTest
+    static final ArchRule restaurantApplicationDoesNotDependOnPersistenceFrameworks = noClasses()
+            .that().resideInAnyPackage("..restaurant.application..")
+            .should().dependOnClassesThat().resideInAnyPackage(
+                    "jakarta.persistence..", "org.springframework.data..", "org.springframework.orm.jpa..", "org.hibernate..");
+
+    @ArchTest
+    static final ArchRule inboundAdaptersDoNotDependOnApplicationServices = noClasses()
+            .that().resideInAnyPackage("..restaurant.adapter.in..")
+            .should().dependOnClassesThat().areAnnotatedWith(Service.class);
 
     @ArchTest
     static final ArchRule restaurantApplicationDoesNotDependOnSpringHttpOrWeb = noClasses()

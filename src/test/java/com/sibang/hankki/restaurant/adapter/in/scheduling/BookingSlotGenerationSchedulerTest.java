@@ -1,5 +1,5 @@
 package com.sibang.hankki.restaurant.adapter.in.scheduling;
-import com.sibang.hankki.restaurant.application.booking.BookingSlotGenerationJob;
+import com.sibang.hankki.restaurant.application.port.in.BookingSlotGenerationUseCase;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -40,7 +40,7 @@ class BookingSlotGenerationSchedulerTest {
             context.publishEvent(new ApplicationReadyEvent(
                     new SpringApplication(), new String[0], context, Duration.ZERO));
 
-            verify(context.getBean(BookingSlotGenerationJob.class)).run();
+            verify(context.getBean(BookingSlotGenerationUseCase.class)).run();
         });
     }
 
@@ -69,8 +69,8 @@ class BookingSlotGenerationSchedulerTest {
     static class SchedulerTestConfiguration {
 
         @Bean
-        BookingSlotGenerationJob job() {
-            return mock(BookingSlotGenerationJob.class);
+        BookingSlotGenerationUseCase job() {
+            return mock(BookingSlotGenerationUseCase.class);
         }
 
     }

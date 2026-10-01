@@ -1,17 +1,17 @@
 package com.sibang.hankki.restaurant.application;
-import com.sibang.hankki.restaurant.adapter.out.persistence.entity.BookingSlot;
-import com.sibang.hankki.restaurant.adapter.out.persistence.entity.RestaurantBookingSettings;
-import com.sibang.hankki.restaurant.adapter.out.persistence.entity.RestaurantEntity;
-import com.sibang.hankki.restaurant.adapter.out.persistence.repository.BookingSlotRepository;
-import com.sibang.hankki.restaurant.adapter.out.persistence.repository.RestaurantBookingSettingsRepository;
-import com.sibang.hankki.restaurant.adapter.out.persistence.repository.RestaurantCatalogRepository;
-import com.sibang.hankki.restaurant.application.booking.BookingSlotGenerationService;
+
 import com.sibang.hankki.restaurant.application.exception.BookingSettingsNotConfiguredException;
 import com.sibang.hankki.restaurant.application.exception.InvalidBookingRequestException;
 import com.sibang.hankki.restaurant.application.exception.RestaurantNotFoundException;
 import com.sibang.hankki.restaurant.application.model.RestaurantAvailabilityResponse;
+import com.sibang.hankki.restaurant.application.port.out.BookingSettings;
+import com.sibang.hankki.restaurant.application.port.out.BookingSettingsPort;
+import com.sibang.hankki.restaurant.application.port.out.BookingSlotPort;
+import com.sibang.hankki.restaurant.application.port.out.RestaurantCatalogPort;
+import com.sibang.hankki.restaurant.application.port.out.RestaurantData;
+import com.sibang.hankki.restaurant.domain.booking.BookingSlotCapacity;
+import com.sibang.hankki.restaurant.domain.booking.BookingTime;
 import com.sibang.hankki.restaurant.domain.model.ConfirmationMode;
-
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -36,25 +36,25 @@ class RestaurantAvailabilityServiceTest {
     private static final LocalDate TODAY = LocalDate.of(2026, 9, 28);
 
     private final UUID restaurantId = UUID.randomUUID();
-    private RestaurantCatalogRepository restaurantRepository;
-    private RestaurantBookingSettingsRepository settingsRepository;
-    private BookingSlotRepository slotRepository;
+    private RestaurantCatalogPort restaurantCatalogPort;
+    private BookingSettingsPort bookingSettingsPort;
+    private BookingSlotPort bookingSlotPort;
     private RestaurantAvailabilityService service;
 
     @BeforeEach
     void setUp() {
-        restaurantRepository = mock(RestaurantCatalogRepository.class);
-        settingsRepository = mock(RestaurantBookingSettingsRepository.class);
-        slotRepository = mock(BookingSlotRepository.class);
-        RestaurantEntity restaurant = mock(RestaurantEntity.class);
-        given(restaurant.getId()).willReturn(restaurantId);
-        given(restaurantRepository.findActiveBySlug("anan-saigon")).willReturn(Optional.of(restaurant));
-        given(settingsRepository.findById(restaurantId)).willReturn(Optional.of(settings(ConfirmationMode.AUTO, null, 1, 6, 7)));
+        restaurantCatalogPort = mock(RestaurantCatalogPort.class);
+        bookingSettingsPort = mock(BookingSettingsPort.class);
+        bookingSlotPort = mock(BookingSlotPort.class);
+        given(restaurantCatalogPort.findActiveRestaurantBySlug("anan-saigon"))
+                .willReturn(Optional.of(restaurant("anan-saigon")));
+        given(bookingSettingsPort.findByRestaurantId(restaurantId))
+                .willReturn(Optional.of(settings(ConfirmationMode.AUTO, null, 1, 6, 7)));
         givenSlots();
         service = new RestaurantAvailabilityService(
-                restaurantRepository,
-                settingsRepository,
-                slotRepository,
+                restaurantCatalogPort,
+                bookingSettingsPort,
+                bookingSlotPort,
                 Clock.fixed(TODAY.atStartOfDay().toInstant(ZoneOffset.UTC), ZoneOffset.UTC));
     }
 
@@ -91,12 +91,13 @@ class RestaurantAvailabilityServiceTest {
     void rejectsPastDateBeforeRestaurantAndSettingsLookup() {
         assertBad(() -> service.availability("anan-saigon", TODAY.minusDays(1).toString(), 2));
 
-        verifyNoInteractions(restaurantRepository, settingsRepository, slotRepository);
+        verifyNoInteractions(restaurantCatalogPort, bookingSettingsPort, bookingSlotPort);
     }
 
     @Test
     void rejectsPartySizeBelowMinimumAndHidesSlotsAboveMaximumOnlineSize() {
-        given(settingsRepository.findById(restaurantId)).willReturn(Optional.of(settings(ConfirmationMode.AUTO, null, 2, 4, 5)));
+        given(bookingSettingsPort.findByRestaurantId(restaurantId))
+                .willReturn(Optional.of(settings(ConfirmationMode.AUTO, null, 2, 4, 5)));
         givenSlots(slot("11:30", 10, 0));
 
         assertBad(() -> service.availability("anan-saigon", TODAY.toString(), 0));
@@ -110,10 +111,12 @@ class RestaurantAvailabilityServiceTest {
     void appliesAutoManualHybridAndLargePartyConfirmationRules() {
         assertEquals(false, service.availability("anan-saigon", TODAY.toString(), 2).requiresRestaurantConfirmation());
 
-        given(settingsRepository.findById(restaurantId)).willReturn(Optional.of(settings(ConfirmationMode.MANUAL, null, 1, 6, 7)));
+        given(bookingSettingsPort.findByRestaurantId(restaurantId))
+                .willReturn(Optional.of(settings(ConfirmationMode.MANUAL, null, 1, 6, 7)));
         assertEquals(true, service.availability("anan-saigon", TODAY.toString(), 2).requiresRestaurantConfirmation());
 
-        given(settingsRepository.findById(restaurantId)).willReturn(Optional.of(settings(ConfirmationMode.HYBRID, (short) 4, 1, 6, 7)));
+        given(bookingSettingsPort.findByRestaurantId(restaurantId))
+                .willReturn(Optional.of(settings(ConfirmationMode.HYBRID, 4, 1, 6, 7)));
         assertEquals(false, service.availability("anan-saigon", TODAY.toString(), 3).requiresRestaurantConfirmation());
         assertEquals(true, service.availability("anan-saigon", TODAY.toString(), 4).requiresRestaurantConfirmation());
         assertEquals(true, service.availability("anan-saigon", TODAY.toString(), 7).requiresRestaurantConfirmation());
@@ -121,30 +124,32 @@ class RestaurantAvailabilityServiceTest {
 
     @Test
     void reportsUnknownRestaurantAndMissingSettings() {
-        given(restaurantRepository.findActiveBySlug("unknown")).willReturn(Optional.empty());
+        given(restaurantCatalogPort.findActiveRestaurantBySlug("unknown")).willReturn(Optional.empty());
         assertThrows(RestaurantNotFoundException.class, () -> service.availability("unknown", TODAY.toString(), 2));
 
-        given(settingsRepository.findById(restaurantId)).willReturn(Optional.empty());
+        given(bookingSettingsPort.findByRestaurantId(restaurantId)).willReturn(Optional.empty());
         assertThrows(BookingSettingsNotConfiguredException.class, () -> service.availability("anan-saigon", TODAY.toString(), 2));
     }
 
-    private void givenSlots(BookingSlot... slots) {
-        given(slotRepository.findByRestaurantIdAndStartsAtGreaterThanEqualAndStartsAtLessThanOrderByStartsAt(
-                eq(restaurantId), any(), any())).willReturn(List.of(slots));
+    private void givenSlots(BookingSlotCapacity... slots) {
+        given(bookingSlotPort.findSlotCapacities(eq(restaurantId), any(), any())).willReturn(List.of(slots));
     }
 
-    private BookingSlot slot(String localTime, int total, int reserved) {
+    private BookingSlotCapacity slot(String localTime, int total, int reserved) {
         Instant startsAt = TODAY.atTime(LocalTime.parse(localTime))
-                .atZone(BookingSlotGenerationService.RESTAURANT_TIME_ZONE)
+                .atZone(BookingTime.RESTAURANT_TIME_ZONE)
                 .toInstant();
-        return new BookingSlot(restaurantId, startsAt, startsAt.plusSeconds(3600), total, reserved);
+        return new BookingSlotCapacity(startsAt, total, reserved);
     }
 
-    private RestaurantBookingSettings settings(
-            ConfirmationMode mode, Short hybridThreshold, int minimum, int maximumOnline, int largeThreshold) {
-        return new RestaurantBookingSettings(
-                restaurantId, 20, (short) 15, (short) 90, (short) 10, 30, mode, hybridThreshold,
-                (short) 30, (short) minimum, (short) maximumOnline, (short) largeThreshold, 120, 15);
+    private RestaurantData restaurant(String slug) {
+        return new RestaurantData(restaurantId, slug, "", "", "", "", "", "", "", "", "");
+    }
+
+    private BookingSettings settings(
+            ConfirmationMode mode, Integer hybridThreshold, int minimum, int maximumOnline, int largeThreshold) {
+        return new BookingSettings(
+                restaurantId, 20, 15, 90, mode, hybridThreshold, 30, minimum, maximumOnline, largeThreshold);
     }
 
     private void assertBad(Runnable action) {
