@@ -11,7 +11,9 @@ import com.tngtech.archunit.library.dependencies.SliceIdentifier;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Repository;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.methods;
@@ -64,6 +66,12 @@ class CleanArchitectureTest {
                     "..restaurant.adapter.in.web..", "..restaurant.adapter.in.scheduling..");
 
     @ArchTest
+    static final ArchRule restaurantApplicationDoesNotDependOnSpringHttpOrWeb = noClasses()
+            .that().resideInAnyPackage("..restaurant.application..")
+            .should().dependOnClassesThat().resideInAnyPackage(
+                    "org.springframework.http..", "org.springframework.web..", "jakarta.servlet..");
+
+    @ArchTest
     static final ArchRule inboundAdaptersDoNotDependOnOutboundAdapters = noClasses()
             .that().resideInAnyPackage("..restaurant.adapter.in..")
             .should().dependOnClassesThat().resideInAnyPackage("..restaurant.adapter.out..");
@@ -84,6 +92,16 @@ class CleanArchitectureTest {
     static final ArchRule controllersAreOnlyInboundWebAdapters = classes()
             .that().areAnnotatedWith(RestController.class)
             .should().resideInAnyPackage("..adapter.in.web..");
+
+    @ArchTest
+    static final ArchRule controllerAdviceIsOnlyInInboundWebAdapters = classes()
+            .that().areAnnotatedWith(RestControllerAdvice.class)
+            .should().resideInAnyPackage("..adapter.in.web..");
+
+    @ArchTest
+    static final ArchRule exceptionHandlersAreOnlyInInboundWebAdapters = methods()
+            .that().areAnnotatedWith(ExceptionHandler.class)
+            .should().beDeclaredInClassesThat().resideInAnyPackage("..adapter.in.web..");
 
     @ArchTest
     static final ArchRule scheduledMethodsAreOnlyInboundSchedulingAdapters = methods()
