@@ -3,10 +3,12 @@ package com.sibang.hankki.restaurant.adapter.out.persistence;
 import com.sibang.hankki.restaurant.adapter.out.persistence.entity.BookingSlot;
 import com.sibang.hankki.restaurant.adapter.out.persistence.repository.BookingSlotRepository;
 import com.sibang.hankki.restaurant.application.port.out.BookingSlotPort;
+import com.sibang.hankki.restaurant.application.port.out.BookingSlotData;
 import com.sibang.hankki.restaurant.domain.booking.BookingSlotCandidate;
 import com.sibang.hankki.restaurant.domain.booking.BookingSlotCapacity;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 
@@ -27,6 +29,18 @@ public class BookingSlotPersistenceAdapter implements BookingSlotPort {
                 .map(slot -> new BookingSlotCapacity(
                         slot.getStartsAt(), slot.getCapacityTotal(), slot.getCapacityReserved()))
                 .toList();
+    }
+
+    @Override
+    public Optional<BookingSlotData> findByRestaurantIdAndStartsAt(UUID restaurantId, Instant startsAt) {
+        return repository.findByRestaurantIdAndStartsAt(restaurantId, startsAt)
+                .map(slot -> new BookingSlotData(
+                        slot.getId(), slot.getRestaurantId(), slot.getStartsAt(), slot.getEndsAt()));
+    }
+
+    @Override
+    public boolean reserveCapacity(UUID slotId, int partySize) {
+        return repository.reserveCapacity(slotId, partySize) == 1;
     }
 
     @Override

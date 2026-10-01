@@ -6,6 +6,8 @@ import java.util.UUID;
 
 public interface ReservationPersistencePort {
 
+    void lockIdempotencyKey(String idempotencyKey);
+
     Reservation save(Reservation reservation);
 
     Optional<Reservation> findById(UUID id);
