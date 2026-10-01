@@ -281,7 +281,7 @@ class ReservationPersistenceAdapterTest {
             String visitStatus,
             boolean capacityOverride) {
         UUID id = UUID.randomUUID();
-        insertRawReservation("RAW-" + id, "raw-idempotency-" + id, null,
+        insertRawReservation("RAW-" + id.toString().substring(0, 8), "raw-idempotency-" + id, null,
                 partySize, startsAt, endsAt, status, visitStatus, capacityOverride);
     }
 
