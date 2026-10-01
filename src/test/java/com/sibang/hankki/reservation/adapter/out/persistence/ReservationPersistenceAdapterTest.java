@@ -1,0 +1,330 @@
+package com.sibang.hankki.reservation.adapter.out.persistence;
+
+import com.sibang.hankki.reservation.domain.model.Reservation;
+import com.sibang.hankki.reservation.domain.model.ReservationEvent;
+import com.sibang.hankki.reservation.domain.model.ReservationEventType;
+import com.sibang.hankki.reservation.domain.model.ReservationStatus;
+import com.sibang.hankki.reservation.domain.model.VisitStatus;
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.annotation.Rollback;
+import org.springframework.transaction.annotation.Transactional;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+@SpringBootTest
+@Transactional
+@Rollback
+@EnabledIfEnvironmentVariable(named = "DB_URL", matches = ".+")
+class ReservationPersistenceAdapterTest {
+
+    private static final UUID PROTOTYPE_RESTAURANT_ID =
+            UUID.fromString("00000000-0000-0000-0000-000000000001");
+    private static final Instant STARTS_AT = Instant.parse("2026-10-15T11:30:00Z");
+    private static final Instant ENDS_AT = Instant.parse("2026-10-15T13:00:00Z");
+
+    @Autowired
+    private ReservationPersistenceAdapter reservationAdapter;
+
+    @Autowired
+    private ReservationEventPersistenceAdapter eventAdapter;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
+    @Test
+    void flywayAppliesReservationFoundationMigration() {
+        Integer migrationCount = jdbcTemplate.queryForObject(
+                "select count(*) from flyway_schema_history where version = '7' and success = true", Integer.class);
+
+        assertEquals(1, migrationCount);
+    }
+
+    @Test
+    void persistsReadsAndMapsARegisteredCustomerReservation() {
+        UUID customerId = insertUser();
+        UUID bookingSlotId = insertBookingSlot(PROTOTYPE_RESTAURANT_ID);
+        Reservation requested = reservation(
+                UUID.randomUUID(), "RSV-REGISTERED-1", "idempotency-registered-1", PROTOTYPE_RESTAURANT_ID,
+                bookingSlotId, customerId, ReservationStatus.CONFIRMED, VisitStatus.EXPECTED, true,
+                "check-in-hash-registered-1");
+
+        Reservation saved = reservationAdapter.save(requested);
+
+        assertEquals(requested.id(), saved.id());
+        assertEquals(requested.reference(), saved.reference());
+        assertEquals(requested.idempotencyKey(), saved.idempotencyKey());
+        assertEquals(requested.requestFingerprint(), saved.requestFingerprint());
+        assertEquals(PROTOTYPE_RESTAURANT_ID, saved.restaurantId());
+        assertEquals(bookingSlotId, saved.bookingSlotId());
+        assertEquals(customerId, saved.customerId());
+        assertEquals("Reservation guest", saved.customerName());
+        assertEquals("guest@example.test", saved.customerEmail());
+        assertEquals("0900000000", saved.customerPhone());
+        assertEquals(STARTS_AT, saved.startsAt());
+        assertEquals(ENDS_AT, saved.endsAt());
+        assertEquals(2, saved.partySize());
+        assertEquals(ReservationStatus.CONFIRMED, saved.status());
+        assertEquals(VisitStatus.EXPECTED, saved.visitStatus());
+        assertTrue(saved.capacityOverride());
+        assertEquals("Window seat", saved.specialRequest());
+        assertEquals("No peanuts", saved.preOrderNote());
+        assertEquals("check-in-hash-registered-1", saved.checkInTokenHash());
+        assertNotNull(saved.createdAt());
+        assertNotNull(saved.updatedAt());
+        assertEquals(0, saved.version());
+        assertEquals(saved, reservationAdapter.findById(saved.id()).orElseThrow());
+        assertEquals(saved, reservationAdapter.findByReference(saved.reference()).orElseThrow());
+        assertEquals(saved, reservationAdapter.findByIdempotencyKey(saved.idempotencyKey()).orElseThrow());
+        assertTrue(reservationAdapter.findByReference("unknown-reference").isEmpty());
+        assertTrue(reservationAdapter.findByIdempotencyKey("unknown-idempotency-key").isEmpty());
+    }
+
+    @Test
+    void supportsGuestReservationsWithoutCustomerId() {
+        Reservation saved = reservationAdapter.save(reservation(
+                UUID.randomUUID(), "RSV-GUEST-1", "idempotency-guest-1", PROTOTYPE_RESTAURANT_ID,
+                null, null, ReservationStatus.PENDING, null, false, null));
+
+        assertNull(saved.customerId());
+        assertEquals(ReservationStatus.PENDING, saved.status());
+        assertNull(saved.visitStatus());
+    }
+
+    @Test
+    void enforcesUniqueReferenceIdempotencyKeyAndCheckInTokenHash() {
+        insertRawReservation("RSV-UNIQUE-1", "idempotency-unique-1", "check-in-hash-unique",
+                2, STARTS_AT, ENDS_AT, "PENDING", null, false);
+
+        assertDatabaseRejects(() -> insertRawReservation(
+                "RSV-UNIQUE-1", "idempotency-unique-2", "check-in-hash-unique-2",
+                2, STARTS_AT, ENDS_AT, "PENDING", null, false));
+        assertDatabaseRejects(() -> insertRawReservation(
+                "RSV-UNIQUE-2", "idempotency-unique-1", "check-in-hash-unique-3",
+                2, STARTS_AT, ENDS_AT, "PENDING", null, false));
+        assertDatabaseRejects(() -> insertRawReservation(
+                "RSV-UNIQUE-3", "idempotency-unique-3", "check-in-hash-unique",
+                2, STARTS_AT, ENDS_AT, "PENDING", null, false));
+    }
+
+    @Test
+    void enforcesDatabaseReservationStatusAndTimeInvariants() {
+        assertRawReservationRejected(0, STARTS_AT, ENDS_AT, "PENDING", null, false);
+        assertRawReservationRejected(2, ENDS_AT, STARTS_AT, "PENDING", null, false);
+        assertRawReservationRejected(2, STARTS_AT, ENDS_AT, "REJECTED", null, false);
+        assertRawReservationRejected(2, STARTS_AT, ENDS_AT, "PENDING", "EXPECTED", false);
+        assertRawReservationRejected(2, STARTS_AT, ENDS_AT, "CONFIRMED", null, false);
+        assertRawReservationRejected(2, STARTS_AT, ENDS_AT, "CONFIRMED", "UNKNOWN", false);
+        assertRawReservationRejected(2, STARTS_AT, ENDS_AT, "PENDING", null, true);
+
+        insertRawReservation(2, STARTS_AT, ENDS_AT, "CONFIRMED", "EXPECTED", true);
+        insertRawReservation(2, STARTS_AT, ENDS_AT, "PENDING", null, false);
+    }
+
+    @Test
+    void appliesOptimisticLockingVersion() {
+        Reservation saved = reservationAdapter.save(reservation(
+                UUID.randomUUID(), "RSV-VERSION-1", "idempotency-version-1", PROTOTYPE_RESTAURANT_ID,
+                null, null, ReservationStatus.PENDING, null, false, null));
+
+        jdbcTemplate.update("update reservations set version = version + 1 where id = ?", saved.id());
+
+        assertThrows(OptimisticLockingFailureException.class, () -> reservationAdapter.save(saved));
+    }
+
+    @Test
+    void appendsAndReadsEventsInCreatedAtOrderAndEnforcesCommandIdUniqueness() {
+        Reservation reservation = reservationAdapter.save(reservation(
+                UUID.randomUUID(), "RSV-EVENT-1", "idempotency-event-1", PROTOTYPE_RESTAURANT_ID,
+                null, null, ReservationStatus.PENDING, null, false, null));
+        ReservationEvent requested = event(reservation.id(), ReservationEventType.REQUESTED,
+                "command-requested", Instant.parse("2026-10-01T00:00:00Z"));
+        ReservationEvent alternative = event(reservation.id(), ReservationEventType.ALTERNATIVE_PROPOSED,
+                "command-alternative", Instant.parse("2026-10-01T00:00:01Z"));
+
+        ReservationEvent appendedRequested = eventAdapter.append(requested);
+        ReservationEvent appendedAlternative = eventAdapter.append(alternative);
+
+        assertEquals(List.of(appendedRequested, appendedAlternative), eventAdapter.findByReservationId(reservation.id()));
+        assertDatabaseRejects(() -> jdbcTemplate.update("""
+                insert into reservation_events (id, reservation_id, event_type, command_id)
+                values (?, ?, 'REQUESTED', 'command-requested')
+                """, UUID.randomUUID(), reservation.id()));
+        assertDatabaseRejects(() -> jdbcTemplate.update("""
+                insert into reservation_events (id, reservation_id, event_type)
+                values (?, ?, 'REJECTED')
+                """, UUID.randomUUID(), reservation.id()));
+    }
+
+    @Test
+    void enforcesRestrictForeignKeysForReferencedRows() {
+        UUID restaurantId = insertRestaurant();
+        Reservation restaurantReservation = reservationAdapter.save(reservation(
+                UUID.randomUUID(), "RSV-RESTRICT-RESTAURANT", "idempotency-restrict-restaurant", restaurantId,
+                null, null, ReservationStatus.PENDING, null, false, null));
+        assertDatabaseRejects(() -> jdbcTemplate.update("delete from restaurants where id = ?", restaurantId));
+
+        UUID customerId = insertUser();
+        Reservation customerReservation = reservationAdapter.save(reservation(
+                UUID.randomUUID(), "RSV-RESTRICT-CUSTOMER", "idempotency-restrict-customer", PROTOTYPE_RESTAURANT_ID,
+                null, customerId, ReservationStatus.PENDING, null, false, null));
+        assertDatabaseRejects(() -> jdbcTemplate.update("delete from users where id = ?", customerId));
+
+        UUID bookingSlotId = insertBookingSlot(PROTOTYPE_RESTAURANT_ID);
+        Reservation slotReservation = reservationAdapter.save(reservation(
+                UUID.randomUUID(), "RSV-RESTRICT-SLOT", "idempotency-restrict-slot", PROTOTYPE_RESTAURANT_ID,
+                bookingSlotId, null, ReservationStatus.PENDING, null, false, null));
+        assertDatabaseRejects(() -> jdbcTemplate.update("delete from booking_slots where id = ?", bookingSlotId));
+
+        eventAdapter.append(event(slotReservation.id(), ReservationEventType.REQUESTED,
+                "command-restrict-event", Instant.parse("2026-10-01T00:00:00Z")));
+        assertDatabaseRejects(() -> jdbcTemplate.update("delete from reservations where id = ?", slotReservation.id()));
+
+        assertFalse(reservationAdapter.findById(restaurantReservation.id()).isEmpty());
+        assertFalse(reservationAdapter.findById(customerReservation.id()).isEmpty());
+    }
+
+    private Reservation reservation(
+            UUID id,
+            String reference,
+            String idempotencyKey,
+            UUID restaurantId,
+            UUID bookingSlotId,
+            UUID customerId,
+            ReservationStatus status,
+            VisitStatus visitStatus,
+            boolean capacityOverride,
+            String checkInTokenHash) {
+        return new Reservation(
+                id,
+                reference,
+                idempotencyKey,
+                "a".repeat(64),
+                restaurantId,
+                bookingSlotId,
+                customerId,
+                "Reservation guest",
+                "guest@example.test",
+                "0900000000",
+                STARTS_AT,
+                ENDS_AT,
+                2,
+                status,
+                capacityOverride,
+                visitStatus,
+                "Window seat",
+                "No peanuts",
+                checkInTokenHash,
+                null,
+                null,
+                0,
+                null,
+                null);
+    }
+
+    private ReservationEvent event(
+            UUID reservationId, ReservationEventType eventType, String commandId, Instant createdAt) {
+        return new ReservationEvent(
+                UUID.randomUUID(), reservationId, eventType, null, commandId, "b".repeat(64),
+                "{\"source\":\"integration-test\"}", createdAt);
+    }
+
+    private void assertRawReservationRejected(
+            int partySize,
+            Instant startsAt,
+            Instant endsAt,
+            String status,
+            String visitStatus,
+            boolean capacityOverride) {
+        assertDatabaseRejects(() -> insertRawReservation(
+                partySize, startsAt, endsAt, status, visitStatus, capacityOverride));
+    }
+
+    private void insertRawReservation(
+            int partySize,
+            Instant startsAt,
+            Instant endsAt,
+            String status,
+            String visitStatus,
+            boolean capacityOverride) {
+        UUID id = UUID.randomUUID();
+        insertRawReservation("RAW-" + id, "raw-idempotency-" + id, null,
+                partySize, startsAt, endsAt, status, visitStatus, capacityOverride);
+    }
+
+    private void insertRawReservation(
+            String reference,
+            String idempotencyKey,
+            String checkInTokenHash,
+            int partySize,
+            Instant startsAt,
+            Instant endsAt,
+            String status,
+            String visitStatus,
+            boolean capacityOverride) {
+        jdbcTemplate.update("""
+                insert into reservations (
+                    id, reference, idempotency_key, request_fingerprint, restaurant_id,
+                    customer_name, customer_phone, starts_at, ends_at, party_size,
+                    status, visit_status, capacity_override, check_in_token_hash
+                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, UUID.randomUUID(), reference, idempotencyKey, "c".repeat(64), PROTOTYPE_RESTAURANT_ID,
+                "Raw reservation", "0900000001", startsAt, endsAt, partySize, status, visitStatus,
+                capacityOverride, checkInTokenHash);
+    }
+
+    private void assertDatabaseRejects(Runnable operation) {
+        String savepoint = "reservation_constraint_check";
+        jdbcTemplate.execute("savepoint " + savepoint);
+        try {
+            operation.run();
+            fail("Expected the database to reject the mutation");
+        } catch (DataIntegrityViolationException expected) {
+            // Expected: the savepoint preserves the outer test transaction for the next assertion.
+        } finally {
+            jdbcTemplate.execute("rollback to savepoint " + savepoint);
+            jdbcTemplate.execute("release savepoint " + savepoint);
+        }
+    }
+
+    private UUID insertRestaurant() {
+        UUID id = UUID.randomUUID();
+        jdbcTemplate.update("""
+                insert into restaurants (id, slug, name, city_slug, approval_status)
+                values (?, ?, ?, ?, 'ACTIVE')
+                """, id, "reservation-test-" + id, "Reservation Test", "ho-chi-minh-city");
+        return id;
+    }
+
+    private UUID insertUser() {
+        UUID id = UUID.randomUUID();
+        jdbcTemplate.update("""
+                insert into users (id, userid, password_hash, name)
+                values (?, ?, ?, ?)
+                """, id, "reservation-test-" + id, "password-hash", "Reservation User");
+        return id;
+    }
+
+    private UUID insertBookingSlot(UUID restaurantId) {
+        UUID id = UUID.randomUUID();
+        jdbcTemplate.update("""
+                insert into booking_slots (id, restaurant_id, starts_at, ends_at, capacity_total, capacity_reserved)
+                values (?, ?, ?, ?, ?, ?)
+                """, id, restaurantId, STARTS_AT, ENDS_AT, 10, 0);
+        return id;
+    }
+}

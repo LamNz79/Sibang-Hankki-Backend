@@ -23,6 +23,31 @@ import static com.tngtech.archunit.library.dependencies.SlicesRuleDefinition.sli
 
 @AnalyzeClasses(packages = "com.sibang.hankki", importOptions = DoNotIncludeTests.class)
 class CleanArchitectureTest {
+    private static final SliceAssignment RESERVATION_LAYER = new SliceAssignment() {
+        @Override
+        public SliceIdentifier getIdentifierOf(JavaClass javaClass) {
+            String packageName = javaClass.getPackageName();
+            if (packageName.startsWith("com.sibang.hankki.reservation.adapter.in.")) {
+                return SliceIdentifier.of("adapter", "in");
+            }
+            if (packageName.startsWith("com.sibang.hankki.reservation.adapter.out.")) {
+                return SliceIdentifier.of("adapter", "out");
+            }
+            if (packageName.startsWith("com.sibang.hankki.reservation.application.")) {
+                return SliceIdentifier.of("application");
+            }
+            if (packageName.startsWith("com.sibang.hankki.reservation.domain.")) {
+                return SliceIdentifier.of("domain");
+            }
+            return SliceIdentifier.ignore();
+        }
+
+        @Override
+        public String getDescription() {
+            return "reservation clean-architecture layers";
+        }
+    };
+
     private static final SliceAssignment RESTAURANT_LAYER = new SliceAssignment() {
         @Override
         public SliceIdentifier getIdentifierOf(JavaClass javaClass) {
@@ -135,6 +160,42 @@ class CleanArchitectureTest {
             .that().areAnnotatedWith(Repository.class)
             .or().areAssignableTo(JpaRepository.class)
             .should().resideInAnyPackage("..adapter.out.persistence.repository..");
+
+    @ArchTest
+    static final ArchRule reservationDomainDoesNotDependOnApplicationOrAdapters = noClasses()
+            .that().resideInAnyPackage("..reservation.domain..")
+            .should().dependOnClassesThat().resideInAnyPackage(
+                    "..reservation.application..", "..reservation.adapter..");
+
+    @ArchTest
+    static final ArchRule reservationDomainIsFrameworkIndependent = noClasses()
+            .that().resideInAnyPackage("..reservation.domain..")
+            .should().dependOnClassesThat().resideInAnyPackage(
+                    "org.springframework..", "jakarta.persistence..", "jakarta.servlet..", "org.hibernate..");
+
+    @ArchTest
+    static final ArchRule reservationApplicationDoesNotDependOnAdaptersOrPersistenceFrameworks = noClasses()
+            .that().resideInAnyPackage("..reservation.application..")
+            .should().dependOnClassesThat().resideInAnyPackage(
+                    "..reservation.adapter..", "jakarta.persistence..", "org.springframework.data..",
+                    "org.springframework.orm.jpa..", "org.hibernate..");
+
+    @ArchTest
+    static final ArchRule reservationJpaEntitiesAreOnlyPersistenceEntities = classes()
+            .that().resideInAnyPackage("..reservation..")
+            .and().areAnnotatedWith(Entity.class)
+            .should().resideInAnyPackage("..reservation.adapter.out.persistence.entity..");
+
+    @ArchTest
+    static final ArchRule reservationRepositoriesAreOnlyPersistenceRepositories = classes()
+            .that().resideInAnyPackage("..reservation..")
+            .and().areAssignableTo(JpaRepository.class)
+            .should().resideInAnyPackage("..reservation.adapter.out.persistence.repository..");
+
+    @ArchTest
+    static final ArchRule reservationPackagesAreFreeOfCycles = slices()
+            .assignedFrom(RESERVATION_LAYER)
+            .should().beFreeOfCycles();
 
     @ArchTest
     static final ArchRule restaurantPackagesAreFreeOfCycles = slices()
