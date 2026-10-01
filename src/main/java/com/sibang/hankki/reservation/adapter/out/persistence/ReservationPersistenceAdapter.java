@@ -6,6 +6,7 @@ import com.sibang.hankki.reservation.application.port.out.ReservationPersistence
 import com.sibang.hankki.reservation.domain.model.Reservation;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -19,7 +20,19 @@ public class ReservationPersistenceAdapter implements ReservationPersistencePort
 
     @Override
     public Reservation save(Reservation reservation) {
-        return toReservation(repository.saveAndFlush(new ReservationEntity(reservation)));
+        ReservationEntity saved = repository.findById(reservation.id())
+                .map(existing -> update(existing, reservation))
+                .orElseGet(() -> repository.saveAndFlush(new ReservationEntity(reservation)));
+        return toReservation(saved);
+    }
+
+    private ReservationEntity update(ReservationEntity existing, Reservation reservation) {
+        if (existing.getVersion() != reservation.version()) {
+            throw new OptimisticLockingFailureException(
+                    "Reservation version does not match the persisted version");
+        }
+        existing.updateFrom(reservation);
+        return repository.saveAndFlush(existing);
     }
 
     @Override

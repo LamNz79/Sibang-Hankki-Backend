@@ -101,6 +101,13 @@ public class ReservationEntity {
 
     public ReservationEntity(Reservation reservation) {
         this.id = reservation.id();
+        this.version = reservation.version();
+        this.createdAt = reservation.createdAt();
+        this.updatedAt = reservation.updatedAt();
+        updateFrom(reservation);
+    }
+
+    public void updateFrom(Reservation reservation) {
         this.reference = reservation.reference();
         this.idempotencyKey = reservation.idempotencyKey();
         this.requestFingerprint = reservation.requestFingerprint();
@@ -121,9 +128,6 @@ public class ReservationEntity {
         this.checkInTokenHash = reservation.checkInTokenHash();
         this.checkedInAt = reservation.checkedInAt();
         this.checkedInBy = reservation.checkedInBy();
-        this.version = reservation.version();
-        this.createdAt = reservation.createdAt();
-        this.updatedAt = reservation.updatedAt();
     }
 
     public UUID getId() {

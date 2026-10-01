@@ -6,12 +6,14 @@ import com.sibang.hankki.reservation.domain.model.ReservationEventType;
 import com.sibang.hankki.reservation.domain.model.ReservationStatus;
 import com.sibang.hankki.reservation.domain.model.VisitStatus;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import jakarta.persistence.EntityManager;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -45,6 +47,9 @@ class ReservationPersistenceAdapterTest {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private EntityManager entityManager;
 
     @Test
     void flywayAppliesReservationFoundationMigration() {
@@ -140,10 +145,14 @@ class ReservationPersistenceAdapterTest {
         Reservation saved = reservationAdapter.save(reservation(
                 UUID.randomUUID(), "RSV-VERSION-1", "idempotency-version-1", PROTOTYPE_RESTAURANT_ID,
                 null, null, ReservationStatus.PENDING, null, false, null));
+        Reservation updated = reservationAdapter.save(withSpecialRequest(saved, "Updated request"));
+        assertEquals(1, updated.version());
 
-        jdbcTemplate.update("update reservations set version = version + 1 where id = ?", saved.id());
+        jdbcTemplate.update("update reservations set version = version + 1 where id = ?", updated.id());
+        entityManager.clear();
 
-        assertThrows(OptimisticLockingFailureException.class, () -> reservationAdapter.save(saved));
+        assertThrows(OptimisticLockingFailureException.class,
+                () -> reservationAdapter.save(withSpecialRequest(updated, "Stale request")));
     }
 
     @Test
@@ -236,6 +245,16 @@ class ReservationPersistenceAdapterTest {
                 null);
     }
 
+    private Reservation withSpecialRequest(Reservation reservation, String specialRequest) {
+        return new Reservation(
+                reservation.id(), reservation.reference(), reservation.idempotencyKey(), reservation.requestFingerprint(),
+                reservation.restaurantId(), reservation.bookingSlotId(), reservation.customerId(), reservation.customerName(),
+                reservation.customerEmail(), reservation.customerPhone(), reservation.startsAt(), reservation.endsAt(),
+                reservation.partySize(), reservation.status(), reservation.capacityOverride(), reservation.visitStatus(),
+                specialRequest, reservation.preOrderNote(), reservation.checkInTokenHash(), reservation.checkedInAt(),
+                reservation.checkedInBy(), reservation.version(), reservation.createdAt(), reservation.updatedAt());
+    }
+
     private ReservationEvent event(
             UUID reservationId, ReservationEventType eventType, String commandId, Instant createdAt) {
         return new ReservationEvent(
@@ -283,8 +302,8 @@ class ReservationPersistenceAdapterTest {
                     status, visit_status, capacity_override, check_in_token_hash
                 ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, UUID.randomUUID(), reference, idempotencyKey, "c".repeat(64), PROTOTYPE_RESTAURANT_ID,
-                "Raw reservation", "0900000001", startsAt, endsAt, partySize, status, visitStatus,
-                capacityOverride, checkInTokenHash);
+                "Raw reservation", "0900000001", databaseTimestamp(startsAt), databaseTimestamp(endsAt),
+                partySize, status, visitStatus, capacityOverride, checkInTokenHash);
     }
 
     private void assertDatabaseRejects(Runnable operation) {
@@ -315,7 +334,7 @@ class ReservationPersistenceAdapterTest {
         jdbcTemplate.update("""
                 insert into users (id, userid, password_hash, name)
                 values (?, ?, ?, ?)
-                """, id, "reservation-test-" + id, "password-hash", "Reservation User");
+                """, id, "rsv-" + id.toString().substring(0, 8), "password-hash", "Reservation User");
         return id;
     }
 
@@ -324,7 +343,11 @@ class ReservationPersistenceAdapterTest {
         jdbcTemplate.update("""
                 insert into booking_slots (id, restaurant_id, starts_at, ends_at, capacity_total, capacity_reserved)
                 values (?, ?, ?, ?, ?, ?)
-                """, id, restaurantId, STARTS_AT, ENDS_AT, 10, 0);
+                """, id, restaurantId, databaseTimestamp(STARTS_AT), databaseTimestamp(ENDS_AT), 10, 0);
         return id;
+    }
+
+    private java.time.OffsetDateTime databaseTimestamp(Instant instant) {
+        return instant.atOffset(ZoneOffset.UTC);
     }
 }
