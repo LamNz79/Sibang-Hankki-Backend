@@ -76,6 +76,20 @@ class RestaurantAvailabilityServiceTest {
     }
 
     @Test
+    void excludesPastAndCurrentSlotsForToday() {
+        givenSlots(slot("11:30", 4, 0), slot("12:30", 4, 0), slot("13:30", 4, 0));
+        service = new RestaurantAvailabilityService(
+                restaurantCatalogPort,
+                bookingSettingsPort,
+                bookingSlotPort,
+                Clock.fixed(
+                        TODAY.atTime(12, 30).atZone(BookingTime.RESTAURANT_TIME_ZONE).toInstant(),
+                        BookingTime.RESTAURANT_TIME_ZONE));
+
+        assertEquals(List.of("13:30"), service.availability("anan-saigon", TODAY.toString(), 2).slots());
+    }
+
+    @Test
     void returnsNoSlotsWhenRequestedDateHasNone() {
         assertEquals(List.of(), service.availability("anan-saigon", TODAY.toString(), 2).slots());
     }

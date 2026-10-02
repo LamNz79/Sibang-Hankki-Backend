@@ -71,8 +71,10 @@ public class RestaurantAvailabilityService implements RestaurantAvailabilityUseC
     private List<String> availableSlots(UUID restaurantId, LocalDate date, BookingPolicy policy, int partySize) {
         Instant start = date.atStartOfDay(BookingTime.RESTAURANT_TIME_ZONE).toInstant();
         Instant end = date.plusDays(1).atStartOfDay(BookingTime.RESTAURANT_TIME_ZONE).toInstant();
+        Instant now = Instant.now(clock);
         List<BookingSlotCapacity> capacities = bookingSlotPort.findSlotCapacities(restaurantId, start, end);
         return policy.availableSlots(capacities, partySize).stream()
+                .filter(slot -> slot.startsAt().isAfter(now))
                 .map(BookingSlotCapacity::startsAt)
                 .map(instant -> TIME.format(instant.atZone(BookingTime.RESTAURANT_TIME_ZONE)))
                 .toList();
