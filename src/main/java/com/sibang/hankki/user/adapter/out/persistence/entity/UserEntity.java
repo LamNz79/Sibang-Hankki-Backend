@@ -60,4 +60,24 @@ public class UserEntity {
 
     protected UserEntity() {
     }
+
+    public UUID getId() {
+        return id;
+    }
+
+    public String getUserid() {
+        return userid;
+    }
+
+    public String getPasswordHash() {
+        return passwordHash;
+    }
+
+    public String getRole() {
+        return role;
+    }
+
+    public UUID getRestaurantId() {
+        return restaurantId;
+    }
 }
