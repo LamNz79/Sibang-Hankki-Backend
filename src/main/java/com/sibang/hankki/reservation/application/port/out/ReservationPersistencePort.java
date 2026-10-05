@@ -1,6 +1,7 @@
 package com.sibang.hankki.reservation.application.port.out;
 
 import com.sibang.hankki.reservation.domain.model.Reservation;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -15,4 +16,8 @@ public interface ReservationPersistencePort {
     Optional<Reservation> findByReference(String reference);
 
     Optional<Reservation> findByIdempotencyKey(String idempotencyKey);
+
+    List<Reservation> findAllByRestaurantId(UUID restaurantId);
+
+    Optional<Reservation> findByIdAndRestaurantId(UUID id, UUID restaurantId);
 }

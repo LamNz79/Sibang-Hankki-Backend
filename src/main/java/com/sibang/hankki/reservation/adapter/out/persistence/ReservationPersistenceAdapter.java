@@ -4,6 +4,7 @@ import com.sibang.hankki.reservation.adapter.out.persistence.entity.ReservationE
 import com.sibang.hankki.reservation.adapter.out.persistence.repository.ReservationJpaRepository;
 import com.sibang.hankki.reservation.application.port.out.ReservationPersistencePort;
 import com.sibang.hankki.reservation.domain.model.Reservation;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.dao.OptimisticLockingFailureException;
@@ -57,6 +58,18 @@ public class ReservationPersistenceAdapter implements ReservationPersistencePort
     @Override
     public Optional<Reservation> findByIdempotencyKey(String idempotencyKey) {
         return repository.findByIdempotencyKey(idempotencyKey).map(this::toReservation);
+    }
+
+    @Override
+    public List<Reservation> findAllByRestaurantId(UUID restaurantId) {
+        return repository.findAllByRestaurantIdOrderByStartsAtAscIdAsc(restaurantId).stream()
+                .map(this::toReservation)
+                .toList();
+    }
+
+    @Override
+    public Optional<Reservation> findByIdAndRestaurantId(UUID id, UUID restaurantId) {
+        return repository.findByIdAndRestaurantId(id, restaurantId).map(this::toReservation);
     }
 
     private Reservation toReservation(ReservationEntity entity) {
