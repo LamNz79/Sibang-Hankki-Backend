@@ -228,6 +228,27 @@ class ReservationPersistenceAdapterTest {
         assertFalse(reservationAdapter.findById(customerReservation.id()).isEmpty());
     }
 
+    @Test
+    void ownerReadsAreOrderedAndScopedToTheirRestaurant() {
+        UUID anotherRestaurantId = insertRestaurant();
+        UUID laterId = UUID.fromString("50000000-0000-0000-0000-000000000002");
+        UUID earlierId = UUID.fromString("50000000-0000-0000-0000-000000000001");
+        Reservation later = reservationAdapter.save(reservation(
+                laterId, "RSV-OWNER-LATER", "idempotency-owner-later", PROTOTYPE_RESTAURANT_ID,
+                null, null, ReservationStatus.PENDING, null, false, null));
+        Reservation earlier = reservationAdapter.save(reservation(
+                earlierId, "RSV-OWNER-EARLIER", "idempotency-owner-earlier", PROTOTYPE_RESTAURANT_ID,
+                null, null, ReservationStatus.PENDING, null, false, null));
+        Reservation other = reservationAdapter.save(reservation(
+                UUID.randomUUID(), "RSV-OWNER-OTHER", "idempotency-owner-other", anotherRestaurantId,
+                null, null, ReservationStatus.PENDING, null, false, null));
+
+        assertEquals(List.of(earlier, later), reservationAdapter.findAllByRestaurantId(PROTOTYPE_RESTAURANT_ID));
+        assertEquals(earlier,
+                reservationAdapter.findByIdAndRestaurantId(earlier.id(), PROTOTYPE_RESTAURANT_ID).orElseThrow());
+        assertTrue(reservationAdapter.findByIdAndRestaurantId(other.id(), PROTOTYPE_RESTAURANT_ID).isEmpty());
+    }
+
     private Reservation reservation(
             UUID id,
             String reference,
