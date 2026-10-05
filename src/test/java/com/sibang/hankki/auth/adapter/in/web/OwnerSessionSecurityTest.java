@@ -25,6 +25,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -98,6 +99,16 @@ class OwnerSessionSecurityTest {
     }
 
     @Test
+    void logoutAndOwnerWritesStillRequireCsrf() throws Exception {
+        MockHttpSession session = login("owner");
+
+        mockMvc.perform(post("/api/auth/logout").session(session))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/owner/probe").session(session))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void invalidCredentialsReturnUnauthorized() throws Exception {
         mockMvc.perform(post("/api/auth/login")
                         .with(csrf())
@@ -134,6 +145,11 @@ class OwnerSessionSecurityTest {
 
         @GetMapping("/probe")
         String probe() {
+            return "ok";
+        }
+
+        @PostMapping("/probe")
+        String update() {
             return "ok";
         }
     }

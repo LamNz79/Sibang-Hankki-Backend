@@ -1,7 +1,6 @@
 package com.sibang.hankki.reservation.adapter.in.web;
 
 import static org.mockito.BDDMockito.given;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -42,7 +41,6 @@ class ReservationControllerTest {
                 .willReturn(result(false));
 
         mockMvc.perform(post("/api/reservations")
-                        .with(csrf())
                         .header("Idempotency-Key", "request-1")
                         .contentType("application/json")
                         .content(requestJson()))
@@ -62,7 +60,6 @@ class ReservationControllerTest {
                 .willReturn(result(true));
 
         mockMvc.perform(post("/api/reservations")
-                        .with(csrf())
                         .header("Idempotency-Key", "request-1")
                         .contentType("application/json")
                         .content(requestJson()))
@@ -73,13 +70,12 @@ class ReservationControllerTest {
     void mapsValidationAndCapacityErrors() throws Exception {
         given(createReservationUseCase.create(org.mockito.ArgumentMatchers.any(CreateReservationCommand.class)))
                 .willThrow(new InvalidReservationRequestException("invalid"));
-        mockMvc.perform(post("/api/reservations").with(csrf()).contentType("application/json").content(requestJson()))
+        mockMvc.perform(post("/api/reservations").contentType("application/json").content(requestJson()))
                 .andExpect(status().isBadRequest());
 
         given(createReservationUseCase.create(org.mockito.ArgumentMatchers.any(CreateReservationCommand.class)))
                 .willThrow(new ReservationCapacityUnavailableException());
         mockMvc.perform(post("/api/reservations")
-                        .with(csrf())
                         .header("Idempotency-Key", "request-1")
                         .contentType("application/json")
                         .content(requestJson()))
