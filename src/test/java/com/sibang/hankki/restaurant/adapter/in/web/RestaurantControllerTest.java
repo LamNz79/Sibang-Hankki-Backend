@@ -1,4 +1,5 @@
 package com.sibang.hankki.restaurant.adapter.in.web;
+import com.sibang.hankki.auth.config.SecurityConfig;
 import com.sibang.hankki.restaurant.application.port.in.RestaurantAvailabilityUseCase;
 import com.sibang.hankki.restaurant.application.port.in.RestaurantCatalogUseCase;
 import com.sibang.hankki.restaurant.application.model.RestaurantResponse;
@@ -10,6 +11,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -21,6 +23,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(RestaurantController.class)
+@Import(SecurityConfig.class)
 class RestaurantControllerTest {
 
     @Autowired
