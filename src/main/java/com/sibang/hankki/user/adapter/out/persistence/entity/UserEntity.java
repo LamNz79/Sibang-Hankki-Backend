@@ -61,6 +61,14 @@ public class UserEntity {
     protected UserEntity() {
     }
 
+    public UserEntity(String userid, String passwordHash, String name, String role, UUID restaurantId) {
+        this.userid = userid;
+        this.passwordHash = passwordHash;
+        this.name = name;
+        this.role = role;
+        this.restaurantId = restaurantId;
+    }
+
     public UUID getId() {
         return id;
     }
@@ -75,6 +83,10 @@ public class UserEntity {
 
     public String getRole() {
         return role;
+    }
+
+    public String getStatus() {
+        return status;
     }
 
     public UUID getRestaurantId() {
