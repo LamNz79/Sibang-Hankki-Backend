@@ -19,4 +19,6 @@ public interface BookingSlotPort {
     boolean lockByIdAndRestaurantId(UUID slotId, UUID restaurantId);
 
     void saveGeneratedSlots(UUID restaurantId, List<BookingSlotCandidate> slots, int capacityTotal);
+
+    int deleteUnreferencedSlots(UUID restaurantId, Instant startsAt, Instant endsAt);
 }

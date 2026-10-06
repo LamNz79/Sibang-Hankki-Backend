@@ -26,6 +26,18 @@ public class RestaurantBusinessHourEntity {
     @Column(nullable = false)
     private LocalTime closesAt;
 
+    protected RestaurantBusinessHourEntity() {
+    }
+
+    public RestaurantBusinessHourEntity(
+            UUID restaurantId, short dayOfWeek, LocalTime opensAt, LocalTime closesAt) {
+        this.id = UUID.randomUUID();
+        this.restaurantId = restaurantId;
+        this.dayOfWeek = dayOfWeek;
+        this.opensAt = opensAt;
+        this.closesAt = closesAt;
+    }
+
     public UUID getRestaurantId() {
         return restaurantId;
     }

@@ -60,4 +60,9 @@ public class BookingSlotPersistenceAdapter implements BookingSlotPort {
                         restaurantId, slot.startsAt(), slot.endsAt(), capacityTotal, 0))
                 .toList());
     }
+
+    @Override
+    public int deleteUnreferencedSlots(UUID restaurantId, Instant startsAt, Instant endsAt) {
+        return repository.deleteUnreferencedSlots(restaurantId, startsAt, endsAt);
+    }
 }
