@@ -2,6 +2,7 @@ package com.sibang.hankki.restaurant.adapter.in.web;
 
 import com.sibang.hankki.restaurant.application.exception.BookingSettingsNotConfiguredException;
 import com.sibang.hankki.restaurant.application.exception.InvalidBookingRequestException;
+import com.sibang.hankki.restaurant.application.exception.MenuResourceNotFoundException;
 import com.sibang.hankki.restaurant.application.exception.RestaurantNotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -18,6 +19,11 @@ class RestaurantExceptionHandler {
 
     @ExceptionHandler(RestaurantNotFoundException.class)
     ResponseEntity<Void> restaurantNotFound(RestaurantNotFoundException exception) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+    }
+
+    @ExceptionHandler(MenuResourceNotFoundException.class)
+    ResponseEntity<Void> menuResourceNotFound(MenuResourceNotFoundException exception) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
     }
 
