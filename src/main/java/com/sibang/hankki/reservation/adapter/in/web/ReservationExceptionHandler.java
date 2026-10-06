@@ -1,6 +1,7 @@
 package com.sibang.hankki.reservation.adapter.in.web;
 
 import com.sibang.hankki.reservation.application.exception.InvalidReservationRequestException;
+import com.sibang.hankki.reservation.application.exception.InvalidReservationStateException;
 import com.sibang.hankki.reservation.application.exception.ReservationBookingSettingsNotConfiguredException;
 import com.sibang.hankki.reservation.application.exception.ReservationCapacityUnavailableException;
 import com.sibang.hankki.reservation.application.exception.ReservationIdempotencyConflictException;
@@ -28,7 +29,8 @@ public class ReservationExceptionHandler {
     @ExceptionHandler({
             ReservationBookingSettingsNotConfiguredException.class,
             ReservationCapacityUnavailableException.class,
-            ReservationIdempotencyConflictException.class
+            ReservationIdempotencyConflictException.class,
+            InvalidReservationStateException.class
     })
     void conflict() {
     }

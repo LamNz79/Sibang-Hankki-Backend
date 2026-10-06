@@ -20,4 +20,6 @@ public interface ReservationPersistencePort {
     List<Reservation> findAllByRestaurantId(UUID restaurantId);
 
     Optional<Reservation> findByIdAndRestaurantId(UUID id, UUID restaurantId);
+
+    Optional<Reservation> findByIdAndRestaurantIdForUpdate(UUID id, UUID restaurantId);
 }

@@ -5,7 +5,9 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import java.util.Optional;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -18,6 +20,11 @@ public interface BookingSlotRepository extends JpaRepository<BookingSlot, UUID> 
             Instant endsAt);
 
     Optional<BookingSlot> findByRestaurantIdAndStartsAt(UUID restaurantId, Instant startsAt);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select slot from BookingSlot slot where slot.id = :slotId and slot.restaurantId = :restaurantId")
+    Optional<BookingSlot> findByIdAndRestaurantIdForUpdate(
+            @Param("slotId") UUID slotId, @Param("restaurantId") UUID restaurantId);
 
     @Modifying
     @Query("""
