@@ -141,4 +141,29 @@ public class RestaurantBookingSettings {
     public Integer getCustomerCancellationCutoffMinutes() {
         return customerCancellationCutoffMinutes;
     }
+
+    public void updateOwnerSettings(
+            int guestCapacity,
+            int bookingIntervalMinutes,
+            int diningDurationMinutes,
+            ConfirmationMode confirmationMode,
+            Integer manualConfirmationMinPartySize,
+            int bookingWindowDays,
+            int minimumPartySize,
+            int maximumOnlinePartySize,
+            int largePartyThreshold,
+            Integer customerCancellationCutoffMinutes) {
+        this.guestCapacity = guestCapacity;
+        this.bookingIntervalMinutes = (short) bookingIntervalMinutes;
+        this.diningDurationMinutes = (short) diningDurationMinutes;
+        this.confirmationMode = confirmationMode;
+        this.manualConfirmationMinPartySize = manualConfirmationMinPartySize == null
+                ? null
+                : manualConfirmationMinPartySize.shortValue();
+        this.bookingWindowDays = (short) bookingWindowDays;
+        this.minimumPartySize = (short) minimumPartySize;
+        this.maximumOnlinePartySize = (short) maximumOnlinePartySize;
+        this.largePartyThreshold = (short) largePartyThreshold;
+        this.customerCancellationCutoffMinutes = customerCancellationCutoffMinutes;
+    }
 }
