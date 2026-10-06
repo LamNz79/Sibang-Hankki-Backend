@@ -158,6 +158,7 @@ class OwnerReservationCommandServiceTest {
                 null,
                 null,
                 null,
+                null,
                 0,
                 Instant.parse("2026-10-01T00:00:00Z"),
                 Instant.parse("2026-10-01T00:00:00Z"));

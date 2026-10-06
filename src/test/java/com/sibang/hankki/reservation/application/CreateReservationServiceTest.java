@@ -91,6 +91,9 @@ class CreateReservationServiceTest {
         assertThat(result.reservation().status()).isEqualTo(ReservationStatus.CONFIRMED);
         assertThat(result.reservation().visitStatus().name()).isEqualTo("EXPECTED");
         assertThat(result.requiresRestaurantConfirmation()).isFalse();
+        assertThat(result.managementToken()).isNotBlank();
+        assertThat(result.reservation().managementTokenHash())
+                .isEqualTo(ReservationManagementToken.hash(result.managementToken()));
         verify(bookingSlotPort).reserveCapacity(SLOT_ID, 2);
         verify(reservationEventPersistencePort, org.mockito.Mockito.times(2)).append(eventCaptor.capture());
         assertThat(eventCaptor.getAllValues()).extracting(event -> event.eventType())
@@ -134,6 +137,7 @@ class CreateReservationServiceTest {
         var replay = service.create(command("same-key", 2));
 
         assertThat(replay.idempotentReplay()).isTrue();
+        assertThat(replay.managementToken()).isNull();
         verify(bookingSlotPort).reserveCapacity(SLOT_ID, 2);
         verify(reservationEventPersistencePort, org.mockito.Mockito.times(2)).append(any());
     }

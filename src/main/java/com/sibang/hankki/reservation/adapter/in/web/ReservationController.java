@@ -1,5 +1,6 @@
 package com.sibang.hankki.reservation.adapter.in.web;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.sibang.hankki.reservation.application.port.in.CreateReservationCommand;
 import com.sibang.hankki.reservation.application.port.in.CreateReservationResult;
 import com.sibang.hankki.reservation.application.port.in.CreateReservationUseCase;
@@ -54,6 +55,7 @@ public class ReservationController {
             String preOrderNote) {
     }
 
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     public record ReservationResponse(
             String id,
             String reference,
@@ -63,7 +65,8 @@ public class ReservationController {
             int partySize,
             String status,
             boolean requiresRestaurantConfirmation,
-            Instant createdAt) {
+            Instant createdAt,
+            String managementToken) {
 
         private static ReservationResponse from(CreateReservationResult result) {
             Reservation reservation = result.reservation();
@@ -76,7 +79,14 @@ public class ReservationController {
                     reservation.partySize(),
                     reservation.status().name(),
                     result.requiresRestaurantConfirmation(),
-                    reservation.createdAt());
+                    reservation.createdAt(),
+                    result.managementToken());
+        }
+
+        @Override
+        public String toString() {
+            return "ReservationResponse[id=" + id + ", reference=" + reference
+                    + ", managementToken=[REDACTED]]";
         }
     }
 }

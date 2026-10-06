@@ -213,6 +213,7 @@ class OwnerReservationControllerTest {
                 visitStatus,
                 "Window seat",
                 "No peanuts",
+                null,
                 "secret-check-in-hash",
                 null,
                 null,

@@ -75,6 +75,9 @@ public class ReservationEntity {
     @Column(name = "pre_order_note", columnDefinition = "text")
     private String preOrderNote;
 
+    @Column(name = "management_token_hash", length = 64)
+    private String managementTokenHash;
+
     @Column(name = "check_in_token_hash", unique = true, length = 255)
     private String checkInTokenHash;
 
@@ -125,6 +128,7 @@ public class ReservationEntity {
         this.visitStatus = reservation.visitStatus();
         this.specialRequest = reservation.specialRequest();
         this.preOrderNote = reservation.preOrderNote();
+        this.managementTokenHash = reservation.managementTokenHash();
         this.checkInTokenHash = reservation.checkInTokenHash();
         this.checkedInAt = reservation.checkedInAt();
         this.checkedInBy = reservation.checkedInBy();
@@ -200,6 +204,10 @@ public class ReservationEntity {
 
     public String getPreOrderNote() {
         return preOrderNote;
+    }
+
+    public String getManagementTokenHash() {
+        return managementTokenHash;
     }
 
     public String getCheckInTokenHash() {

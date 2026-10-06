@@ -13,5 +13,22 @@ public record BookingSettings(
         int bookingWindowDays,
         int minimumPartySize,
         int maximumOnlinePartySize,
-        int largePartyThreshold) {
+        int largePartyThreshold,
+        Integer customerCancellationCutoffMinutes) {
+
+    public BookingSettings(
+            UUID restaurantId,
+            int guestCapacity,
+            int bookingIntervalMinutes,
+            int diningDurationMinutes,
+            ConfirmationMode confirmationMode,
+            Integer manualConfirmationMinPartySize,
+            int bookingWindowDays,
+            int minimumPartySize,
+            int maximumOnlinePartySize,
+            int largePartyThreshold) {
+        this(restaurantId, guestCapacity, bookingIntervalMinutes, diningDurationMinutes, confirmationMode,
+                manualConfirmationMinPartySize, bookingWindowDays, minimumPartySize,
+                maximumOnlinePartySize, largePartyThreshold, null);
+    }
 }

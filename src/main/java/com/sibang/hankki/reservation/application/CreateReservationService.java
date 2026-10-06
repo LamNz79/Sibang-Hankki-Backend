@@ -85,7 +85,8 @@ public class CreateReservationService implements CreateReservationUseCase {
                     date,
                     time,
                     previous.status() == ReservationStatus.PENDING,
-                    true);
+                    true,
+                    null);
         }
 
         LocalDate today = LocalDate.now(clock.withZone(BookingTime.RESTAURANT_TIME_ZONE));
@@ -114,6 +115,7 @@ public class CreateReservationService implements CreateReservationUseCase {
         }
 
         Instant now = Instant.now(clock);
+        String managementToken = ReservationManagementToken.generate();
         Reservation reservation = new Reservation(
                 UUID.randomUUID(),
                 "SHK-" + UUID.randomUUID().toString().replace("-", "").substring(0, 28).toUpperCase(),
@@ -133,6 +135,7 @@ public class CreateReservationService implements CreateReservationUseCase {
                 status == ReservationStatus.CONFIRMED ? VisitStatus.EXPECTED : null,
                 command.specialRequest(),
                 command.preOrderNote(),
+                ReservationManagementToken.hash(managementToken),
                 null,
                 null,
                 null,
@@ -144,7 +147,8 @@ public class CreateReservationService implements CreateReservationUseCase {
         if (status == ReservationStatus.CONFIRMED) {
             appendEvent(saved, ReservationEventType.CONFIRMED, fingerprint, now.plusNanos(1_000));
         }
-        return new CreateReservationResult(saved, restaurant.slug(), date, time, requiresConfirmation, false);
+        return new CreateReservationResult(
+                saved, restaurant.slug(), date, time, requiresConfirmation, false, managementToken);
     }
 
     private void appendEvent(Reservation reservation, ReservationEventType type, String fingerprint, Instant now) {

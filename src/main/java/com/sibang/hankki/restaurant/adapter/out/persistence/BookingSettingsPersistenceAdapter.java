@@ -35,6 +35,7 @@ public class BookingSettingsPersistenceAdapter implements BookingSettingsPort {
                 settings.getBookingWindowDays(),
                 settings.getMinimumPartySize(),
                 settings.getMaximumOnlinePartySize(),
-                settings.getLargePartyThreshold());
+                settings.getLargePartyThreshold(),
+                settings.getCustomerCancellationCutoffMinutes());
     }
 }

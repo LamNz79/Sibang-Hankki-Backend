@@ -77,6 +77,16 @@ public class ReservationPersistenceAdapter implements ReservationPersistencePort
         return repository.findByIdAndRestaurantIdForUpdate(id, restaurantId).map(this::toReservation);
     }
 
+    @Override
+    public Optional<Reservation> findByIdAndManagementTokenHash(UUID id, String managementTokenHash) {
+        return repository.findByIdAndManagementTokenHash(id, managementTokenHash).map(this::toReservation);
+    }
+
+    @Override
+    public Optional<Reservation> findByIdAndManagementTokenHashForUpdate(UUID id, String managementTokenHash) {
+        return repository.findByIdAndManagementTokenHashForUpdate(id, managementTokenHash).map(this::toReservation);
+    }
+
     private Reservation toReservation(ReservationEntity entity) {
         return new Reservation(
                 entity.getId(),
@@ -97,6 +107,7 @@ public class ReservationPersistenceAdapter implements ReservationPersistencePort
                 entity.getVisitStatus(),
                 entity.getSpecialRequest(),
                 entity.getPreOrderNote(),
+                entity.getManagementTokenHash(),
                 entity.getCheckInTokenHash(),
                 entity.getCheckedInAt(),
                 entity.getCheckedInBy(),
