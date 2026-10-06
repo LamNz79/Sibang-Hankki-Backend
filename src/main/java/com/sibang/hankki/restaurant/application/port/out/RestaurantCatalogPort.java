@@ -17,4 +17,6 @@ public interface RestaurantCatalogPort {
     List<RestaurantBusinessHourData> findBusinessHoursByRestaurantIds(Collection<UUID> restaurantIds);
 
     List<RestaurantGalleryCount> countActiveImagesByRestaurantIds(Collection<UUID> restaurantIds);
+
+    List<RestaurantImageData> findImagesByRestaurantIds(Collection<UUID> restaurantIds);
 }
