@@ -7,6 +7,7 @@ import com.sibang.hankki.restaurant.application.port.out.RestaurantBusinessHourD
 import com.sibang.hankki.restaurant.application.port.out.RestaurantCatalogPort;
 import com.sibang.hankki.restaurant.application.port.out.RestaurantData;
 import com.sibang.hankki.restaurant.application.port.out.RestaurantGalleryCount;
+import com.sibang.hankki.restaurant.application.port.out.RestaurantImageData;
 import com.sibang.hankki.restaurant.application.port.out.RestaurantTagData;
 import com.sibang.hankki.restaurant.application.prototype.RestaurantAvailabilityMockData;
 import com.sibang.hankki.restaurant.application.prototype.RestaurantPrototypePresentation;
@@ -57,11 +58,13 @@ public class RestaurantCatalogService implements RestaurantCatalogUseCase {
         Map<UUID, List<RestaurantBusinessHourData>> hours = groupByRestaurant(
                 catalogPort.findBusinessHoursByRestaurantIds(ids), RestaurantBusinessHourData::restaurantId);
         Map<UUID, Long> galleryCounts = galleryCounts(catalogPort.countActiveImagesByRestaurantIds(ids));
+        Map<UUID, List<RestaurantImageData>> images = groupByRestaurant(
+                catalogPort.findImagesByRestaurantIds(ids), RestaurantImageData::restaurantId);
 
         return restaurants.stream()
                 .map(restaurant -> response(restaurant, tags.getOrDefault(restaurant.id(), List.of()),
                         hours.getOrDefault(restaurant.id(), List.of()), galleryCounts.getOrDefault(restaurant.id(), 0L),
-                        includeSlotMatrix))
+                        images.getOrDefault(restaurant.id(), List.of()), includeSlotMatrix))
                 .toList();
     }
 
@@ -70,6 +73,7 @@ public class RestaurantCatalogService implements RestaurantCatalogUseCase {
             List<RestaurantTagData> restaurantTags,
             List<RestaurantBusinessHourData> businessHours,
             long galleryCount,
+            List<RestaurantImageData> images,
             boolean includeSlotMatrix) {
         RestaurantPrototypePresentation.Presentation presentation = RestaurantPrototypePresentation.forSlug(
                 restaurant.slug());
@@ -86,6 +90,7 @@ public class RestaurantCatalogService implements RestaurantCatalogUseCase {
         if (availability != null && availability.showInTags()) {
             tags = prepend(tags, "Available");
         }
+        RestaurantImageData primaryImage = images.isEmpty() ? null : images.get(0);
 
         return new RestaurantResponse(
                 restaurant.slug(),
@@ -99,6 +104,8 @@ public class RestaurantCatalogService implements RestaurantCatalogUseCase {
                 presentation.ratingCount(),
                 restaurant.priceRange(),
                 presentation.heroAccent(),
+                primaryImage == null ? null : primaryImage.imageUrl(),
+                primaryImage == null ? restaurant.name() : primaryImage.altText(),
                 openHours(businessHours),
                 restaurant.address(),
                 availability == null ? "Availability unavailable" : "Available today from " + availability.availableFrom(),

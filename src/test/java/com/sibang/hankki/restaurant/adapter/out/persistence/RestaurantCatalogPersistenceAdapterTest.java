@@ -3,6 +3,7 @@ package com.sibang.hankki.restaurant.adapter.out.persistence;
 import com.sibang.hankki.restaurant.application.port.out.RestaurantBusinessHourData;
 import com.sibang.hankki.restaurant.application.port.out.RestaurantData;
 import com.sibang.hankki.restaurant.application.port.out.RestaurantGalleryCount;
+import com.sibang.hankki.restaurant.application.port.out.RestaurantImageData;
 import com.sibang.hankki.restaurant.application.port.out.RestaurantTagData;
 import java.time.LocalTime;
 import java.util.List;
@@ -102,6 +103,16 @@ class RestaurantCatalogPersistenceAdapterTest {
 
         assertEquals(List.of(new RestaurantGalleryCount(ANAN_ID, 5)),
                 catalogAdapter.countActiveImagesByRestaurantIds(List.of(ANAN_ID)));
+    }
+
+    @Test
+    void returnsActiveImagesInDisplayOrder() {
+        List<RestaurantImageData> images = catalogAdapter.findImagesByRestaurantIds(List.of(ANAN_ID));
+
+        assertEquals(5, images.size());
+        assertEquals(ANAN_ID, images.get(0).restaurantId());
+        assertEquals(1, images.get(0).sortOrder());
+        assertTrue(images.get(0).imageUrl().startsWith("https://images.unsplash.com/"));
     }
 
     @Test

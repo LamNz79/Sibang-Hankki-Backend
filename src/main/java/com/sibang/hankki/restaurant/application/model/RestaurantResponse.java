@@ -15,6 +15,8 @@ public record RestaurantResponse(
         int ratingCount,
         String priceRangeLabel,
         String heroAccent,
+        String imageUrl,
+        String imageAlt,
         String openHours,
         String address,
         String availableText,

@@ -8,6 +8,7 @@ import com.sibang.hankki.restaurant.application.port.out.RestaurantBusinessHourD
 import com.sibang.hankki.restaurant.application.port.out.RestaurantCatalogPort;
 import com.sibang.hankki.restaurant.application.port.out.RestaurantData;
 import com.sibang.hankki.restaurant.application.port.out.RestaurantGalleryCount;
+import com.sibang.hankki.restaurant.application.port.out.RestaurantImageData;
 import com.sibang.hankki.restaurant.application.port.out.RestaurantTagData;
 import jakarta.persistence.EntityManager;
 import java.util.Collection;
@@ -65,6 +66,19 @@ public class RestaurantCatalogPersistenceAdapter implements RestaurantCatalogPor
                 where image.restaurantId in :restaurantIds and image.deletedAt is null
                 group by image.restaurantId
                 """, RestaurantGalleryCount.class)
+                .setParameter("restaurantIds", restaurantIds)
+                .getResultList();
+    }
+
+    @Override
+    public List<RestaurantImageData> findImagesByRestaurantIds(Collection<UUID> restaurantIds) {
+        return entityManager.createQuery("""
+                select new com.sibang.hankki.restaurant.application.port.out.RestaurantImageData(
+                    image.restaurantId, image.imageUrl, image.altText, image.sortOrder)
+                from RestaurantImageEntity image
+                where image.restaurantId in :restaurantIds and image.deletedAt is null
+                order by image.restaurantId, image.sortOrder, image.id
+                """, RestaurantImageData.class)
                 .setParameter("restaurantIds", restaurantIds)
                 .getResultList();
     }

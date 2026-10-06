@@ -44,6 +44,7 @@ class RestaurantControllerTest {
                 .andExpect(content().contentTypeCompatibleWith("application/json"))
                 .andExpect(jsonPath("$.length()").value(6))
                 .andExpect(jsonPath("$[0].slug").value("anan-saigon"))
+                .andExpect(jsonPath("$[0].imageUrl").value("https://example.test/anan.jpg"))
                 .andExpect(jsonPath("$[0].slotMatrix").doesNotExist());
     }
 
@@ -54,6 +55,7 @@ class RestaurantControllerTest {
         mockMvc.perform(get("/api/restaurants/anan-saigon"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("Anan Saigon"))
+                .andExpect(jsonPath("$.imageUrl").value("https://example.test/anan.jpg"))
                 .andExpect(jsonPath("$.slotMatrix").isMap());
     }
 
@@ -73,6 +75,7 @@ class RestaurantControllerTest {
         return new RestaurantResponse(
                 "anan-saigon", "Anan Saigon", "ho-chi-minh-city", "District 1", "District 1",
                 "Vietnamese contemporary", "vietnamese", 4.7, 139, "150K - 350K", "#f6ede4",
+                "https://example.test/anan.jpg", "Anan Saigon dining room",
                 "11:30 - 22:00", "District 1", "Available today from 18:30", "18:30", "under300",
                 List.of("michelin", "special_deal", "available"), List.of("Michelin", "Special deal", "Date night"),
                 5, "summary", Map.of("2026-09-15", Map.of("2", List.of("18:30"))));

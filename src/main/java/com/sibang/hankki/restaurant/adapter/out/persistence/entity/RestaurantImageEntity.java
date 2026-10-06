@@ -17,5 +17,13 @@ class RestaurantImageEntity {
     @Column(nullable = false)
     private UUID restaurantId;
 
+    @Column(nullable = false)
+    private String imageUrl;
+
+    private String altText;
+
+    @Column(nullable = false)
+    private int sortOrder;
+
     private Instant deletedAt;
 }
