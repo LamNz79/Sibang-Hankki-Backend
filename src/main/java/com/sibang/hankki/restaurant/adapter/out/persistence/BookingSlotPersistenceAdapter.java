@@ -44,6 +44,11 @@ public class BookingSlotPersistenceAdapter implements BookingSlotPort {
     }
 
     @Override
+    public boolean lockByIdAndRestaurantId(UUID slotId, UUID restaurantId) {
+        return repository.findByIdAndRestaurantIdForUpdate(slotId, restaurantId).isPresent();
+    }
+
+    @Override
     public void saveGeneratedSlots(UUID restaurantId, List<BookingSlotCandidate> slots, int capacityTotal) {
         repository.saveAll(slots.stream()
                 .map(slot -> new BookingSlot(

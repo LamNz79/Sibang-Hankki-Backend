@@ -1,0 +1,184 @@
+package com.sibang.hankki.reservation.application;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import com.sibang.hankki.reservation.adapter.out.persistence.repository.ReservationEventJpaRepository;
+import com.sibang.hankki.reservation.adapter.out.persistence.repository.ReservationJpaRepository;
+import com.sibang.hankki.reservation.application.exception.ReservationCapacityUnavailableException;
+import com.sibang.hankki.reservation.application.exception.ReservationNotFoundException;
+import com.sibang.hankki.reservation.domain.model.ReservationStatus;
+import com.sibang.hankki.reservation.domain.model.VisitStatus;
+import com.sibang.hankki.restaurant.adapter.out.persistence.repository.BookingSlotRepository;
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
+
+@SpringBootTest
+@EnabledIfEnvironmentVariable(named = "DB_URL", matches = ".+")
+class OwnerReservationCommandPersistenceTest {
+
+    private static final Instant STARTS_AT = Instant.parse("2026-10-10T11:30:00Z");
+    private static final Instant ENDS_AT = Instant.parse("2026-10-10T13:00:00Z");
+
+    @Autowired
+    private OwnerReservationCommandService service;
+    @Autowired
+    private ReservationJpaRepository reservationRepository;
+    @Autowired
+    private ReservationEventJpaRepository eventRepository;
+    @Autowired
+    private BookingSlotRepository slotRepository;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
+    private UUID restaurantId;
+    private UUID actorId;
+    private UUID slotId;
+
+    @BeforeEach
+    void setUp() {
+        restaurantId = UUID.randomUUID();
+        actorId = UUID.randomUUID();
+        slotId = UUID.randomUUID();
+        jdbcTemplate.update("""
+                insert into restaurants (id, slug, name, city_slug, approval_status)
+                values (?, ?, 'Owner Command Test', 'ho-chi-minh-city', 'ACTIVE')
+                """, restaurantId, "owner-command-test-" + restaurantId);
+        jdbcTemplate.update("""
+                insert into users (id, userid, password_hash, name, role, status, restaurant_id)
+                values (?, ?, 'unused-test-hash', 'Test Owner', 'OWNER', 'ACTIVE', ?)
+                """, actorId, "owner-" + actorId.toString().substring(0, 20), restaurantId);
+        jdbcTemplate.update("""
+                insert into booking_slots
+                    (id, restaurant_id, starts_at, ends_at, capacity_total, capacity_reserved)
+                values (?, ?, ?, ?, 4, 0)
+                """, slotId, restaurantId, Timestamp.from(STARTS_AT), Timestamp.from(ENDS_AT));
+    }
+
+    @AfterEach
+    void cleanUp() {
+        jdbcTemplate.update("delete from reservation_events where reservation_id in (select id from reservations where restaurant_id = ?)", restaurantId);
+        jdbcTemplate.update("delete from reservations where restaurant_id = ?", restaurantId);
+        jdbcTemplate.update("delete from booking_slots where restaurant_id = ?", restaurantId);
+        jdbcTemplate.update("delete from users where id = ?", actorId);
+        jdbcTemplate.update("delete from restaurants where id = ?", restaurantId);
+    }
+
+    @Test
+    void confirmReservesCapacityOnceAndSetsExpectedVisitStatus() {
+        UUID reservationId = insertPendingReservation(2);
+
+        var confirmed = service.confirm(reservationId, restaurantId, actorId);
+        var replay = service.confirm(reservationId, restaurantId, actorId);
+
+        assertEquals(ReservationStatus.CONFIRMED, confirmed.status());
+        assertEquals(VisitStatus.EXPECTED, confirmed.visitStatus());
+        assertEquals(confirmed.id(), replay.id());
+        assertEquals(2, slotRepository.findById(slotId).orElseThrow().getCapacityReserved());
+        assertEquals(1, eventRepository.findByReservationIdOrderByCreatedAtAscIdAsc(reservationId).size());
+        assertEquals(actorId, eventRepository.findByReservationIdOrderByCreatedAtAscIdAsc(reservationId)
+                .get(0).getActorUserId());
+    }
+
+    @Test
+    void insufficientCapacityRollsBackReservationAndEvent() {
+        UUID reservationId = insertPendingReservation(5);
+
+        assertThrows(ReservationCapacityUnavailableException.class,
+                () -> service.confirm(reservationId, restaurantId, actorId));
+
+        assertEquals(ReservationStatus.PENDING,
+                reservationRepository.findById(reservationId).orElseThrow().getStatus());
+        assertEquals(0, slotRepository.findById(slotId).orElseThrow().getCapacityReserved());
+        assertEquals(0, eventRepository.findByReservationIdOrderByCreatedAtAscIdAsc(reservationId).size());
+    }
+
+    @Test
+    void declineDoesNotReserveCapacityAndReplayDoesNotDuplicateEvent() {
+        UUID reservationId = insertPendingReservation(2);
+
+        var declined = service.decline(reservationId, restaurantId, actorId, "Fully booked");
+        service.decline(reservationId, restaurantId, actorId, "Fully booked");
+
+        assertEquals(ReservationStatus.DECLINED, declined.status());
+        assertEquals(0, slotRepository.findById(slotId).orElseThrow().getCapacityReserved());
+        var events = eventRepository.findByReservationIdOrderByCreatedAtAscIdAsc(reservationId);
+        assertEquals(1, events.size());
+        assertEquals(actorId, events.get(0).getActorUserId());
+        assertTrue(events.get(0).getMetadata().contains("Fully booked"));
+    }
+
+    @Test
+    void crossRestaurantReservationIsNotExposed() {
+        UUID reservationId = insertPendingReservation(2);
+
+        assertThrows(ReservationNotFoundException.class,
+                () -> service.confirm(reservationId, UUID.randomUUID(), actorId));
+    }
+
+    @Test
+    void concurrentConfirmCannotOversellCapacity() throws Exception {
+        jdbcTemplate.update("update booking_slots set capacity_total = 2 where id = ?", slotId);
+        UUID firstReservationId = insertPendingReservation(2);
+        UUID secondReservationId = insertPendingReservation(2);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            List<Future<Boolean>> results = executor.invokeAll(List.of(
+                    confirm(firstReservationId), confirm(secondReservationId)));
+            assertEquals(1, results.stream().filter(this::succeeded).count());
+        } finally {
+            executor.shutdownNow();
+        }
+
+        assertEquals(2, slotRepository.findById(slotId).orElseThrow().getCapacityReserved());
+        assertEquals(1, reservationRepository.findAllByRestaurantIdOrderByStartsAtAscIdAsc(restaurantId).stream()
+                .filter(reservation -> reservation.getStatus() == ReservationStatus.CONFIRMED)
+                .count());
+    }
+
+    private Callable<Boolean> confirm(UUID reservationId) {
+        return () -> {
+            try {
+                service.confirm(reservationId, restaurantId, actorId);
+                return true;
+            } catch (ReservationCapacityUnavailableException exception) {
+                return false;
+            }
+        };
+    }
+
+    private boolean succeeded(Future<Boolean> result) {
+        try {
+            return result.get();
+        } catch (Exception exception) {
+            throw new AssertionError(exception);
+        }
+    }
+
+    private UUID insertPendingReservation(int partySize) {
+        UUID reservationId = UUID.randomUUID();
+        jdbcTemplate.update("""
+                insert into reservations (
+                    id, reference, idempotency_key, request_fingerprint, restaurant_id, booking_slot_id,
+                    customer_name, customer_phone, starts_at, ends_at, party_size, status)
+                values (?, ?, ?, ?, ?, ?, 'Minh Lam', '0900000000', ?, ?, ?, 'PENDING')
+                """, reservationId, "SHK-" + reservationId.toString().substring(0, 8),
+                "owner-command-" + reservationId, "0".repeat(64), restaurantId, slotId,
+                Timestamp.from(STARTS_AT), Timestamp.from(ENDS_AT), partySize);
+        return reservationId;
+    }
+}
