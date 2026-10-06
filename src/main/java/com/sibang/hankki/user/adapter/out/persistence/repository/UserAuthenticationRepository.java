@@ -7,5 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface UserAuthenticationRepository extends JpaRepository<UserEntity, UUID> {
 
+    Optional<UserEntity> findByUserid(String userid);
+
     Optional<UserEntity> findByUseridAndStatusAndDeletedAtIsNull(String userid, String status);
 }

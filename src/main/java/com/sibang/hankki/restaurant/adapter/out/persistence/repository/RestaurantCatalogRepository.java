@@ -53,6 +53,10 @@ public class RestaurantCatalogRepository {
                 .findFirst();
     }
 
+    public boolean existsById(UUID id) {
+        return entityManager.find(RestaurantEntity.class, id) != null;
+    }
+
     public List<RestaurantTagEntity> findTagsByRestaurantIds(Collection<UUID> restaurantIds) {
         return entityManager.createQuery("""
                 select tag from RestaurantTagEntity tag
