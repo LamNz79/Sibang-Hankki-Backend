@@ -45,4 +45,20 @@ public interface BookingSlotRepository extends JpaRepository<BookingSlot, UUID> 
               and slot.capacityReserved >= :partySize
             """)
     int releaseCapacity(@Param("slotId") UUID slotId, @Param("partySize") int partySize);
+
+    @Modifying
+    @Query(value = """
+            delete from booking_slots slot
+            where slot.restaurant_id = :restaurantId
+              and slot.starts_at >= :startsAt
+              and slot.starts_at < :endsAt
+              and not exists (
+                  select 1 from reservations reservation
+                  where reservation.booking_slot_id = slot.id
+              )
+            """, nativeQuery = true)
+    int deleteUnreferencedSlots(
+            @Param("restaurantId") UUID restaurantId,
+            @Param("startsAt") Instant startsAt,
+            @Param("endsAt") Instant endsAt);
 }

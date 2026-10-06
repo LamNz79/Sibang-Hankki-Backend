@@ -36,7 +36,7 @@ public class BookingSlotGenerationService {
     private final Clock clock;
     private final BookingSlotGenerator slotGenerator = new BookingSlotGenerator();
 
-    BookingSlotGenerationService(
+    public BookingSlotGenerationService(
             RestaurantCatalogPort restaurantCatalogPort,
             BookingSettingsPort bookingSettingsPort,
             BookingSlotPort bookingSlotPort,
@@ -48,7 +48,7 @@ public class BookingSlotGenerationService {
     }
 
     @Transactional
-    List<BookingSlotCandidate> generateSlots(UUID restaurantId, LocalDate fromDate, LocalDate toDate) {
+    public List<BookingSlotCandidate> generateSlots(UUID restaurantId, LocalDate fromDate, LocalDate toDate) {
         if (restaurantId == null) {
             throw new InvalidBookingRequestException("restaurantId is required");
         }
