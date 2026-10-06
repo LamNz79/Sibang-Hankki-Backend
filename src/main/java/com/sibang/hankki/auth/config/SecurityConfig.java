@@ -21,6 +21,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/api/auth/csrf", "/api/auth/login").permitAll()
                         .requestMatchers("/api/auth/me").authenticated()
+                        .requestMatchers("/api/owner/settings/**").hasRole("OWNER")
                         .requestMatchers("/api/owner/**").hasAnyRole("OWNER", "STAFF")
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .anyRequest().permitAll())

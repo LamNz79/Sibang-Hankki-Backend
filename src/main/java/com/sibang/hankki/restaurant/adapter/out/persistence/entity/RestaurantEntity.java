@@ -114,7 +114,40 @@ public class RestaurantEntity {
         return address;
     }
 
+    public String getPhone() {
+        return phone;
+    }
+
+    public String getEmail() {
+        return email;
+    }
+
+    public String getTimezone() {
+        return timezone;
+    }
+
     public String getPriceRange() {
         return priceRange;
+    }
+
+    public void updateOwnerProfile(
+            String name,
+            String description,
+            String cuisineLabel,
+            String area,
+            String district,
+            String address,
+            String phone,
+            String email,
+            String priceRange) {
+        this.name = name;
+        this.description = description;
+        this.cuisineLabel = cuisineLabel;
+        this.area = area;
+        this.district = district;
+        this.address = address;
+        this.phone = phone;
+        this.email = email;
+        this.priceRange = priceRange;
     }
 }
