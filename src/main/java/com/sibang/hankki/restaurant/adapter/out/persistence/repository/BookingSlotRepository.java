@@ -35,4 +35,14 @@ public interface BookingSlotRepository extends JpaRepository<BookingSlot, UUID> 
               and slot.capacityTotal - slot.capacityReserved >= :partySize
             """)
     int reserveCapacity(@Param("slotId") UUID slotId, @Param("partySize") int partySize);
+
+    @Modifying
+    @Query("""
+            update BookingSlot slot
+            set slot.capacityReserved = slot.capacityReserved - :partySize,
+                slot.updatedAt = CURRENT_TIMESTAMP
+            where slot.id = :slotId
+              and slot.capacityReserved >= :partySize
+            """)
+    int releaseCapacity(@Param("slotId") UUID slotId, @Param("partySize") int partySize);
 }

@@ -10,5 +10,6 @@ public record CreateReservationResult(
         LocalDate date,
         LocalTime time,
         boolean requiresRestaurantConfirmation,
-        boolean idempotentReplay) {
+        boolean idempotentReplay,
+        String managementToken) {
 }

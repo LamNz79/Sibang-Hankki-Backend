@@ -14,6 +14,8 @@ public interface BookingSlotPort {
 
     boolean reserveCapacity(UUID slotId, int partySize);
 
+    boolean releaseCapacity(UUID slotId, int partySize);
+
     boolean lockByIdAndRestaurantId(UUID slotId, UUID restaurantId);
 
     void saveGeneratedSlots(UUID restaurantId, List<BookingSlotCandidate> slots, int capacityTotal);

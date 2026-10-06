@@ -23,6 +23,7 @@ public record Reservation(
         VisitStatus visitStatus,
         String specialRequest,
         String preOrderNote,
+        String managementTokenHash,
         String checkInTokenHash,
         Instant checkedInAt,
         UUID checkedInBy,
@@ -55,6 +56,9 @@ public record Reservation(
         }
         if (capacityOverride && status != ReservationStatus.CONFIRMED) {
             throw new IllegalArgumentException("capacityOverride requires a confirmed reservation");
+        }
+        if (managementTokenHash != null && managementTokenHash.length() != 64) {
+            throw new IllegalArgumentException("managementTokenHash must be a SHA-256 hex value");
         }
         if (version < 0) {
             throw new IllegalArgumentException("version must not be negative");

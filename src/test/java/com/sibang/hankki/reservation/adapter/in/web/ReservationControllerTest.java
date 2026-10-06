@@ -51,7 +51,8 @@ class ReservationControllerTest {
                 .andExpect(jsonPath("$.time").value("18:30"))
                 .andExpect(jsonPath("$.partySize").value(2))
                 .andExpect(jsonPath("$.status").value("CONFIRMED"))
-                .andExpect(jsonPath("$.requiresRestaurantConfirmation").value(false));
+                .andExpect(jsonPath("$.requiresRestaurantConfirmation").value(false))
+                .andExpect(jsonPath("$.managementToken").value("raw-management-token"));
     }
 
     @Test
@@ -63,7 +64,8 @@ class ReservationControllerTest {
                         .header("Idempotency-Key", "request-1")
                         .contentType("application/json")
                         .content(requestJson()))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.managementToken").doesNotExist());
     }
 
     @Test
@@ -87,9 +89,11 @@ class ReservationControllerTest {
                 UUID.randomUUID(), "SHK-ABC123", "request-1", "a".repeat(64), UUID.randomUUID(), UUID.randomUUID(),
                 null, "Minh Lam", null, "0900000000", Instant.parse("2026-10-05T11:30:00Z"),
                 Instant.parse("2026-10-05T13:00:00Z"), 2, ReservationStatus.CONFIRMED, false, VisitStatus.EXPECTED,
-                null, null, null, null, null, 0, Instant.parse("2026-10-01T00:00:00Z"), Instant.parse("2026-10-01T00:00:00Z"));
+                null, null, null, null, null, null, 0,
+                Instant.parse("2026-10-01T00:00:00Z"), Instant.parse("2026-10-01T00:00:00Z"));
         return new CreateReservationResult(
-                reservation, "anan-saigon", LocalDate.of(2026, 10, 5), LocalTime.of(18, 30), false, replay);
+                reservation, "anan-saigon", LocalDate.of(2026, 10, 5), LocalTime.of(18, 30),
+                false, replay, replay ? null : "raw-management-token");
     }
 
     private String requestJson() {

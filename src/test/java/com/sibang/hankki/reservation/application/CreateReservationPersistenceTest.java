@@ -93,6 +93,9 @@ class CreateReservationPersistenceTest {
         var result = service.create(command("auto", 2, "18:30"));
 
         ReservationEntity reservation = reservationRepository.findById(result.reservation().id()).orElseThrow();
+        assertTrue(result.managementToken() != null && !result.managementToken().isBlank());
+        assertEquals(ReservationManagementToken.hash(result.managementToken()), reservation.getManagementTokenHash());
+        assertFalse(result.managementToken().equals(reservation.getManagementTokenHash()));
         assertEquals("CONFIRMED", reservation.getStatus().name());
         assertEquals("EXPECTED", reservation.getVisitStatus().name());
         assertEquals(2, slotRepository.findById(slotId).orElseThrow().getCapacityReserved());

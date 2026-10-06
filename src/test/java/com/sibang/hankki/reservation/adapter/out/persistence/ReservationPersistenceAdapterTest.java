@@ -279,6 +279,7 @@ class ReservationPersistenceAdapterTest {
                 visitStatus,
                 "Window seat",
                 "No peanuts",
+                null,
                 checkInTokenHash,
                 null,
                 null,
@@ -293,7 +294,8 @@ class ReservationPersistenceAdapterTest {
                 reservation.restaurantId(), reservation.bookingSlotId(), reservation.customerId(), reservation.customerName(),
                 reservation.customerEmail(), reservation.customerPhone(), reservation.startsAt(), reservation.endsAt(),
                 reservation.partySize(), reservation.status(), reservation.capacityOverride(), reservation.visitStatus(),
-                specialRequest, reservation.preOrderNote(), reservation.checkInTokenHash(), reservation.checkedInAt(),
+                specialRequest, reservation.preOrderNote(), reservation.managementTokenHash(),
+                reservation.checkInTokenHash(), reservation.checkedInAt(),
                 reservation.checkedInBy(), reservation.version(), reservation.createdAt(), reservation.updatedAt());
     }
 

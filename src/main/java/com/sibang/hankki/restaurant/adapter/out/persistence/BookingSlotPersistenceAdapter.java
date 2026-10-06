@@ -44,6 +44,11 @@ public class BookingSlotPersistenceAdapter implements BookingSlotPort {
     }
 
     @Override
+    public boolean releaseCapacity(UUID slotId, int partySize) {
+        return repository.releaseCapacity(slotId, partySize) == 1;
+    }
+
+    @Override
     public boolean lockByIdAndRestaurantId(UUID slotId, UUID restaurantId) {
         return repository.findByIdAndRestaurantIdForUpdate(slotId, restaurantId).isPresent();
     }

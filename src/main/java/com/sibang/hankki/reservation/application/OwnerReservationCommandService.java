@@ -99,7 +99,8 @@ public class OwnerReservationCommandService implements OwnerReservationCommandUs
                 reservation.restaurantId(), reservation.bookingSlotId(), reservation.customerId(), reservation.customerName(),
                 reservation.customerEmail(), reservation.customerPhone(), reservation.startsAt(), reservation.endsAt(),
                 reservation.partySize(), status, reservation.capacityOverride(), visitStatus,
-                reservation.specialRequest(), reservation.preOrderNote(), reservation.checkInTokenHash(),
+                reservation.specialRequest(), reservation.preOrderNote(), reservation.managementTokenHash(),
+                reservation.checkInTokenHash(),
                 reservation.checkedInAt(), reservation.checkedInBy(), reservation.version(),
                 reservation.createdAt(), reservation.updatedAt());
     }

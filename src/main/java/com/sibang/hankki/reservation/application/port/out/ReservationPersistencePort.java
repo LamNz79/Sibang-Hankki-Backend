@@ -22,4 +22,8 @@ public interface ReservationPersistencePort {
     Optional<Reservation> findByIdAndRestaurantId(UUID id, UUID restaurantId);
 
     Optional<Reservation> findByIdAndRestaurantIdForUpdate(UUID id, UUID restaurantId);
+
+    Optional<Reservation> findByIdAndManagementTokenHash(UUID id, String managementTokenHash);
+
+    Optional<Reservation> findByIdAndManagementTokenHashForUpdate(UUID id, String managementTokenHash);
 }

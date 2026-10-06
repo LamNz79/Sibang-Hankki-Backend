@@ -137,4 +137,8 @@ public class RestaurantBookingSettings {
     public Short getManualConfirmationMinPartySize() {
         return manualConfirmationMinPartySize;
     }
+
+    public Integer getCustomerCancellationCutoffMinutes() {
+        return customerCancellationCutoffMinutes;
+    }
 }
