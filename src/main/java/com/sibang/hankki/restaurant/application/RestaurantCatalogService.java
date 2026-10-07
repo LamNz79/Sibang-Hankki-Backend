@@ -114,6 +114,10 @@ public class RestaurantCatalogService implements RestaurantCatalogUseCase {
                 benefits,
                 tags,
                 Math.toIntExact(galleryCount),
+                images.stream()
+                        .map(image -> new RestaurantResponse.GalleryImage(
+                                image.imageUrl(), image.altText() == null ? restaurant.name() : image.altText()))
+                        .toList(),
                 restaurant.description(),
                 includeSlotMatrix ? RestaurantAvailabilityMockData.slotMatrix(restaurant.slug()) : Map.of());
     }

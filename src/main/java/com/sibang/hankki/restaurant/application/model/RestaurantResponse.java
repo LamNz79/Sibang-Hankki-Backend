@@ -25,6 +25,10 @@ public record RestaurantResponse(
         List<String> benefits,
         List<String> tags,
         int galleryCount,
+        List<GalleryImage> galleryImages,
         String summary,
         Map<String, Map<String, List<String>>> slotMatrix) {
+
+    public record GalleryImage(String imageUrl, String imageAlt) {
+    }
 }
