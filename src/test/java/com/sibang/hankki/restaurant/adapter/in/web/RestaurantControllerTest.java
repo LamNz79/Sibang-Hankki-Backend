@@ -56,6 +56,7 @@ class RestaurantControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("Anan Saigon"))
                 .andExpect(jsonPath("$.imageUrl").value("https://example.test/anan.jpg"))
+                .andExpect(jsonPath("$.galleryImages[0].imageUrl").value("https://example.test/anan.jpg"))
                 .andExpect(jsonPath("$.slotMatrix").isMap());
     }
 
@@ -78,6 +79,8 @@ class RestaurantControllerTest {
                 "https://example.test/anan.jpg", "Anan Saigon dining room",
                 "11:30 - 22:00", "District 1", "Available today from 18:30", "18:30", "under300",
                 List.of("michelin", "special_deal", "available"), List.of("Michelin", "Special deal", "Date night"),
-                5, "summary", Map.of("2026-09-15", Map.of("2", List.of("18:30"))));
+                5, List.of(new RestaurantResponse.GalleryImage(
+                        "https://example.test/anan.jpg", "Anan Saigon dining room")),
+                "summary", Map.of("2026-09-15", Map.of("2", List.of("18:30"))));
     }
 }
