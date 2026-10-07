@@ -40,7 +40,7 @@ class CustomerRegistrationServiceTest {
     }
 
     @Test
-    void registersTrimmedActiveCustomerWithBcryptPasswordAndNoRestaurant() {
+    void trimsProfileFieldsButPreservesPasswordBeforeBcryptHashing() {
         given(repository.saveAndFlush(org.mockito.ArgumentMatchers.any(UserEntity.class)))
                 .willAnswer(invocation -> invocation.getArgument(0));
 
@@ -56,7 +56,7 @@ class CustomerRegistrationServiceTest {
         assertEquals("CUSTOMER", saved.getRole());
         assertEquals("ACTIVE", saved.getStatus());
         assertNull(saved.getRestaurantId());
-        assertTrue(passwordEncoder.matches("Customer@2026", saved.getPasswordHash()));
+        assertTrue(passwordEncoder.matches("  Customer@2026  ", saved.getPasswordHash()));
         assertEquals("CUSTOMER", registered.role());
     }
 

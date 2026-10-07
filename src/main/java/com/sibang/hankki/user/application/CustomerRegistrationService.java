@@ -34,7 +34,7 @@ public class CustomerRegistrationService implements RegisterCustomerUseCase {
         String userid = trim(command.userid());
         String email = trim(command.email());
         String name = trim(command.name());
-        String password = trim(command.password());
+        String password = command.password();
         validate(userid, email, name, password);
         if (repository.existsByUserid(userid)) {
             throw new DuplicateUseridException();
