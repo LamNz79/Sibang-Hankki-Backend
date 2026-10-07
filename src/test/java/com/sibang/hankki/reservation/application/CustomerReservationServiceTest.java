@@ -194,7 +194,7 @@ class CustomerReservationServiceTest {
     }
 
     private void givenRestaurant() {
-        given(restaurantPort.findActiveRestaurantById(RESTAURANT_ID)).willReturn(Optional.of(new RestaurantData(
+        given(restaurantPort.findRestaurantById(RESTAURANT_ID)).willReturn(Optional.of(new RestaurantData(
                 RESTAURANT_ID, "the-royal-pavilion", "The Royal Pavilion", "", "", "", "", "", "", "", "")));
     }
 

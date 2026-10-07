@@ -145,7 +145,7 @@ public class CustomerReservationService implements CustomerReservationUseCase, C
     }
 
     private CustomerAccountReservation accountReservation(Reservation reservation) {
-        RestaurantData restaurant = restaurantCatalogPort.findActiveRestaurantById(reservation.restaurantId())
+        RestaurantData restaurant = restaurantCatalogPort.findRestaurantById(reservation.restaurantId())
                 .orElseThrow(() -> new ReservationNotFoundException(reservation.id()));
         return new CustomerAccountReservation(reservation, restaurant.slug(), restaurant.name());
     }

@@ -53,6 +53,10 @@ public class RestaurantCatalogRepository {
                 .findFirst();
     }
 
+    public Optional<RestaurantEntity> findById(UUID id) {
+        return Optional.ofNullable(entityManager.find(RestaurantEntity.class, id));
+    }
+
     public boolean existsById(UUID id) {
         return entityManager.find(RestaurantEntity.class, id) != null;
     }

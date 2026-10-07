@@ -44,6 +44,11 @@ public class RestaurantCatalogPersistenceAdapter implements RestaurantCatalogPor
     }
 
     @Override
+    public Optional<RestaurantData> findRestaurantById(UUID restaurantId) {
+        return repository.findById(restaurantId).map(this::toRestaurantData);
+    }
+
+    @Override
     public List<RestaurantTagData> findTagsByRestaurantIds(Collection<UUID> restaurantIds) {
         return repository.findTagsByRestaurantIds(restaurantIds).stream()
                 .map(this::toRestaurantTagData)

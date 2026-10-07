@@ -124,6 +124,18 @@ class CustomerAccountReservationPersistenceTest {
                 () -> service.findAccountReservations(customerId));
     }
 
+    @Test
+    void suspendedRestaurantStillAllowsAccountHistoryAndCancellation() {
+        jdbcTemplate.update("update restaurants set approval_status = 'SUSPENDED' where id = ?", restaurantId);
+
+        assertEquals(2, service.findAccountReservations(customerId).size());
+        assertEquals(firstReservationId,
+                service.findAccountReservation(firstReservationId, customerId).reservation().id());
+        assertEquals(ReservationStatus.CANCELLED,
+                service.cancelAccountReservation(firstReservationId, customerId).reservation().status());
+        assertEquals(0, slotRepository.findById(slotId).orElseThrow().getCapacityReserved());
+    }
+
     private void insertCustomer(UUID id, String prefix) {
         jdbcTemplate.update("""
                 insert into users (id, userid, password_hash, name, role, status)
