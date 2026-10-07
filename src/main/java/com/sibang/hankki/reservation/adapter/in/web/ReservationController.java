@@ -1,6 +1,7 @@
 package com.sibang.hankki.reservation.adapter.in.web;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.sibang.hankki.auth.SessionUser;
 import com.sibang.hankki.reservation.application.port.in.CreateReservationCommand;
 import com.sibang.hankki.reservation.application.port.in.CreateReservationResult;
 import com.sibang.hankki.reservation.application.port.in.CreateReservationUseCase;
@@ -8,6 +9,7 @@ import com.sibang.hankki.reservation.domain.model.Reservation;
 import java.time.Instant;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -27,7 +29,8 @@ public class ReservationController {
     @PostMapping
     public ResponseEntity<ReservationResponse> create(
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
-            @RequestBody CreateReservationRequest request) {
+            @RequestBody CreateReservationRequest request,
+            @AuthenticationPrincipal SessionUser user) {
         CreateReservationResult result = createReservationUseCase.create(new CreateReservationCommand(
                 idempotencyKey,
                 request.restaurantSlug(),
@@ -38,7 +41,8 @@ public class ReservationController {
                 request.customerPhone(),
                 request.customerEmail(),
                 request.specialRequest(),
-                request.preOrderNote()));
+                request.preOrderNote()),
+                user != null && "CUSTOMER".equals(user.role()) ? user.id() : null);
         return ResponseEntity.status(result.idempotentReplay() ? HttpStatus.OK : HttpStatus.CREATED)
                 .body(ReservationResponse.from(result));
     }

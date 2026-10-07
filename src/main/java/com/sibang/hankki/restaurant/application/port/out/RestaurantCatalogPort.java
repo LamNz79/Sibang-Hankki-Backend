@@ -12,6 +12,8 @@ public interface RestaurantCatalogPort {
 
     Optional<RestaurantData> findActiveRestaurantById(UUID restaurantId);
 
+    Optional<RestaurantData> findRestaurantById(UUID restaurantId);
+
     List<RestaurantTagData> findTagsByRestaurantIds(Collection<UUID> restaurantIds);
 
     List<RestaurantBusinessHourData> findBusinessHoursByRestaurantIds(Collection<UUID> restaurantIds);
