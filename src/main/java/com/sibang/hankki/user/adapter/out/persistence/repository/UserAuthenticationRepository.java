@@ -9,5 +9,7 @@ public interface UserAuthenticationRepository extends JpaRepository<UserEntity, 
 
     Optional<UserEntity> findByUserid(String userid);
 
+    boolean existsByUserid(String userid);
+
     Optional<UserEntity> findByUseridAndStatusAndDeletedAtIsNull(String userid, String status);
 }

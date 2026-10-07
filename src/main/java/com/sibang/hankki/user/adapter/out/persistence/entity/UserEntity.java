@@ -69,6 +69,13 @@ public class UserEntity {
         this.restaurantId = restaurantId;
     }
 
+    public UserEntity(String userid, String email, String passwordHash, String name) {
+        this.userid = userid;
+        this.email = email;
+        this.passwordHash = passwordHash;
+        this.name = name;
+    }
+
     public UUID getId() {
         return id;
     }
@@ -79,6 +86,14 @@ public class UserEntity {
 
     public String getPasswordHash() {
         return passwordHash;
+    }
+
+    public String getEmail() {
+        return email;
+    }
+
+    public String getName() {
+        return name;
     }
 
     public String getRole() {

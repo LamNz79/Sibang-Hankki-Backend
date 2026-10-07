@@ -19,7 +19,7 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.ignoringRequestMatchers(
                         "/api/reservations", "/api/customer/reservations/*/cancel"))
                 .authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers("/api/auth/csrf", "/api/auth/login").permitAll()
+                        .requestMatchers("/api/auth/csrf", "/api/auth/login", "/api/auth/register").permitAll()
                         .requestMatchers("/api/auth/me").authenticated()
                         .requestMatchers("/api/owner/settings/**").hasRole("OWNER")
                         .requestMatchers("/api/owner/**").hasAnyRole("OWNER", "STAFF")
