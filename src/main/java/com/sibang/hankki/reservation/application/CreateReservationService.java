@@ -26,6 +26,8 @@ import com.sibang.hankki.restaurant.application.port.out.RestaurantData;
 import com.sibang.hankki.restaurant.domain.booking.BookingPolicy;
 import com.sibang.hankki.restaurant.domain.booking.BookingRuleViolationException;
 import com.sibang.hankki.restaurant.domain.booking.BookingTime;
+import com.sibang.hankki.user.application.exception.CustomerProfileNotFoundException;
+import com.sibang.hankki.user.application.port.in.CustomerProfileUseCase;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -47,6 +49,7 @@ public class CreateReservationService implements CreateReservationUseCase {
     private final BookingSlotPort bookingSlotPort;
     private final ReservationPersistencePort reservationPersistencePort;
     private final ReservationEventPersistencePort reservationEventPersistencePort;
+    private final CustomerProfileUseCase customerProfileUseCase;
     private final Clock clock;
 
     public CreateReservationService(
@@ -55,23 +58,32 @@ public class CreateReservationService implements CreateReservationUseCase {
             BookingSlotPort bookingSlotPort,
             ReservationPersistencePort reservationPersistencePort,
             ReservationEventPersistencePort reservationEventPersistencePort,
+            CustomerProfileUseCase customerProfileUseCase,
             Clock clock) {
         this.restaurantCatalogPort = restaurantCatalogPort;
         this.bookingSettingsPort = bookingSettingsPort;
         this.bookingSlotPort = bookingSlotPort;
         this.reservationPersistencePort = reservationPersistencePort;
         this.reservationEventPersistencePort = reservationEventPersistencePort;
+        this.customerProfileUseCase = customerProfileUseCase;
         this.clock = clock;
     }
 
     @Override
     @Transactional
     public CreateReservationResult create(CreateReservationCommand command) {
+        return create(command, null);
+    }
+
+    @Override
+    @Transactional
+    public CreateReservationResult create(CreateReservationCommand command, UUID authenticatedCustomerId) {
         Objects.requireNonNull(command, "command is required");
         LocalDate date = parseDate(command.date());
         LocalTime time = parseTime(command.time());
         validateRequired(command);
-        String fingerprint = fingerprint(command);
+        UUID customerId = activeCustomerId(authenticatedCustomerId);
+        String fingerprint = fingerprint(command, customerId);
 
         reservationPersistencePort.lockIdempotencyKey(command.idempotencyKey());
         Reservation previous = reservationPersistencePort.findByIdempotencyKey(command.idempotencyKey()).orElse(null);
@@ -115,7 +127,7 @@ public class CreateReservationService implements CreateReservationUseCase {
         }
 
         Instant now = Instant.now(clock);
-        String managementToken = ReservationManagementToken.generate();
+        String managementToken = customerId == null ? ReservationManagementToken.generate() : null;
         Reservation reservation = new Reservation(
                 UUID.randomUUID(),
                 "SHK-" + UUID.randomUUID().toString().replace("-", "").substring(0, 28).toUpperCase(),
@@ -123,7 +135,7 @@ public class CreateReservationService implements CreateReservationUseCase {
                 fingerprint,
                 restaurant.id(),
                 slot.id(),
-                null,
+                customerId,
                 command.customerName(),
                 command.customerEmail(),
                 command.customerPhone(),
@@ -135,7 +147,7 @@ public class CreateReservationService implements CreateReservationUseCase {
                 status == ReservationStatus.CONFIRMED ? VisitStatus.EXPECTED : null,
                 command.specialRequest(),
                 command.preOrderNote(),
-                ReservationManagementToken.hash(managementToken),
+                managementToken == null ? null : ReservationManagementToken.hash(managementToken),
                 null,
                 null,
                 null,
@@ -207,10 +219,23 @@ public class CreateReservationService implements CreateReservationUseCase {
         }
     }
 
-    private String fingerprint(CreateReservationCommand command) {
+    private UUID activeCustomerId(UUID customerId) {
+        if (customerId == null) {
+            return null;
+        }
+        try {
+            customerProfileUseCase.get(customerId);
+            return customerId;
+        } catch (CustomerProfileNotFoundException exception) {
+            return null;
+        }
+    }
+
+    private String fingerprint(CreateReservationCommand command, UUID customerId) {
         String request = value(command.restaurantSlug()) + value(command.date()) + value(command.time())
                 + command.partySize() + value(command.customerName()) + value(command.customerPhone())
-                + value(command.customerEmail()) + value(command.specialRequest()) + value(command.preOrderNote());
+                + value(command.customerEmail()) + value(command.specialRequest()) + value(command.preOrderNote())
+                + value(customerId == null ? null : customerId.toString());
         try {
             return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
                     .digest(request.getBytes(StandardCharsets.UTF_8)));

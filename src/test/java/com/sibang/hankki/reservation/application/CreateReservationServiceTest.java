@@ -27,6 +27,9 @@ import com.sibang.hankki.restaurant.application.port.out.BookingSlotPort;
 import com.sibang.hankki.restaurant.application.port.out.RestaurantCatalogPort;
 import com.sibang.hankki.restaurant.application.port.out.RestaurantData;
 import com.sibang.hankki.restaurant.domain.model.ConfirmationMode;
+import com.sibang.hankki.user.application.exception.CustomerProfileNotFoundException;
+import com.sibang.hankki.user.application.port.in.CustomerProfileUseCase;
+import com.sibang.hankki.user.application.port.in.CustomerProfileUseCase.CustomerProfile;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -46,6 +49,7 @@ class CreateReservationServiceTest {
 
     private static final UUID RESTAURANT_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final UUID SLOT_ID = UUID.fromString("00000000-0000-0000-0000-000000000002");
+    private static final UUID CUSTOMER_ID = UUID.fromString("70000000-0000-0000-0000-000000000001");
     private static final Instant NOW = Instant.parse("2026-10-01T03:00:00Z");
 
     @Mock
@@ -58,6 +62,8 @@ class CreateReservationServiceTest {
     private ReservationPersistencePort reservationPersistencePort;
     @Mock
     private ReservationEventPersistencePort reservationEventPersistencePort;
+    @Mock
+    private CustomerProfileUseCase customerProfileUseCase;
     @Captor
     private ArgumentCaptor<Reservation> reservationCaptor;
     @Captor
@@ -73,6 +79,7 @@ class CreateReservationServiceTest {
                 bookingSlotPort,
                 reservationPersistencePort,
                 reservationEventPersistencePort,
+                customerProfileUseCase,
                 Clock.fixed(NOW, ZoneOffset.UTC));
         when(restaurantCatalogPort.findActiveRestaurantBySlug("anan-saigon")).thenReturn(Optional.of(restaurant()));
         lenient().when(bookingSlotPort.findByRestaurantIdAndStartsAt(eq(RESTAURANT_ID), any()))
@@ -100,6 +107,44 @@ class CreateReservationServiceTest {
                 .containsExactly(ReservationEventType.REQUESTED, ReservationEventType.CONFIRMED);
         assertThat(eventCaptor.getAllValues().get(1).createdAt())
                 .isEqualTo(eventCaptor.getAllValues().get(0).createdAt().plusNanos(1_000));
+    }
+
+    @Test
+    void activeCustomerIsLinkedWithoutGuestManagementToken() {
+        givenActiveCustomer();
+        givenSettings(ConfirmationMode.AUTO, null);
+        when(bookingSlotPort.reserveCapacity(SLOT_ID, 2)).thenReturn(true);
+
+        var result = service.create(command("customer-key", 2), CUSTOMER_ID);
+
+        assertThat(result.reservation().customerId()).isEqualTo(CUSTOMER_ID);
+        assertThat(result.reservation().managementTokenHash()).isNull();
+        assertThat(result.managementToken()).isNull();
+    }
+
+    @Test
+    void staleCustomerSessionCreatesGuestReservation() {
+        when(customerProfileUseCase.get(CUSTOMER_ID)).thenThrow(new CustomerProfileNotFoundException());
+        givenSettings(ConfirmationMode.AUTO, null);
+        when(bookingSlotPort.reserveCapacity(SLOT_ID, 2)).thenReturn(true);
+
+        var result = service.create(command("stale-key", 2), CUSTOMER_ID);
+
+        assertThat(result.reservation().customerId()).isNull();
+        assertThat(result.managementToken()).isNotBlank();
+    }
+
+    @Test
+    void customerIdentityIsPartOfIdempotencyFingerprint() {
+        givenActiveCustomer();
+        givenSettings(ConfirmationMode.AUTO, null);
+        when(bookingSlotPort.reserveCapacity(SLOT_ID, 2)).thenReturn(true);
+        var linked = service.create(command("isolated-key", 2), CUSTOMER_ID);
+        when(reservationPersistencePort.findByIdempotencyKey("isolated-key"))
+                .thenReturn(Optional.of(linked.reservation()));
+
+        assertThatThrownBy(() -> service.create(command("isolated-key", 2)))
+                .isInstanceOf(ReservationIdempotencyConflictException.class);
     }
 
     @Test
@@ -194,6 +239,11 @@ class CreateReservationServiceTest {
     private void givenSettings(ConfirmationMode mode, Integer manualThreshold) {
         when(bookingSettingsPort.findByRestaurantId(RESTAURANT_ID)).thenReturn(Optional.of(new BookingSettings(
                 RESTAURANT_ID, 20, 60, 90, mode, manualThreshold, 30, 1, 10, 11)));
+    }
+
+    private void givenActiveCustomer() {
+        when(customerProfileUseCase.get(CUSTOMER_ID)).thenReturn(new CustomerProfile(
+                CUSTOMER_ID, "customer", "Customer", "customer@example.com", null));
     }
 
     private CreateReservationCommand command(String key, int partySize) {

@@ -26,4 +26,10 @@ public interface ReservationPersistencePort {
     Optional<Reservation> findByIdAndManagementTokenHash(UUID id, String managementTokenHash);
 
     Optional<Reservation> findByIdAndManagementTokenHashForUpdate(UUID id, String managementTokenHash);
+
+    List<Reservation> findAllByCustomerId(UUID customerId);
+
+    Optional<Reservation> findByIdAndCustomerId(UUID id, UUID customerId);
+
+    Optional<Reservation> findByIdAndCustomerIdForUpdate(UUID id, UUID customerId);
 }

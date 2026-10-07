@@ -1,11 +1,14 @@
 package com.sibang.hankki.reservation.adapter.in.web;
 
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.sibang.hankki.auth.config.SecurityConfig;
+import com.sibang.hankki.auth.OwnerSessionUserDetailsService;
 import com.sibang.hankki.reservation.application.exception.InvalidReservationRequestException;
 import com.sibang.hankki.reservation.application.exception.ReservationCapacityUnavailableException;
 import com.sibang.hankki.reservation.application.port.in.CreateReservationCommand;
@@ -14,30 +17,54 @@ import com.sibang.hankki.reservation.application.port.in.CreateReservationUseCas
 import com.sibang.hankki.reservation.domain.model.Reservation;
 import com.sibang.hankki.reservation.domain.model.ReservationStatus;
 import com.sibang.hankki.reservation.domain.model.VisitStatus;
+import com.sibang.hankki.user.adapter.out.persistence.entity.UserEntity;
+import com.sibang.hankki.user.adapter.out.persistence.repository.UserAuthenticationRepository;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.UUID;
+import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockHttpSession;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(ReservationController.class)
-@Import(SecurityConfig.class)
+@Import({SecurityConfig.class, OwnerSessionUserDetailsService.class})
 class ReservationControllerTest {
+
+    private static final UUID CUSTOMER_ID = UUID.fromString("70000000-0000-0000-0000-000000000001");
+    private static final String PASSWORD = "test-password";
 
     @Autowired
     private MockMvc mockMvc;
 
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+
     @MockitoBean
     private CreateReservationUseCase createReservationUseCase;
 
+    @MockitoBean
+    private UserAuthenticationRepository userRepository;
+
+    @BeforeEach
+    void configureUsers() {
+        configureUser("customer", "CUSTOMER", CUSTOMER_ID);
+        configureUser("owner", "OWNER", UUID.randomUUID());
+    }
+
     @Test
     void createsReservationWithThePublicResponseContract() throws Exception {
-        given(createReservationUseCase.create(org.mockito.ArgumentMatchers.any(CreateReservationCommand.class)))
+        given(createReservationUseCase.create(
+                org.mockito.ArgumentMatchers.any(CreateReservationCommand.class),
+                org.mockito.ArgumentMatchers.isNull()))
                 .willReturn(result(false));
 
         mockMvc.perform(post("/api/reservations")
@@ -57,7 +84,9 @@ class ReservationControllerTest {
 
     @Test
     void idempotencyReplayReturnsOk() throws Exception {
-        given(createReservationUseCase.create(org.mockito.ArgumentMatchers.any(CreateReservationCommand.class)))
+        given(createReservationUseCase.create(
+                org.mockito.ArgumentMatchers.any(CreateReservationCommand.class),
+                org.mockito.ArgumentMatchers.isNull()))
                 .willReturn(result(true));
 
         mockMvc.perform(post("/api/reservations")
@@ -69,13 +98,49 @@ class ReservationControllerTest {
     }
 
     @Test
+    void authenticatedCustomerIsLinkedButOwnerIsNot() throws Exception {
+        given(createReservationUseCase.create(
+                org.mockito.ArgumentMatchers.any(CreateReservationCommand.class),
+                org.mockito.ArgumentMatchers.eq(CUSTOMER_ID)))
+                .willReturn(result(false));
+        given(createReservationUseCase.create(
+                org.mockito.ArgumentMatchers.any(CreateReservationCommand.class),
+                org.mockito.ArgumentMatchers.isNull()))
+                .willReturn(result(false));
+
+        mockMvc.perform(post("/api/reservations")
+                        .session(login("customer"))
+                        .header("Idempotency-Key", "customer-request")
+                        .contentType("application/json")
+                        .content(requestJson()))
+                .andExpect(status().isCreated());
+        mockMvc.perform(post("/api/reservations")
+                        .session(login("owner"))
+                        .header("Idempotency-Key", "owner-request")
+                        .contentType("application/json")
+                        .content(requestJson()))
+                .andExpect(status().isCreated());
+
+        verify(createReservationUseCase).create(
+                org.mockito.ArgumentMatchers.any(CreateReservationCommand.class),
+                org.mockito.ArgumentMatchers.eq(CUSTOMER_ID));
+        verify(createReservationUseCase).create(
+                org.mockito.ArgumentMatchers.any(CreateReservationCommand.class),
+                org.mockito.ArgumentMatchers.isNull());
+    }
+
+    @Test
     void mapsValidationAndCapacityErrors() throws Exception {
-        given(createReservationUseCase.create(org.mockito.ArgumentMatchers.any(CreateReservationCommand.class)))
+        given(createReservationUseCase.create(
+                org.mockito.ArgumentMatchers.any(CreateReservationCommand.class),
+                org.mockito.ArgumentMatchers.isNull()))
                 .willThrow(new InvalidReservationRequestException("invalid"));
         mockMvc.perform(post("/api/reservations").contentType("application/json").content(requestJson()))
                 .andExpect(status().isBadRequest());
 
-        given(createReservationUseCase.create(org.mockito.ArgumentMatchers.any(CreateReservationCommand.class)))
+        given(createReservationUseCase.create(
+                org.mockito.ArgumentMatchers.any(CreateReservationCommand.class),
+                org.mockito.ArgumentMatchers.isNull()))
                 .willThrow(new ReservationCapacityUnavailableException());
         mockMvc.perform(post("/api/reservations")
                         .header("Idempotency-Key", "request-1")
@@ -101,5 +166,25 @@ class ReservationControllerTest {
                 {"restaurantSlug":"anan-saigon","date":"2026-10-05","time":"18:30","partySize":2,
                  "customerName":"Minh Lam","customerPhone":"0900000000"}
                 """;
+    }
+
+    private void configureUser(String userid, String role, UUID id) {
+        UserEntity user = org.mockito.Mockito.mock(UserEntity.class);
+        given(user.getId()).willReturn(id);
+        given(user.getUserid()).willReturn(userid);
+        given(user.getPasswordHash()).willReturn(passwordEncoder.encode(PASSWORD));
+        given(user.getRole()).willReturn(role);
+        given(userRepository.findByUseridAndStatusAndDeletedAtIsNull(userid, "ACTIVE"))
+                .willReturn(Optional.of(user));
+    }
+
+    private MockHttpSession login(String userid) throws Exception {
+        return (MockHttpSession) mockMvc.perform(post("/api/auth/login")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .param("userid", userid)
+                        .param("password", PASSWORD))
+                .andExpect(status().isNoContent())
+                .andReturn().getRequest().getSession(false);
     }
 }
