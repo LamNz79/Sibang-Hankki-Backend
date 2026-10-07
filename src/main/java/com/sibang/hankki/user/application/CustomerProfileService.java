@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class CustomerProfileService implements CustomerProfileUseCase {
 
     private static final String CUSTOMER = "CUSTOMER";
+    private static final String ACTIVE = "ACTIVE";
     private static final Pattern EMAIL = Pattern.compile("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$");
 
     private final UserAuthenticationRepository repository;
@@ -45,7 +46,7 @@ public class CustomerProfileService implements CustomerProfileUseCase {
     }
 
     private UserEntity findCustomer(UUID userId) {
-        return repository.findByIdAndRoleAndDeletedAtIsNull(userId, CUSTOMER)
+        return repository.findByIdAndRoleAndStatusAndDeletedAtIsNull(userId, CUSTOMER, ACTIVE)
                 .orElseThrow(CustomerProfileNotFoundException::new);
     }
 

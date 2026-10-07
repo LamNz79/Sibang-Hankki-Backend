@@ -38,19 +38,19 @@ class CustomerProfileServiceTest {
 
     @Test
     void readsOnlyTheAuthenticatedCustomer() {
-        given(repository.findByIdAndRoleAndDeletedAtIsNull(USER_ID, "CUSTOMER"))
+        given(repository.findByIdAndRoleAndStatusAndDeletedAtIsNull(USER_ID, "CUSTOMER", "ACTIVE"))
                 .willReturn(Optional.of(customer()));
 
         var profile = service.get(USER_ID);
 
         assertEquals("customer", profile.userid());
-        verify(repository).findByIdAndRoleAndDeletedAtIsNull(USER_ID, "CUSTOMER");
+        verify(repository).findByIdAndRoleAndStatusAndDeletedAtIsNull(USER_ID, "CUSTOMER", "ACTIVE");
     }
 
     @Test
     void trimsAllowedFieldsAndKeepsUseridImmutable() {
         UserEntity customer = customer();
-        given(repository.findByIdAndRoleAndDeletedAtIsNull(USER_ID, "CUSTOMER"))
+        given(repository.findByIdAndRoleAndStatusAndDeletedAtIsNull(USER_ID, "CUSTOMER", "ACTIVE"))
                 .willReturn(Optional.of(customer));
 
         var profile = service.update(USER_ID, new UpdateCustomerProfileCommand(
@@ -64,7 +64,7 @@ class CustomerProfileServiceTest {
 
     @Test
     void missingOrDeletedCustomerReturnsNotFound() {
-        given(repository.findByIdAndRoleAndDeletedAtIsNull(USER_ID, "CUSTOMER"))
+        given(repository.findByIdAndRoleAndStatusAndDeletedAtIsNull(USER_ID, "CUSTOMER", "ACTIVE"))
                 .willReturn(Optional.empty());
 
         assertThrows(CustomerProfileNotFoundException.class, () -> service.get(USER_ID));

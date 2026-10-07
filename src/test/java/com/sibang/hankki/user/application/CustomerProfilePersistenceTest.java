@@ -73,6 +73,17 @@ class CustomerProfilePersistenceTest {
         assertThrows(CustomerProfileNotFoundException.class, () -> service.get(user.getId()));
     }
 
+    @Test
+    void suspendedCustomerCannotReadOrUpdateProfileWithAnExistingSessionId() {
+        UserEntity user = repository.saveAndFlush(customer("profile-suspended-user"));
+        jdbcTemplate.update("update users set status = 'SUSPENDED' where id = ?", user.getId());
+        entityManager.clear();
+
+        assertThrows(CustomerProfileNotFoundException.class, () -> service.get(user.getId()));
+        assertThrows(CustomerProfileNotFoundException.class, () -> service.update(
+                user.getId(), new UpdateCustomerProfileCommand("Name", "name@example.com", null)));
+    }
+
     private UserEntity customer(String userid) {
         return new UserEntity(userid, userid + "@example.com", "hash", "Customer Name");
     }
