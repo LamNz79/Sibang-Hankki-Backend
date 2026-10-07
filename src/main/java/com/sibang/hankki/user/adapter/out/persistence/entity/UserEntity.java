@@ -96,6 +96,16 @@ public class UserEntity {
         return name;
     }
 
+    public String getPhone() {
+        return phone;
+    }
+
+    public void updateProfile(String name, String email, String phone) {
+        this.name = name;
+        this.email = email;
+        this.phone = phone;
+    }
+
     public String getRole() {
         return role;
     }
