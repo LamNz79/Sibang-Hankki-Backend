@@ -172,6 +172,37 @@ class OwnerReservationCommandServiceTest {
     }
 
     @Test
+    void checksInByReservationIdUsingTheSameTransition() {
+        Reservation confirmed = reservation(ReservationStatus.CONFIRMED, VisitStatus.EXPECTED);
+        given(reservationPort.findByIdAndRestaurantIdForUpdate(RESERVATION_ID, RESTAURANT_ID))
+                .willReturn(Optional.of(confirmed));
+        given(reservationPort.save(org.mockito.ArgumentMatchers.any())).willAnswer(invocation -> invocation.getArgument(0));
+
+        Reservation arrived = service.checkIn(RESERVATION_ID, RESTAURANT_ID, ACTOR_ID);
+
+        assertThat(arrived.visitStatus()).isEqualTo(VisitStatus.ARRIVED);
+        assertThat(arrived.checkedInAt()).isEqualTo(NOW);
+        assertThat(arrived.checkedInBy()).isEqualTo(ACTOR_ID);
+        ArgumentCaptor<ReservationEvent> event = ArgumentCaptor.forClass(ReservationEvent.class);
+        verify(eventPort).append(event.capture());
+        assertThat(event.getValue().eventType()).isEqualTo(ReservationEventType.CHECKED_IN);
+    }
+
+    @Test
+    void manualCheckInRejectsInvalidStateAndOtherRestaurant() {
+        Reservation pending = reservation(ReservationStatus.PENDING, null);
+        given(reservationPort.findByIdAndRestaurantIdForUpdate(RESERVATION_ID, RESTAURANT_ID))
+                .willReturn(Optional.of(pending), Optional.empty());
+
+        assertThatThrownBy(() -> service.checkIn(RESERVATION_ID, RESTAURANT_ID, ACTOR_ID))
+                .isInstanceOf(InvalidReservationStateException.class);
+        assertThatThrownBy(() -> service.checkIn(RESERVATION_ID, RESTAURANT_ID, ACTOR_ID))
+                .isInstanceOf(ReservationNotFoundException.class);
+        verify(reservationPort, never()).save(org.mockito.ArgumentMatchers.any());
+        verifyNoInteractions(eventPort, slotPort);
+    }
+
+    @Test
     void checkInTokenFromAnotherRestaurantIsNotFound() {
         given(reservationPort.findByCheckInTokenHashAndRestaurantIdForUpdate(
                 ReservationToken.hash(CHECK_IN_TOKEN), RESTAURANT_ID)).willReturn(Optional.empty());
