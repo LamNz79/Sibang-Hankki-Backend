@@ -4,6 +4,10 @@ import java.util.UUID;
 
 public class ReservationNotFoundException extends RuntimeException {
 
+    public ReservationNotFoundException() {
+        super("Reservation not found");
+    }
+
     public ReservationNotFoundException(String restaurantSlug) {
         super("Restaurant not found: " + restaurantSlug);
     }

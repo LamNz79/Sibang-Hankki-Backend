@@ -28,10 +28,13 @@ import com.sibang.hankki.user.application.port.in.CustomerProfileUseCase.Custome
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.Base64;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
@@ -45,7 +48,7 @@ class CustomerReservationServiceTest {
     private static final UUID SLOT_ID = UUID.fromString("70000000-0000-0000-0000-000000000001");
     private static final UUID CUSTOMER_ID = UUID.fromString("70000000-0000-0000-0000-000000000002");
     private static final String TOKEN = "guest-management-token";
-    private static final String TOKEN_HASH = ReservationManagementToken.hash(TOKEN);
+    private static final String TOKEN_HASH = ReservationToken.hash(TOKEN);
     private static final Instant NOW = Instant.parse("2026-10-06T00:00:00Z");
 
     @Mock
@@ -186,6 +189,49 @@ class CustomerReservationServiceTest {
         ArgumentCaptor<ReservationEvent> event = ArgumentCaptor.forClass(ReservationEvent.class);
         verify(eventPort).append(event.capture());
         assertThat(event.getValue().actorUserId()).isEqualTo(CUSTOMER_ID);
+    }
+
+    @Test
+    void guestIssuesIndependentCheckInTokenAndStoresOnlyItsHash() {
+        Reservation confirmed = reservation(ReservationStatus.CONFIRMED, VisitStatus.EXPECTED);
+        given(reservationPort.findByIdAndManagementTokenHashForUpdate(RESERVATION_ID, TOKEN_HASH))
+                .willReturn(Optional.of(confirmed));
+        given(reservationPort.save(org.mockito.ArgumentMatchers.any()))
+                .willAnswer(invocation -> invocation.getArgument(0));
+
+        String checkInToken = service.issueCheckInToken(RESERVATION_ID, TOKEN);
+
+        assertThat(Base64.getUrlDecoder().decode(checkInToken)).hasSize(32);
+        assertThat(checkInToken).isNotEqualTo(TOKEN);
+        ArgumentCaptor<Reservation> saved = ArgumentCaptor.forClass(Reservation.class);
+        verify(reservationPort).save(saved.capture());
+        assertThat(saved.getValue().checkInTokenHash()).isEqualTo(ReservationToken.hash(checkInToken));
+        assertThat(saved.getValue().checkInTokenHash()).doesNotContain(checkInToken);
+        assertThat(saved.getValue().managementTokenHash()).isEqualTo(TOKEN_HASH);
+
+        assertThatThrownBy(() -> service.issueCheckInToken(RESERVATION_ID, "wrong"))
+                .isInstanceOf(ReservationNotFoundException.class);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = ReservationStatus.class, names = {"PENDING", "CANCELLED", "DECLINED", "EXPIRED"})
+    void invalidReservationStatesCannotIssueCheckInToken(ReservationStatus status) {
+        given(reservationPort.findByIdAndManagementTokenHashForUpdate(RESERVATION_ID, TOKEN_HASH))
+                .willReturn(Optional.of(reservation(status, null)));
+
+        assertThatThrownBy(() -> service.issueCheckInToken(RESERVATION_ID, TOKEN))
+                .isInstanceOf(InvalidReservationStateException.class);
+        verify(reservationPort, never()).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void accountCannotIssueCheckInTokenForAnotherCustomersReservation() {
+        givenActiveCustomer();
+
+        assertThatThrownBy(() -> service.issueAccountCheckInToken(RESERVATION_ID, CUSTOMER_ID))
+                .isInstanceOf(ReservationNotFoundException.class);
+        verify(reservationPort).findByIdAndCustomerIdForUpdate(RESERVATION_ID, CUSTOMER_ID);
+        verify(reservationPort, never()).save(org.mockito.ArgumentMatchers.any());
     }
 
     private void givenActiveCustomer() {

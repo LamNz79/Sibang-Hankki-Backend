@@ -8,4 +8,6 @@ public interface CustomerReservationUseCase {
     Reservation findById(UUID reservationId, String managementToken);
 
     Reservation cancel(UUID reservationId, String managementToken);
+
+    String issueCheckInToken(UUID reservationId, String managementToken);
 }

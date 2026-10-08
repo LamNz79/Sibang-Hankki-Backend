@@ -10,10 +10,12 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sibang.hankki.reservation.application.exception.InvalidReservationStateException;
 import com.sibang.hankki.reservation.application.exception.ReservationCapacityUnavailableException;
+import com.sibang.hankki.reservation.application.exception.ReservationNotFoundException;
 import com.sibang.hankki.reservation.application.port.out.ReservationEventPersistencePort;
 import com.sibang.hankki.reservation.application.port.out.ReservationPersistencePort;
 import com.sibang.hankki.reservation.domain.model.Reservation;
 import com.sibang.hankki.reservation.domain.model.ReservationEvent;
+import com.sibang.hankki.reservation.domain.model.ReservationEventType;
 import com.sibang.hankki.reservation.domain.model.ReservationStatus;
 import com.sibang.hankki.reservation.domain.model.VisitStatus;
 import com.sibang.hankki.restaurant.application.port.out.BookingSlotPort;
@@ -36,6 +38,8 @@ class OwnerReservationCommandServiceTest {
     private static final UUID RESTAURANT_ID = UUID.fromString("00000000-0000-0000-0000-000000000002");
     private static final UUID SLOT_ID = UUID.fromString("70000000-0000-0000-0000-000000000001");
     private static final UUID ACTOR_ID = UUID.fromString("60000000-0000-0000-0000-000000000001");
+    private static final String CHECK_IN_TOKEN = "opaque-check-in-token";
+    private static final Instant NOW = Instant.parse("2026-10-06T00:00:00Z");
 
     @Mock
     private ReservationPersistencePort reservationPort;
@@ -53,7 +57,7 @@ class OwnerReservationCommandServiceTest {
                 eventPort,
                 slotPort,
                 new ObjectMapper(),
-                Clock.fixed(Instant.parse("2026-10-06T00:00:00Z"), ZoneOffset.UTC));
+                Clock.fixed(NOW, ZoneOffset.UTC));
     }
 
     @Test
@@ -135,7 +139,55 @@ class OwnerReservationCommandServiceTest {
                 .isInstanceOf(InvalidReservationStateException.class);
     }
 
+    @Test
+    void checksInExpectedReservationAndRecordsActorAndTime() {
+        Reservation confirmed = reservation(ReservationStatus.CONFIRMED, VisitStatus.EXPECTED);
+        given(reservationPort.findByCheckInTokenHashAndRestaurantIdForUpdate(
+                ReservationToken.hash(CHECK_IN_TOKEN), RESTAURANT_ID)).willReturn(Optional.of(confirmed));
+        given(reservationPort.save(org.mockito.ArgumentMatchers.any())).willAnswer(invocation -> invocation.getArgument(0));
+
+        Reservation arrived = service.checkIn(CHECK_IN_TOKEN, RESTAURANT_ID, ACTOR_ID);
+
+        assertThat(arrived.visitStatus()).isEqualTo(VisitStatus.ARRIVED);
+        assertThat(arrived.checkedInAt()).isEqualTo(NOW);
+        assertThat(arrived.checkedInBy()).isEqualTo(ACTOR_ID);
+        ArgumentCaptor<ReservationEvent> event = ArgumentCaptor.forClass(ReservationEvent.class);
+        verify(eventPort).append(event.capture());
+        assertThat(event.getValue().eventType()).isEqualTo(ReservationEventType.CHECKED_IN);
+        assertThat(event.getValue().actorUserId()).isEqualTo(ACTOR_ID);
+        assertThat(event.getValue().createdAt()).isEqualTo(NOW);
+    }
+
+    @Test
+    void repeatedCheckInIsIdempotent() {
+        Reservation arrived = reservation(
+                ReservationStatus.CONFIRMED, VisitStatus.ARRIVED, NOW, ACTOR_ID);
+        given(reservationPort.findByCheckInTokenHashAndRestaurantIdForUpdate(
+                ReservationToken.hash(CHECK_IN_TOKEN), RESTAURANT_ID)).willReturn(Optional.of(arrived));
+
+        assertThat(service.checkIn(CHECK_IN_TOKEN, RESTAURANT_ID, ACTOR_ID)).isSameAs(arrived);
+
+        verify(reservationPort, never()).save(org.mockito.ArgumentMatchers.any());
+        verifyNoInteractions(eventPort, slotPort);
+    }
+
+    @Test
+    void checkInTokenFromAnotherRestaurantIsNotFound() {
+        given(reservationPort.findByCheckInTokenHashAndRestaurantIdForUpdate(
+                ReservationToken.hash(CHECK_IN_TOKEN), RESTAURANT_ID)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.checkIn(CHECK_IN_TOKEN, RESTAURANT_ID, ACTOR_ID))
+                .isInstanceOf(ReservationNotFoundException.class);
+        verify(reservationPort, never()).save(org.mockito.ArgumentMatchers.any());
+        verifyNoInteractions(eventPort, slotPort);
+    }
+
     private Reservation reservation(ReservationStatus status, VisitStatus visitStatus) {
+        return reservation(status, visitStatus, null, null);
+    }
+
+    private Reservation reservation(
+            ReservationStatus status, VisitStatus visitStatus, Instant checkedInAt, UUID checkedInBy) {
         return new Reservation(
                 RESERVATION_ID,
                 "SHK-COMMAND-1",
@@ -156,9 +208,9 @@ class OwnerReservationCommandServiceTest {
                 null,
                 null,
                 null,
-                null,
-                null,
-                null,
+                ReservationToken.hash(CHECK_IN_TOKEN),
+                checkedInAt,
+                checkedInBy,
                 0,
                 Instant.parse("2026-10-01T00:00:00Z"),
                 Instant.parse("2026-10-01T00:00:00Z"));

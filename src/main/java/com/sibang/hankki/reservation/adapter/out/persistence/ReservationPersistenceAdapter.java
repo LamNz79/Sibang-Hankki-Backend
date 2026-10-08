@@ -104,6 +104,13 @@ public class ReservationPersistenceAdapter implements ReservationPersistencePort
         return repository.findByIdAndCustomerIdForUpdate(id, customerId).map(this::toReservation);
     }
 
+    @Override
+    public Optional<Reservation> findByCheckInTokenHashAndRestaurantIdForUpdate(
+            String checkInTokenHash, UUID restaurantId) {
+        return repository.findByCheckInTokenHashAndRestaurantIdForUpdate(checkInTokenHash, restaurantId)
+                .map(this::toReservation);
+    }
+
     private Reservation toReservation(ReservationEntity entity) {
         return new Reservation(
                 entity.getId(),

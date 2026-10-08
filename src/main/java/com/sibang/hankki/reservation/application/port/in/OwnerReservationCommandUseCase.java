@@ -8,4 +8,6 @@ public interface OwnerReservationCommandUseCase {
     Reservation confirm(UUID reservationId, UUID restaurantId, UUID actorUserId);
 
     Reservation decline(UUID reservationId, UUID restaurantId, UUID actorUserId, String reason);
+
+    Reservation checkIn(String checkInToken, UUID restaurantId, UUID actorUserId);
 }

@@ -34,7 +34,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
-@WebMvcTest(OwnerReservationController.class)
+@WebMvcTest({OwnerReservationController.class, OwnerCheckInController.class})
 @Import({SecurityConfig.class, OwnerSessionUserDetailsService.class})
 class OwnerReservationControllerTest {
 
@@ -43,6 +43,7 @@ class OwnerReservationControllerTest {
     private static final UUID RESERVATION_ID = UUID.fromString("50000000-0000-0000-0000-000000000001");
     private static final UUID OWNER_ID = UUID.fromString("60000000-0000-0000-0000-000000000001");
     private static final UUID STAFF_ID = UUID.fromString("60000000-0000-0000-0000-000000000002");
+    private static final String CHECK_IN_TOKEN = "opaque-check-in-token";
 
     @Autowired
     private MockMvc mockMvc;
@@ -165,6 +166,43 @@ class OwnerReservationControllerTest {
         mockMvc.perform(post("/api/owner/reservations/{id}/confirm", RESERVATION_ID)
                         .with(csrf())
                         .session(login("customer")))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void ownerAndStaffCanCheckInWithoutExposingTokenHash() throws Exception {
+        Reservation arrived = reservation(ReservationStatus.CONFIRMED, VisitStatus.ARRIVED);
+        given(commandUseCase.checkIn(CHECK_IN_TOKEN, RESTAURANT_ID, OWNER_ID)).willReturn(arrived);
+        given(commandUseCase.checkIn(CHECK_IN_TOKEN, RESTAURANT_ID, STAFF_ID)).willReturn(arrived);
+
+        for (String userid : new String[] {"owner", "staff"}) {
+            mockMvc.perform(post("/api/owner/check-ins")
+                            .with(csrf())
+                            .session(login(userid))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"checkInToken\":\"" + CHECK_IN_TOKEN + "\"}"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.visitStatus").value("ARRIVED"))
+                    .andExpect(jsonPath("$.checkInTokenHash").doesNotExist());
+        }
+
+        verify(commandUseCase).checkIn(CHECK_IN_TOKEN, RESTAURANT_ID, OWNER_ID);
+        verify(commandUseCase).checkIn(CHECK_IN_TOKEN, RESTAURANT_ID, STAFF_ID);
+    }
+
+    @Test
+    void ownerCheckInRequiresCsrfAndRejectsCustomerRole() throws Exception {
+        mockMvc.perform(post("/api/owner/check-ins")
+                        .session(login("owner"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"checkInToken\":\"" + CHECK_IN_TOKEN + "\"}"))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(post("/api/owner/check-ins")
+                        .with(csrf())
+                        .session(login("customer"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"checkInToken\":\"" + CHECK_IN_TOKEN + "\"}"))
                 .andExpect(status().isForbidden());
     }
 

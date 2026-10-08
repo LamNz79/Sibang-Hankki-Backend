@@ -17,7 +17,9 @@ public class SecurityConfig {
     SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 .csrf(csrf -> csrf.ignoringRequestMatchers(
-                        "/api/reservations", "/api/customer/reservations/*/cancel"))
+                        "/api/reservations",
+                        "/api/customer/reservations/*/cancel",
+                        "/api/customer/reservations/*/check-in-token"))
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/api/auth/csrf", "/api/auth/login", "/api/auth/register").permitAll()
                         .requestMatchers("/api/auth/me").authenticated()

@@ -3,8 +3,6 @@ package com.sibang.hankki.reservation.adapter.in.web;
 import com.sibang.hankki.auth.SessionUser;
 import com.sibang.hankki.reservation.application.port.in.OwnerReservationCommandUseCase;
 import com.sibang.hankki.reservation.application.port.in.OwnerReservationReadUseCase;
-import com.sibang.hankki.reservation.domain.model.Reservation;
-import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -57,38 +55,4 @@ public class OwnerReservationController {
     public record DeclineReservationRequest(String reason) {
     }
 
-    public record OwnerReservationResponse(
-            UUID id,
-            String reference,
-            String customerName,
-            String customerEmail,
-            String customerPhone,
-            Instant startsAt,
-            Instant endsAt,
-            int partySize,
-            String status,
-            String visitStatus,
-            String specialRequest,
-            String preOrderNote,
-            Instant createdAt,
-            Instant updatedAt) {
-
-        private static OwnerReservationResponse from(Reservation reservation) {
-            return new OwnerReservationResponse(
-                    reservation.id(),
-                    reservation.reference(),
-                    reservation.customerName(),
-                    reservation.customerEmail(),
-                    reservation.customerPhone(),
-                    reservation.startsAt(),
-                    reservation.endsAt(),
-                    reservation.partySize(),
-                    reservation.status().name(),
-                    reservation.visitStatus() == null ? null : reservation.visitStatus().name(),
-                    reservation.specialRequest(),
-                    reservation.preOrderNote(),
-                    reservation.createdAt(),
-                    reservation.updatedAt());
-        }
-    }
 }

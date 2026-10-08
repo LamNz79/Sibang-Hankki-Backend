@@ -127,7 +127,7 @@ public class CreateReservationService implements CreateReservationUseCase {
         }
 
         Instant now = Instant.now(clock);
-        String managementToken = customerId == null ? ReservationManagementToken.generate() : null;
+        String managementToken = customerId == null ? ReservationToken.generate() : null;
         Reservation reservation = new Reservation(
                 UUID.randomUUID(),
                 "SHK-" + UUID.randomUUID().toString().replace("-", "").substring(0, 28).toUpperCase(),
@@ -147,7 +147,7 @@ public class CreateReservationService implements CreateReservationUseCase {
                 status == ReservationStatus.CONFIRMED ? VisitStatus.EXPECTED : null,
                 command.specialRequest(),
                 command.preOrderNote(),
-                managementToken == null ? null : ReservationManagementToken.hash(managementToken),
+                managementToken == null ? null : ReservationToken.hash(managementToken),
                 null,
                 null,
                 null,

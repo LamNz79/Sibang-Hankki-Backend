@@ -94,7 +94,7 @@ class CreateReservationPersistenceTest {
 
         ReservationEntity reservation = reservationRepository.findById(result.reservation().id()).orElseThrow();
         assertTrue(result.managementToken() != null && !result.managementToken().isBlank());
-        assertEquals(ReservationManagementToken.hash(result.managementToken()), reservation.getManagementTokenHash());
+        assertEquals(ReservationToken.hash(result.managementToken()), reservation.getManagementTokenHash());
         assertFalse(result.managementToken().equals(reservation.getManagementTokenHash()));
         assertEquals("CONFIRMED", reservation.getStatus().name());
         assertEquals("EXPECTED", reservation.getVisitStatus().name());
