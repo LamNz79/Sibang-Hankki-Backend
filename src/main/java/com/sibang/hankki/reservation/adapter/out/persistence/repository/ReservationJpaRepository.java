@@ -43,4 +43,12 @@ public interface ReservationJpaRepository extends JpaRepository<ReservationEntit
             + "where reservation.id = :id and reservation.customerId = :customerId")
     Optional<ReservationEntity> findByIdAndCustomerIdForUpdate(
             @Param("id") UUID id, @Param("customerId") UUID customerId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select reservation from ReservationEntity reservation "
+            + "where reservation.checkInTokenHash = :checkInTokenHash "
+            + "and reservation.restaurantId = :restaurantId")
+    Optional<ReservationEntity> findByCheckInTokenHashAndRestaurantIdForUpdate(
+            @Param("checkInTokenHash") String checkInTokenHash,
+            @Param("restaurantId") UUID restaurantId);
 }

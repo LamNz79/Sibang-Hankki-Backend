@@ -38,7 +38,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 class CustomerReservationPersistenceTest {
 
     private static final String TOKEN = "guest-management-token";
-    private static final String TOKEN_HASH = ReservationManagementToken.hash(TOKEN);
+    private static final String TOKEN_HASH = ReservationToken.hash(TOKEN);
     private static final Instant STARTS_AT = Instant.parse("2026-10-10T11:30:00Z");
     private static final Instant ENDS_AT = Instant.parse("2026-10-10T13:00:00Z");
 

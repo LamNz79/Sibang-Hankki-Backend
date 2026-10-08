@@ -43,6 +43,12 @@ public class CustomerAccountReservationController {
         return CustomerAccountReservationResponse.from(useCase.cancelAccountReservation(id, user.id()));
     }
 
+    @PostMapping("/{id}/check-in-token")
+    public CheckInTokenResponse issueCheckInToken(
+            @PathVariable UUID id, @AuthenticationPrincipal SessionUser user) {
+        return new CheckInTokenResponse(id, useCase.issueAccountCheckInToken(id, user.id()));
+    }
+
     public record CustomerAccountReservationResponse(
             UUID id,
             String reference,

@@ -11,6 +11,7 @@ import com.sibang.hankki.reservation.domain.model.Reservation;
 import com.sibang.hankki.reservation.domain.model.ReservationEvent;
 import com.sibang.hankki.reservation.domain.model.ReservationEventType;
 import com.sibang.hankki.reservation.domain.model.ReservationStatus;
+import com.sibang.hankki.reservation.domain.model.VisitStatus;
 import com.sibang.hankki.restaurant.application.port.out.BookingSettings;
 import com.sibang.hankki.restaurant.application.port.out.BookingSettingsPort;
 import com.sibang.hankki.restaurant.application.port.out.BookingSlotPort;
@@ -72,6 +73,15 @@ public class CustomerReservationService implements CustomerReservationUseCase, C
     }
 
     @Override
+    @Transactional
+    public String issueCheckInToken(UUID reservationId, String managementToken) {
+        Reservation reservation = reservationPersistencePort.findByIdAndManagementTokenHashForUpdate(
+                        reservationId, tokenHash(reservationId, managementToken))
+                .orElseThrow(() -> new ReservationNotFoundException(reservationId));
+        return issueCheckInToken(reservation);
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public List<CustomerAccountReservation> findAccountReservations(UUID customerId) {
         requireActiveCustomer(customerId);
@@ -95,6 +105,26 @@ public class CustomerReservationService implements CustomerReservationUseCase, C
         Reservation reservation = reservationPersistencePort.findByIdAndCustomerIdForUpdate(reservationId, customerId)
                 .orElseThrow(() -> new ReservationNotFoundException(reservationId));
         return accountReservation(cancel(reservation, customerId));
+    }
+
+    @Override
+    @Transactional
+    public String issueAccountCheckInToken(UUID reservationId, UUID customerId) {
+        requireActiveCustomer(customerId);
+        Reservation reservation = reservationPersistencePort.findByIdAndCustomerIdForUpdate(reservationId, customerId)
+                .orElseThrow(() -> new ReservationNotFoundException(reservationId));
+        return issueCheckInToken(reservation);
+    }
+
+    private String issueCheckInToken(Reservation reservation) {
+        if (reservation.status() != ReservationStatus.CONFIRMED
+                || reservation.visitStatus() != VisitStatus.EXPECTED) {
+            throw new InvalidReservationStateException(
+                    "Check-in tokens require a confirmed reservation with EXPECTED visit status");
+        }
+        String checkInToken = ReservationToken.generate();
+        reservationPersistencePort.save(withCheckInTokenHash(reservation, ReservationToken.hash(checkInToken)));
+        return checkInToken;
     }
 
     private Reservation cancel(Reservation reservation, UUID actorUserId) {
@@ -154,7 +184,18 @@ public class CustomerReservationService implements CustomerReservationUseCase, C
         if (managementToken == null || managementToken.isBlank()) {
             throw new ReservationNotFoundException(reservationId);
         }
-        return ReservationManagementToken.hash(managementToken);
+        return ReservationToken.hash(managementToken);
+    }
+
+    private Reservation withCheckInTokenHash(Reservation reservation, String checkInTokenHash) {
+        return new Reservation(
+                reservation.id(), reservation.reference(), reservation.idempotencyKey(), reservation.requestFingerprint(),
+                reservation.restaurantId(), reservation.bookingSlotId(), reservation.customerId(), reservation.customerName(),
+                reservation.customerEmail(), reservation.customerPhone(), reservation.startsAt(), reservation.endsAt(),
+                reservation.partySize(), reservation.status(), reservation.capacityOverride(), reservation.visitStatus(),
+                reservation.specialRequest(), reservation.preOrderNote(), reservation.managementTokenHash(),
+                checkInTokenHash, reservation.checkedInAt(), reservation.checkedInBy(), reservation.version(),
+                reservation.createdAt(), reservation.updatedAt());
     }
 
     private Reservation cancelled(Reservation reservation) {

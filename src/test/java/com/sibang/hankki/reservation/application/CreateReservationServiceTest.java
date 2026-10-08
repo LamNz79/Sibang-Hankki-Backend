@@ -100,7 +100,7 @@ class CreateReservationServiceTest {
         assertThat(result.requiresRestaurantConfirmation()).isFalse();
         assertThat(result.managementToken()).isNotBlank();
         assertThat(result.reservation().managementTokenHash())
-                .isEqualTo(ReservationManagementToken.hash(result.managementToken()));
+                .isEqualTo(ReservationToken.hash(result.managementToken()));
         verify(bookingSlotPort).reserveCapacity(SLOT_ID, 2);
         verify(reservationEventPersistencePort, org.mockito.Mockito.times(2)).append(eventCaptor.capture());
         assertThat(eventCaptor.getAllValues()).extracting(event -> event.eventType())

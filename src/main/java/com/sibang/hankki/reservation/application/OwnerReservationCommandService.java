@@ -80,6 +80,31 @@ public class OwnerReservationCommandService implements OwnerReservationCommandUs
         return declined;
     }
 
+    @Override
+    @Transactional
+    public Reservation checkIn(String checkInToken, UUID restaurantId, UUID actorUserId) {
+        if (checkInToken == null || checkInToken.isBlank()) {
+            throw new ReservationNotFoundException();
+        }
+        Reservation reservation = reservationPersistencePort
+                .findByCheckInTokenHashAndRestaurantIdForUpdate(ReservationToken.hash(checkInToken), restaurantId)
+                .orElseThrow(ReservationNotFoundException::new);
+        if (reservation.status() == ReservationStatus.CONFIRMED
+                && reservation.visitStatus() == VisitStatus.ARRIVED) {
+            return reservation;
+        }
+        if (reservation.status() != ReservationStatus.CONFIRMED
+                || reservation.visitStatus() != VisitStatus.EXPECTED) {
+            throw new InvalidReservationStateException(
+                    "Reservation must be CONFIRMED and EXPECTED for check-in");
+        }
+
+        Instant now = Instant.now(clock);
+        Reservation checkedIn = reservationPersistencePort.save(checkedIn(reservation, actorUserId, now));
+        appendEvent(checkedIn, ReservationEventType.CHECKED_IN, actorUserId, null);
+        return checkedIn;
+    }
+
     private Reservation lock(UUID reservationId, UUID restaurantId) {
         return reservationPersistencePort.findByIdAndRestaurantIdForUpdate(reservationId, restaurantId)
                 .orElseThrow(() -> new ReservationNotFoundException(reservationId));
@@ -102,6 +127,17 @@ public class OwnerReservationCommandService implements OwnerReservationCommandUs
                 reservation.specialRequest(), reservation.preOrderNote(), reservation.managementTokenHash(),
                 reservation.checkInTokenHash(),
                 reservation.checkedInAt(), reservation.checkedInBy(), reservation.version(),
+                reservation.createdAt(), reservation.updatedAt());
+    }
+
+    private Reservation checkedIn(Reservation reservation, UUID actorUserId, Instant checkedInAt) {
+        return new Reservation(
+                reservation.id(), reservation.reference(), reservation.idempotencyKey(), reservation.requestFingerprint(),
+                reservation.restaurantId(), reservation.bookingSlotId(), reservation.customerId(), reservation.customerName(),
+                reservation.customerEmail(), reservation.customerPhone(), reservation.startsAt(), reservation.endsAt(),
+                reservation.partySize(), reservation.status(), reservation.capacityOverride(), VisitStatus.ARRIVED,
+                reservation.specialRequest(), reservation.preOrderNote(), reservation.managementTokenHash(),
+                reservation.checkInTokenHash(), checkedInAt, actorUserId, reservation.version(),
                 reservation.createdAt(), reservation.updatedAt());
     }
 

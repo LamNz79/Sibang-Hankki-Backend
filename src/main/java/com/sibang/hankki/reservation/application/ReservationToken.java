@@ -7,11 +7,11 @@ import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.HexFormat;
 
-final class ReservationManagementToken {
+final class ReservationToken {
 
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
-    private ReservationManagementToken() {
+    private ReservationToken() {
     }
 
     static String generate() {

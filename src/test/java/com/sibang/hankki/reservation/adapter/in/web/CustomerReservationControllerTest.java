@@ -69,6 +69,20 @@ class CustomerReservationControllerTest {
         verify(useCase).cancel(RESERVATION_ID, TOKEN);
     }
 
+    @Test
+    void guestIssuesCheckInTokenWithManagementTokenAndWithoutCsrf() throws Exception {
+        given(useCase.issueCheckInToken(RESERVATION_ID, TOKEN)).willReturn("opaque-check-in-token");
+
+        mockMvc.perform(post("/api/customer/reservations/{id}/check-in-token", RESERVATION_ID)
+                        .header(CustomerReservationController.MANAGEMENT_TOKEN_HEADER, TOKEN))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.reservationId").value(RESERVATION_ID.toString()))
+                .andExpect(jsonPath("$.checkInToken").value("opaque-check-in-token"))
+                .andExpect(jsonPath("$.checkInTokenHash").doesNotExist());
+
+        verify(useCase).issueCheckInToken(RESERVATION_ID, TOKEN);
+    }
+
     private Reservation reservation(ReservationStatus status, VisitStatus visitStatus) {
         return new Reservation(
                 RESERVATION_ID, "SHK-GUEST-1", "guest-key", "a".repeat(64), UUID.randomUUID(), UUID.randomUUID(),

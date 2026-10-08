@@ -32,4 +32,7 @@ public interface ReservationPersistencePort {
     Optional<Reservation> findByIdAndCustomerId(UUID id, UUID customerId);
 
     Optional<Reservation> findByIdAndCustomerIdForUpdate(UUID id, UUID customerId);
+
+    Optional<Reservation> findByCheckInTokenHashAndRestaurantIdForUpdate(
+            String checkInTokenHash, UUID restaurantId);
 }

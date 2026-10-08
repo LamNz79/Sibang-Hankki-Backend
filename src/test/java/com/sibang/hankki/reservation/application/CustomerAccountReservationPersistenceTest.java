@@ -1,11 +1,14 @@
 package com.sibang.hankki.reservation.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.sibang.hankki.reservation.adapter.out.persistence.repository.ReservationEventJpaRepository;
 import com.sibang.hankki.reservation.application.exception.ReservationNotFoundException;
 import com.sibang.hankki.reservation.domain.model.ReservationStatus;
+import com.sibang.hankki.reservation.domain.model.ReservationEventType;
+import com.sibang.hankki.reservation.domain.model.VisitStatus;
 import com.sibang.hankki.restaurant.adapter.out.persistence.repository.BookingSlotRepository;
 import java.sql.Timestamp;
 import java.time.Clock;
@@ -35,6 +38,8 @@ class CustomerAccountReservationPersistenceTest {
     @Autowired
     private CustomerReservationService service;
     @Autowired
+    private OwnerReservationCommandService ownerReservationCommandService;
+    @Autowired
     private BookingSlotRepository slotRepository;
     @Autowired
     private ReservationEventJpaRepository eventRepository;
@@ -44,6 +49,7 @@ class CustomerAccountReservationPersistenceTest {
     private UUID restaurantId;
     private UUID customerId;
     private UUID otherCustomerId;
+    private UUID actorId;
     private UUID slotId;
     private UUID firstReservationId;
     private UUID secondReservationId;
@@ -54,6 +60,7 @@ class CustomerAccountReservationPersistenceTest {
         restaurantId = UUID.randomUUID();
         customerId = UUID.randomUUID();
         otherCustomerId = UUID.randomUUID();
+        actorId = UUID.randomUUID();
         slotId = UUID.randomUUID();
         firstReservationId = UUID.randomUUID();
         secondReservationId = UUID.randomUUID();
@@ -64,6 +71,10 @@ class CustomerAccountReservationPersistenceTest {
                 """, restaurantId, "account-reservation-test-" + restaurantId);
         insertCustomer(customerId, "account-customer-");
         insertCustomer(otherCustomerId, "other-customer-");
+        jdbcTemplate.update("""
+                insert into users (id, userid, password_hash, name, role, status, restaurant_id)
+                values (?, ?, 'unused-hash', 'Owner', 'OWNER', 'ACTIVE', ?)
+                """, actorId, "check-in-owner-" + actorId.toString().substring(0, 8), restaurantId);
         jdbcTemplate.update("""
                 insert into restaurant_booking_settings (
                     restaurant_id, guest_capacity, booking_interval_minutes, dining_duration_minutes,
@@ -89,7 +100,7 @@ class CustomerAccountReservationPersistenceTest {
         jdbcTemplate.update("delete from reservations where restaurant_id = ?", restaurantId);
         jdbcTemplate.update("delete from booking_slots where restaurant_id = ?", restaurantId);
         jdbcTemplate.update("delete from restaurant_booking_settings where restaurant_id = ?", restaurantId);
-        jdbcTemplate.update("delete from users where id in (?, ?)", customerId, otherCustomerId);
+        jdbcTemplate.update("delete from users where id in (?, ?, ?)", customerId, otherCustomerId, actorId);
         jdbcTemplate.update("delete from restaurants where id = ?", restaurantId);
     }
 
@@ -136,6 +147,33 @@ class CustomerAccountReservationPersistenceTest {
         assertEquals(0, slotRepository.findById(slotId).orElseThrow().getCapacityReserved());
     }
 
+    @Test
+    void rotatingTokenInvalidatesOldQrAndOwnerCheckInIsIdempotent() {
+        String oldToken = service.issueAccountCheckInToken(firstReservationId, customerId);
+        String currentToken = service.issueAccountCheckInToken(firstReservationId, customerId);
+
+        String storedHash = jdbcTemplate.queryForObject(
+                "select check_in_token_hash from reservations where id = ?",
+                String.class,
+                firstReservationId);
+        assertNotEquals(oldToken, currentToken);
+        assertNotEquals(currentToken, storedHash);
+        assertEquals(ReservationToken.hash(currentToken), storedHash);
+
+        assertThrows(ReservationNotFoundException.class,
+                () -> ownerReservationCommandService.checkIn(oldToken, restaurantId, actorId));
+
+        var arrived = ownerReservationCommandService.checkIn(currentToken, restaurantId, actorId);
+        var replay = ownerReservationCommandService.checkIn(currentToken, restaurantId, actorId);
+        assertEquals(VisitStatus.ARRIVED, arrived.visitStatus());
+        assertEquals(FixedClockConfiguration.NOW, arrived.checkedInAt());
+        assertEquals(actorId, arrived.checkedInBy());
+        assertEquals(arrived.id(), replay.id());
+        var events = eventRepository.findByReservationIdOrderByCreatedAtAscIdAsc(firstReservationId);
+        assertEquals(1, events.size());
+        assertEquals(ReservationEventType.CHECKED_IN, events.get(0).getEventType());
+    }
+
     private void insertCustomer(UUID id, String prefix) {
         jdbcTemplate.update("""
                 insert into users (id, userid, password_hash, name, role, status)
@@ -158,10 +196,12 @@ class CustomerAccountReservationPersistenceTest {
     @TestConfiguration(proxyBeanMethods = false)
     static class FixedClockConfiguration {
 
+        static final Instant NOW = Instant.parse("2026-10-06T00:00:00Z");
+
         @Bean
         @Primary
         Clock fixedClock() {
-            return Clock.fixed(Instant.parse("2026-10-06T00:00:00Z"), ZoneOffset.UTC);
+            return Clock.fixed(NOW, ZoneOffset.UTC);
         }
     }
 }

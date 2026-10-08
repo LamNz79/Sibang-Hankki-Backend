@@ -37,6 +37,13 @@ public class CustomerReservationController {
         return CustomerReservationResponse.from(useCase.cancel(id, managementToken));
     }
 
+    @PostMapping("/{id}/check-in-token")
+    public CheckInTokenResponse issueCheckInToken(
+            @PathVariable UUID id,
+            @RequestHeader(value = MANAGEMENT_TOKEN_HEADER, required = false) String managementToken) {
+        return new CheckInTokenResponse(id, useCase.issueCheckInToken(id, managementToken));
+    }
+
     public record CustomerReservationResponse(
             UUID id,
             String reference,

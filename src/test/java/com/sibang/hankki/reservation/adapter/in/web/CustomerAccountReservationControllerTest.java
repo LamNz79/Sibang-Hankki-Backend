@@ -117,6 +117,29 @@ class CustomerAccountReservationControllerTest {
                 .andExpect(jsonPath("$.status").value("CANCELLED"));
     }
 
+    @Test
+    void accountCheckInTokenRequiresCustomerAndCsrf() throws Exception {
+        MockHttpSession customer = login("customer");
+        mockMvc.perform(post("/api/customer/account/reservations/{id}/check-in-token", RESERVATION_ID)
+                        .session(customer))
+                .andExpect(status().isForbidden());
+
+        given(useCase.issueAccountCheckInToken(RESERVATION_ID, CUSTOMER_ID))
+                .willReturn("opaque-check-in-token");
+        mockMvc.perform(post("/api/customer/account/reservations/{id}/check-in-token", RESERVATION_ID)
+                        .with(csrf())
+                        .session(customer))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.reservationId").value(RESERVATION_ID.toString()))
+                .andExpect(jsonPath("$.checkInToken").value("opaque-check-in-token"))
+                .andExpect(jsonPath("$.checkInTokenHash").doesNotExist());
+
+        mockMvc.perform(post("/api/customer/account/reservations/{id}/check-in-token", RESERVATION_ID)
+                        .with(csrf())
+                        .session(login("owner")))
+                .andExpect(status().isForbidden());
+    }
+
     private void configureUser(String userid, String role, UUID id) {
         UserEntity user = org.mockito.Mockito.mock(UserEntity.class);
         given(user.getId()).willReturn(id);

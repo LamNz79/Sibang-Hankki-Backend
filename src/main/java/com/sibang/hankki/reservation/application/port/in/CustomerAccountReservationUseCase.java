@@ -12,6 +12,8 @@ public interface CustomerAccountReservationUseCase {
 
     CustomerAccountReservation cancelAccountReservation(UUID reservationId, UUID customerId);
 
+    String issueAccountCheckInToken(UUID reservationId, UUID customerId);
+
     record CustomerAccountReservation(
             Reservation reservation,
             String restaurantSlug,
