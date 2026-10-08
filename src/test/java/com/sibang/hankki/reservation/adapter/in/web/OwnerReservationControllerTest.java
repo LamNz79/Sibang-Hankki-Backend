@@ -206,6 +206,39 @@ class OwnerReservationControllerTest {
                 .andExpect(status().isForbidden());
     }
 
+    @Test
+    void ownerCanSeatAndStaffCanCompleteUsingSessionScope() throws Exception {
+        given(commandUseCase.seat(RESERVATION_ID, RESTAURANT_ID, OWNER_ID))
+                .willReturn(reservation(ReservationStatus.CONFIRMED, VisitStatus.SEATED));
+        given(commandUseCase.complete(RESERVATION_ID, RESTAURANT_ID, STAFF_ID))
+                .willReturn(reservation(ReservationStatus.CONFIRMED, VisitStatus.COMPLETED));
+
+        mockMvc.perform(post("/api/owner/reservations/{id}/seat", RESERVATION_ID)
+                        .with(csrf())
+                        .session(login("owner")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.visitStatus").value("SEATED"));
+        mockMvc.perform(post("/api/owner/reservations/{id}/complete", RESERVATION_ID)
+                        .with(csrf())
+                        .session(login("staff")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.visitStatus").value("COMPLETED"));
+
+        verify(commandUseCase).seat(RESERVATION_ID, RESTAURANT_ID, OWNER_ID);
+        verify(commandUseCase).complete(RESERVATION_ID, RESTAURANT_ID, STAFF_ID);
+    }
+
+    @Test
+    void visitCommandsRequireCsrfAndOwnerOrStaffRole() throws Exception {
+        mockMvc.perform(post("/api/owner/reservations/{id}/seat", RESERVATION_ID)
+                        .session(login("owner")))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/owner/reservations/{id}/complete", RESERVATION_ID)
+                        .with(csrf())
+                        .session(login("customer")))
+                .andExpect(status().isForbidden());
+    }
+
     private MockHttpSession login(String userid) throws Exception {
         MvcResult result = mockMvc.perform(post("/api/auth/login")
                         .with(csrf())

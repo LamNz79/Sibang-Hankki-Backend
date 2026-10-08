@@ -182,6 +182,82 @@ class OwnerReservationCommandServiceTest {
         verifyNoInteractions(eventPort, slotPort);
     }
 
+    @Test
+    void seatsArrivedReservationAndRecordsEvent() {
+        Reservation arrived = reservation(ReservationStatus.CONFIRMED, VisitStatus.ARRIVED);
+        given(reservationPort.findByIdAndRestaurantIdForUpdate(RESERVATION_ID, RESTAURANT_ID))
+                .willReturn(Optional.of(arrived));
+        given(reservationPort.save(org.mockito.ArgumentMatchers.any())).willAnswer(invocation -> invocation.getArgument(0));
+
+        Reservation seated = service.seat(RESERVATION_ID, RESTAURANT_ID, ACTOR_ID);
+
+        assertThat(seated.visitStatus()).isEqualTo(VisitStatus.SEATED);
+        ArgumentCaptor<ReservationEvent> event = ArgumentCaptor.forClass(ReservationEvent.class);
+        verify(eventPort).append(event.capture());
+        assertThat(event.getValue().eventType()).isEqualTo(ReservationEventType.SEATED);
+        assertThat(event.getValue().actorUserId()).isEqualTo(ACTOR_ID);
+    }
+
+    @Test
+    void completesSeatedReservationAndRecordsEvent() {
+        Reservation seated = reservation(ReservationStatus.CONFIRMED, VisitStatus.SEATED);
+        given(reservationPort.findByIdAndRestaurantIdForUpdate(RESERVATION_ID, RESTAURANT_ID))
+                .willReturn(Optional.of(seated));
+        given(reservationPort.save(org.mockito.ArgumentMatchers.any())).willAnswer(invocation -> invocation.getArgument(0));
+
+        Reservation completed = service.complete(RESERVATION_ID, RESTAURANT_ID, ACTOR_ID);
+
+        assertThat(completed.visitStatus()).isEqualTo(VisitStatus.COMPLETED);
+        ArgumentCaptor<ReservationEvent> event = ArgumentCaptor.forClass(ReservationEvent.class);
+        verify(eventPort).append(event.capture());
+        assertThat(event.getValue().eventType()).isEqualTo(ReservationEventType.COMPLETED);
+        assertThat(event.getValue().actorUserId()).isEqualTo(ACTOR_ID);
+    }
+
+    @Test
+    void repeatedVisitTransitionsAreIdempotent() {
+        Reservation seated = reservation(ReservationStatus.CONFIRMED, VisitStatus.SEATED);
+        Reservation completed = reservation(ReservationStatus.CONFIRMED, VisitStatus.COMPLETED);
+        given(reservationPort.findByIdAndRestaurantIdForUpdate(RESERVATION_ID, RESTAURANT_ID))
+                .willReturn(Optional.of(seated), Optional.of(completed));
+
+        assertThat(service.seat(RESERVATION_ID, RESTAURANT_ID, ACTOR_ID)).isSameAs(seated);
+        assertThat(service.complete(RESERVATION_ID, RESTAURANT_ID, ACTOR_ID)).isSameAs(completed);
+
+        verify(reservationPort, never()).save(org.mockito.ArgumentMatchers.any());
+        verifyNoInteractions(eventPort, slotPort);
+    }
+
+    @Test
+    void visitTransitionsCannotSkipOrMoveBackward() {
+        Reservation expected = reservation(ReservationStatus.CONFIRMED, VisitStatus.EXPECTED);
+        Reservation completed = reservation(ReservationStatus.CONFIRMED, VisitStatus.COMPLETED);
+        Reservation arrived = reservation(ReservationStatus.CONFIRMED, VisitStatus.ARRIVED);
+        given(reservationPort.findByIdAndRestaurantIdForUpdate(RESERVATION_ID, RESTAURANT_ID))
+                .willReturn(Optional.of(expected), Optional.of(completed), Optional.of(arrived));
+
+        assertThatThrownBy(() -> service.seat(RESERVATION_ID, RESTAURANT_ID, ACTOR_ID))
+                .isInstanceOf(InvalidReservationStateException.class);
+        assertThatThrownBy(() -> service.seat(RESERVATION_ID, RESTAURANT_ID, ACTOR_ID))
+                .isInstanceOf(InvalidReservationStateException.class);
+        assertThatThrownBy(() -> service.complete(RESERVATION_ID, RESTAURANT_ID, ACTOR_ID))
+                .isInstanceOf(InvalidReservationStateException.class);
+
+        verify(reservationPort, never()).save(org.mockito.ArgumentMatchers.any());
+        verifyNoInteractions(eventPort, slotPort);
+    }
+
+    @Test
+    void visitTransitionFromAnotherRestaurantIsNotFound() {
+        given(reservationPort.findByIdAndRestaurantIdForUpdate(RESERVATION_ID, RESTAURANT_ID))
+                .willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.seat(RESERVATION_ID, RESTAURANT_ID, ACTOR_ID))
+                .isInstanceOf(ReservationNotFoundException.class);
+        verify(reservationPort, never()).save(org.mockito.ArgumentMatchers.any());
+        verifyNoInteractions(eventPort, slotPort);
+    }
+
     private Reservation reservation(ReservationStatus status, VisitStatus visitStatus) {
         return reservation(status, visitStatus, null, null);
     }

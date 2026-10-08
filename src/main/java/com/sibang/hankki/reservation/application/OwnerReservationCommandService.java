@@ -105,6 +105,46 @@ public class OwnerReservationCommandService implements OwnerReservationCommandUs
         return checkedIn;
     }
 
+    @Override
+    @Transactional
+    public Reservation seat(UUID reservationId, UUID restaurantId, UUID actorUserId) {
+        return transitionVisit(
+                reservationId, restaurantId, actorUserId,
+                VisitStatus.ARRIVED, VisitStatus.SEATED, ReservationEventType.SEATED);
+    }
+
+    @Override
+    @Transactional
+    public Reservation complete(UUID reservationId, UUID restaurantId, UUID actorUserId) {
+        return transitionVisit(
+                reservationId, restaurantId, actorUserId,
+                VisitStatus.SEATED, VisitStatus.COMPLETED, ReservationEventType.COMPLETED);
+    }
+
+    private Reservation transitionVisit(
+            UUID reservationId,
+            UUID restaurantId,
+            UUID actorUserId,
+            VisitStatus requiredVisitStatus,
+            VisitStatus targetVisitStatus,
+            ReservationEventType eventType) {
+        Reservation reservation = lock(reservationId, restaurantId);
+        if (reservation.status() == ReservationStatus.CONFIRMED
+                && reservation.visitStatus() == targetVisitStatus) {
+            return reservation;
+        }
+        if (reservation.status() != ReservationStatus.CONFIRMED
+                || reservation.visitStatus() != requiredVisitStatus) {
+            throw new InvalidReservationStateException(
+                    "Reservation must be CONFIRMED and " + requiredVisitStatus + " for this transition");
+        }
+
+        Reservation updated = reservationPersistencePort.save(
+                transition(reservation, ReservationStatus.CONFIRMED, targetVisitStatus));
+        appendEvent(updated, eventType, actorUserId, null);
+        return updated;
+    }
+
     private Reservation lock(UUID reservationId, UUID restaurantId) {
         return reservationPersistencePort.findByIdAndRestaurantIdForUpdate(reservationId, restaurantId)
                 .orElseThrow(() -> new ReservationNotFoundException(reservationId));
