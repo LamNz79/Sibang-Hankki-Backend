@@ -52,6 +52,18 @@ public class OwnerReservationController {
         return OwnerReservationResponse.from(commandUseCase.decline(id, user.restaurantId(), user.id(), reason));
     }
 
+    @PostMapping("/{id}/seat")
+    public OwnerReservationResponse seat(
+            @PathVariable UUID id, @AuthenticationPrincipal SessionUser user) {
+        return OwnerReservationResponse.from(commandUseCase.seat(id, user.restaurantId(), user.id()));
+    }
+
+    @PostMapping("/{id}/complete")
+    public OwnerReservationResponse complete(
+            @PathVariable UUID id, @AuthenticationPrincipal SessionUser user) {
+        return OwnerReservationResponse.from(commandUseCase.complete(id, user.restaurantId(), user.id()));
+    }
+
     public record DeclineReservationRequest(String reason) {
     }
 

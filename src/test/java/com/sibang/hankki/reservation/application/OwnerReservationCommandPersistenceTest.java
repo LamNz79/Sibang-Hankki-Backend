@@ -6,8 +6,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.sibang.hankki.reservation.adapter.out.persistence.repository.ReservationEventJpaRepository;
 import com.sibang.hankki.reservation.adapter.out.persistence.repository.ReservationJpaRepository;
+import com.sibang.hankki.reservation.application.exception.InvalidReservationStateException;
 import com.sibang.hankki.reservation.application.exception.ReservationCapacityUnavailableException;
 import com.sibang.hankki.reservation.application.exception.ReservationNotFoundException;
+import com.sibang.hankki.reservation.domain.model.ReservationEventType;
 import com.sibang.hankki.reservation.domain.model.ReservationStatus;
 import com.sibang.hankki.reservation.domain.model.VisitStatus;
 import com.sibang.hankki.restaurant.adapter.out.persistence.repository.BookingSlotRepository;
@@ -150,6 +152,58 @@ class OwnerReservationCommandPersistenceTest {
                 .count());
     }
 
+    @Test
+    void seatAndCompletePersistEachTransitionAndEventOnce() {
+        UUID reservationId = insertConfirmedReservation(VisitStatus.ARRIVED);
+
+        var seated = service.seat(reservationId, restaurantId, actorId);
+        var seatedReplay = service.seat(reservationId, restaurantId, actorId);
+        var completed = service.complete(reservationId, restaurantId, actorId);
+        var completedReplay = service.complete(reservationId, restaurantId, actorId);
+
+        assertEquals(VisitStatus.SEATED, seated.visitStatus());
+        assertEquals(seated.id(), seatedReplay.id());
+        assertEquals(VisitStatus.COMPLETED, completed.visitStatus());
+        assertEquals(completed.id(), completedReplay.id());
+        assertEquals(VisitStatus.COMPLETED,
+                reservationRepository.findById(reservationId).orElseThrow().getVisitStatus());
+        var events = eventRepository.findByReservationIdOrderByCreatedAtAscIdAsc(reservationId);
+        assertEquals(2, events.size());
+        assertEquals(1, events.stream()
+                .filter(event -> event.getEventType() == ReservationEventType.SEATED).count());
+        assertEquals(1, events.stream()
+                .filter(event -> event.getEventType() == ReservationEventType.COMPLETED).count());
+        assertTrue(events.stream().allMatch(event -> actorId.equals(event.getActorUserId())));
+    }
+
+    @Test
+    void visitTransitionsRejectSkippingAndMovingBackward() {
+        UUID expectedId = insertConfirmedReservation(VisitStatus.EXPECTED);
+        UUID completedId = insertConfirmedReservation(VisitStatus.COMPLETED);
+        UUID arrivedId = insertConfirmedReservation(VisitStatus.ARRIVED);
+
+        assertThrows(InvalidReservationStateException.class,
+                () -> service.seat(expectedId, restaurantId, actorId));
+        assertThrows(InvalidReservationStateException.class,
+                () -> service.seat(completedId, restaurantId, actorId));
+        assertThrows(InvalidReservationStateException.class,
+                () -> service.complete(arrivedId, restaurantId, actorId));
+        assertEquals(0, eventRepository.findByReservationIdOrderByCreatedAtAscIdAsc(expectedId).size());
+        assertEquals(0, eventRepository.findByReservationIdOrderByCreatedAtAscIdAsc(completedId).size());
+        assertEquals(0, eventRepository.findByReservationIdOrderByCreatedAtAscIdAsc(arrivedId).size());
+    }
+
+    @Test
+    void visitTransitionsDoNotExposeAnotherRestaurantReservation() {
+        UUID reservationId = insertConfirmedReservation(VisitStatus.ARRIVED);
+        UUID otherRestaurantId = UUID.randomUUID();
+
+        assertThrows(ReservationNotFoundException.class,
+                () -> service.seat(reservationId, otherRestaurantId, actorId));
+        assertThrows(ReservationNotFoundException.class,
+                () -> service.complete(reservationId, otherRestaurantId, actorId));
+    }
+
     private Callable<Boolean> confirm(UUID reservationId) {
         return () -> {
             try {
@@ -179,6 +233,14 @@ class OwnerReservationCommandPersistenceTest {
                 """, reservationId, "SHK-" + reservationId.toString().substring(0, 8),
                 "owner-command-" + reservationId, "0".repeat(64), restaurantId, slotId,
                 Timestamp.from(STARTS_AT), Timestamp.from(ENDS_AT), partySize);
+        return reservationId;
+    }
+
+    private UUID insertConfirmedReservation(VisitStatus visitStatus) {
+        UUID reservationId = insertPendingReservation(2);
+        jdbcTemplate.update(
+                "update reservations set status = 'CONFIRMED', visit_status = ? where id = ?",
+                visitStatus.name(), reservationId);
         return reservationId;
     }
 }
