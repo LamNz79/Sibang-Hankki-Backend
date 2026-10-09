@@ -14,6 +14,8 @@ public interface RestaurantCatalogPort {
 
     Optional<RestaurantData> findRestaurantById(UUID restaurantId);
 
+    Optional<String> findTimezoneById(UUID restaurantId);
+
     List<RestaurantTagData> findTagsByRestaurantIds(Collection<UUID> restaurantIds);
 
     List<RestaurantBusinessHourData> findBusinessHoursByRestaurantIds(Collection<UUID> restaurantIds);

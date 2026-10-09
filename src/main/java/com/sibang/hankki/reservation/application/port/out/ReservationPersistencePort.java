@@ -19,6 +19,17 @@ public interface ReservationPersistencePort {
 
     List<Reservation> findAllByRestaurantId(UUID restaurantId);
 
+    OwnerReservationPageData findOwnerPage(
+            UUID restaurantId,
+            int page,
+            int size,
+            String query,
+            OwnerReservationStatus status,
+            java.time.Instant startsAtFrom,
+            java.time.Instant startsAtBefore);
+
+    OwnerReservationSummaryData summarizeOwnerReservations(UUID restaurantId);
+
     Optional<Reservation> findByIdAndRestaurantId(UUID id, UUID restaurantId);
 
     Optional<Reservation> findByIdAndRestaurantIdForUpdate(UUID id, UUID restaurantId);
@@ -35,4 +46,19 @@ public interface ReservationPersistencePort {
 
     Optional<Reservation> findByCheckInTokenHashAndRestaurantIdForUpdate(
             String checkInTokenHash, UUID restaurantId);
+
+    enum OwnerReservationStatus {
+        PENDING,
+        CONFIRMED,
+        CHECKED_IN,
+        CANCELLED,
+        DECLINED,
+        NO_SHOW
+    }
+
+    record OwnerReservationPageData(List<Reservation> items, long totalElements, int totalPages) {
+    }
+
+    record OwnerReservationSummaryData(long confirmed, long checkedIn, long cancelled, long noShow) {
+    }
 }

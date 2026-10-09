@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -29,6 +30,19 @@ public class OwnerReservationController {
     @GetMapping
     public List<OwnerReservationResponse> findAll(@AuthenticationPrincipal SessionUser user) {
         return readUseCase.findAll(user.restaurantId()).stream().map(OwnerReservationResponse::from).toList();
+    }
+
+    @GetMapping("/paged")
+    public OwnerReservationPageResponse findPage(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String query,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String dateFrom,
+            @RequestParam(required = false) String dateTo,
+            @AuthenticationPrincipal SessionUser user) {
+        return OwnerReservationPageResponse.from(readUseCase.findPage(
+                user.restaurantId(), page, size, query, status, dateFrom, dateTo));
     }
 
     @GetMapping("/{id}")
