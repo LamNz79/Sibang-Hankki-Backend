@@ -39,6 +39,7 @@ jobs:
       DB_URL: jdbc:postgresql://127.0.0.1:5432/sibang_hankki_test
       DB_USERNAME: sibang_test
       DB_PASSWORD: ci_password
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "2"
       BOOKING_SLOT_GENERATION_ENABLED: "false"
     steps:
       - name: Check out source
