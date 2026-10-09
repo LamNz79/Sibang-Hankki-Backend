@@ -49,6 +49,11 @@ public class RestaurantCatalogPersistenceAdapter implements RestaurantCatalogPor
     }
 
     @Override
+    public Optional<String> findTimezoneById(UUID restaurantId) {
+        return repository.findById(restaurantId).map(RestaurantEntity::getTimezone);
+    }
+
+    @Override
     public List<RestaurantTagData> findTagsByRestaurantIds(Collection<UUID> restaurantIds) {
         return repository.findTagsByRestaurantIds(restaurantIds).stream()
                 .map(this::toRestaurantTagData)

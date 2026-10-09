@@ -14,6 +14,8 @@ import com.sibang.hankki.reservation.application.exception.InvalidReservationReq
 import com.sibang.hankki.reservation.application.exception.ReservationNotFoundException;
 import com.sibang.hankki.reservation.application.port.in.OwnerReservationCommandUseCase;
 import com.sibang.hankki.reservation.application.port.in.OwnerReservationReadUseCase;
+import com.sibang.hankki.reservation.application.port.in.OwnerReservationReadUseCase.OwnerReservationPage;
+import com.sibang.hankki.reservation.application.port.in.OwnerReservationReadUseCase.OwnerReservationSummary;
 import com.sibang.hankki.reservation.domain.model.Reservation;
 import com.sibang.hankki.reservation.domain.model.ReservationStatus;
 import com.sibang.hankki.reservation.domain.model.VisitStatus;
@@ -97,6 +99,80 @@ class OwnerReservationControllerTest {
                 .andExpect(jsonPath("$[0].version").doesNotExist());
 
         verify(readUseCase).findAll(RESTAURANT_ID);
+    }
+
+    @Test
+    void ownerPagedListUsesDefaultsAndReturnsContract() throws Exception {
+        given(readUseCase.findPage(RESTAURANT_ID, 0, 20, null, null, null, null))
+                .willReturn(new OwnerReservationPage(
+                        List.of(reservation()), 0, 20, 123, 7,
+                        new OwnerReservationSummary(13, 3, 2, 0)));
+
+        mockMvc.perform(get("/api/owner/reservations/paged").session(login("owner")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].id").value(RESERVATION_ID.toString()))
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.size").value(20))
+                .andExpect(jsonPath("$.totalElements").value(123))
+                .andExpect(jsonPath("$.totalPages").value(7))
+                .andExpect(jsonPath("$.summary.confirmed").value(13))
+                .andExpect(jsonPath("$.summary.checkedIn").value(3))
+                .andExpect(jsonPath("$.summary.cancelled").value(2))
+                .andExpect(jsonPath("$.summary.noShow").value(0));
+    }
+
+    @Test
+    void staffCanUsePagedFiltersAndSessionRestaurantScope() throws Exception {
+        given(readUseCase.findPage(
+                RESTAURANT_ID, 2, 10, " Minh ", "CONFIRMED", "2026-10-01", "2026-10-31"))
+                .willReturn(new OwnerReservationPage(
+                        List.of(), 2, 10, 0, 0, new OwnerReservationSummary(0, 0, 0, 0)));
+
+        mockMvc.perform(get("/api/owner/reservations/paged")
+                        .session(login("staff"))
+                        .param("page", "2")
+                        .param("size", "10")
+                        .param("query", " Minh ")
+                        .param("status", "CONFIRMED")
+                        .param("dateFrom", "2026-10-01")
+                        .param("dateTo", "2026-10-31"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items").isEmpty());
+
+        verify(readUseCase).findPage(
+                RESTAURANT_ID, 2, 10, " Minh ", "CONFIRMED", "2026-10-01", "2026-10-31");
+    }
+
+    @Test
+    void pagedListBlocksAnonymousAndCustomer() throws Exception {
+        mockMvc.perform(get("/api/owner/reservations/paged"))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/owner/reservations/paged").session(login("customer")))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void pagedListRejectsInvalidParameters() throws Exception {
+        given(readUseCase.findPage(RESTAURANT_ID, -1, 20, null, null, null, null))
+                .willThrow(new InvalidReservationRequestException("invalid page"));
+        given(readUseCase.findPage(RESTAURANT_ID, 0, 101, null, null, null, null))
+                .willThrow(new InvalidReservationRequestException("invalid size"));
+        given(readUseCase.findPage(RESTAURANT_ID, 0, 20, null, "ACTIVE", null, null))
+                .willThrow(new InvalidReservationRequestException("invalid status"));
+        given(readUseCase.findPage(RESTAURANT_ID, 0, 20, null, null, "not-a-date", null))
+                .willThrow(new InvalidReservationRequestException("invalid date"));
+        MockHttpSession owner = login("owner");
+
+        mockMvc.perform(get("/api/owner/reservations/paged").session(owner).param("page", "-1"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get("/api/owner/reservations/paged").session(owner).param("size", "101"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get("/api/owner/reservations/paged").session(owner).param("status", "ACTIVE"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get("/api/owner/reservations/paged").session(owner).param("dateFrom", "not-a-date"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get("/api/owner/reservations/paged").session(owner).param("page", "NaN"))
+                .andExpect(status().isBadRequest());
     }
 
     @Test
