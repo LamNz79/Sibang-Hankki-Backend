@@ -89,6 +89,16 @@ public class OwnerReservationCommandService implements OwnerReservationCommandUs
         Reservation reservation = reservationPersistencePort
                 .findByCheckInTokenHashAndRestaurantIdForUpdate(ReservationToken.hash(checkInToken), restaurantId)
                 .orElseThrow(ReservationNotFoundException::new);
+        return checkIn(reservation, actorUserId);
+    }
+
+    @Override
+    @Transactional
+    public Reservation checkIn(UUID reservationId, UUID restaurantId, UUID actorUserId) {
+        return checkIn(lock(reservationId, restaurantId), actorUserId);
+    }
+
+    private Reservation checkIn(Reservation reservation, UUID actorUserId) {
         if (reservation.status() == ReservationStatus.CONFIRMED
                 && reservation.visitStatus() == VisitStatus.ARRIVED) {
             return reservation;

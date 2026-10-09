@@ -207,6 +207,49 @@ class OwnerReservationControllerTest {
     }
 
     @Test
+    void ownerAndStaffCanCheckInByReservationIdUsingSessionScope() throws Exception {
+        Reservation arrived = reservation(ReservationStatus.CONFIRMED, VisitStatus.ARRIVED);
+        given(commandUseCase.checkIn(RESERVATION_ID, RESTAURANT_ID, OWNER_ID)).willReturn(arrived);
+        given(commandUseCase.checkIn(RESERVATION_ID, RESTAURANT_ID, STAFF_ID)).willReturn(arrived);
+
+        for (String userid : new String[] {"owner", "staff"}) {
+            mockMvc.perform(post("/api/owner/reservations/{id}/check-in", RESERVATION_ID)
+                            .with(csrf())
+                            .session(login(userid)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.visitStatus").value("ARRIVED"));
+        }
+
+        verify(commandUseCase).checkIn(RESERVATION_ID, RESTAURANT_ID, OWNER_ID);
+        verify(commandUseCase).checkIn(RESERVATION_ID, RESTAURANT_ID, STAFF_ID);
+    }
+
+    @Test
+    void manualCheckInRequiresCsrfAndOwnerOrStaffRole() throws Exception {
+        mockMvc.perform(post("/api/owner/reservations/{id}/check-in", RESERVATION_ID)
+                        .session(login("owner")))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/owner/reservations/{id}/check-in", RESERVATION_ID)
+                        .with(csrf()))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(post("/api/owner/reservations/{id}/check-in", RESERVATION_ID)
+                        .with(csrf())
+                        .session(login("customer")))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void manualCheckInFromAnotherRestaurantReturnsNotFound() throws Exception {
+        given(commandUseCase.checkIn(RESERVATION_ID, RESTAURANT_ID, OWNER_ID))
+                .willThrow(new ReservationNotFoundException(RESERVATION_ID));
+
+        mockMvc.perform(post("/api/owner/reservations/{id}/check-in", RESERVATION_ID)
+                        .with(csrf())
+                        .session(login("owner")))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
     void ownerCanSeatAndStaffCanCompleteUsingSessionScope() throws Exception {
         given(commandUseCase.seat(RESERVATION_ID, RESTAURANT_ID, OWNER_ID))
                 .willReturn(reservation(ReservationStatus.CONFIRMED, VisitStatus.SEATED));

@@ -11,6 +11,8 @@ public interface OwnerReservationCommandUseCase {
 
     Reservation checkIn(String checkInToken, UUID restaurantId, UUID actorUserId);
 
+    Reservation checkIn(UUID reservationId, UUID restaurantId, UUID actorUserId);
+
     Reservation seat(UUID reservationId, UUID restaurantId, UUID actorUserId);
 
     Reservation complete(UUID reservationId, UUID restaurantId, UUID actorUserId);

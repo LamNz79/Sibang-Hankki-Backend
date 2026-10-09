@@ -204,6 +204,38 @@ class OwnerReservationCommandPersistenceTest {
                 () -> service.complete(reservationId, otherRestaurantId, actorId));
     }
 
+    @Test
+    void manualCheckInPersistsAuditOnceAndUsesRestaurantScope() {
+        UUID reservationId = insertConfirmedReservation(VisitStatus.EXPECTED);
+
+        var arrived = service.checkIn(reservationId, restaurantId, actorId);
+        var replay = service.checkIn(reservationId, restaurantId, actorId);
+
+        assertEquals(VisitStatus.ARRIVED, arrived.visitStatus());
+        assertEquals(actorId, arrived.checkedInBy());
+        assertTrue(arrived.checkedInAt() != null);
+        assertEquals(arrived.id(), replay.id());
+        var events = eventRepository.findByReservationIdOrderByCreatedAtAscIdAsc(reservationId);
+        assertEquals(1, events.size());
+        assertEquals(ReservationEventType.CHECKED_IN, events.get(0).getEventType());
+        assertEquals(actorId, events.get(0).getActorUserId());
+        assertThrows(ReservationNotFoundException.class,
+                () -> service.checkIn(reservationId, UUID.randomUUID(), actorId));
+    }
+
+    @Test
+    void manualCheckInRejectsInvalidTransition() {
+        UUID pendingId = insertPendingReservation(2);
+        UUID seatedId = insertConfirmedReservation(VisitStatus.SEATED);
+
+        assertThrows(InvalidReservationStateException.class,
+                () -> service.checkIn(pendingId, restaurantId, actorId));
+        assertThrows(InvalidReservationStateException.class,
+                () -> service.checkIn(seatedId, restaurantId, actorId));
+        assertEquals(0, eventRepository.findByReservationIdOrderByCreatedAtAscIdAsc(pendingId).size());
+        assertEquals(0, eventRepository.findByReservationIdOrderByCreatedAtAscIdAsc(seatedId).size());
+    }
+
     private Callable<Boolean> confirm(UUID reservationId) {
         return () -> {
             try {

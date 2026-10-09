@@ -52,6 +52,12 @@ public class OwnerReservationController {
         return OwnerReservationResponse.from(commandUseCase.decline(id, user.restaurantId(), user.id(), reason));
     }
 
+    @PostMapping("/{id}/check-in")
+    public OwnerReservationResponse checkIn(
+            @PathVariable UUID id, @AuthenticationPrincipal SessionUser user) {
+        return OwnerReservationResponse.from(commandUseCase.checkIn(id, user.restaurantId(), user.id()));
+    }
+
     @PostMapping("/{id}/seat")
     public OwnerReservationResponse seat(
             @PathVariable UUID id, @AuthenticationPrincipal SessionUser user) {
