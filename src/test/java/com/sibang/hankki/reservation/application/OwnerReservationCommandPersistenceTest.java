@@ -3,12 +3,17 @@ package com.sibang.hankki.reservation.application;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 
 import com.sibang.hankki.reservation.adapter.out.persistence.repository.ReservationEventJpaRepository;
 import com.sibang.hankki.reservation.adapter.out.persistence.repository.ReservationJpaRepository;
 import com.sibang.hankki.reservation.application.exception.InvalidReservationStateException;
 import com.sibang.hankki.reservation.application.exception.ReservationCapacityUnavailableException;
 import com.sibang.hankki.reservation.application.exception.ReservationNotFoundException;
+import com.sibang.hankki.reservation.application.port.out.ReservationEventPersistencePort;
+import com.sibang.hankki.reservation.application.port.out.ReservationPersistencePort;
+import com.sibang.hankki.reservation.domain.model.Reservation;
 import com.sibang.hankki.reservation.domain.model.ReservationEventType;
 import com.sibang.hankki.reservation.domain.model.ReservationStatus;
 import com.sibang.hankki.reservation.domain.model.VisitStatus;
@@ -28,6 +33,7 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 @SpringBootTest
 @EnabledIfEnvironmentVariable(named = "DB_URL", matches = ".+")
@@ -46,6 +52,10 @@ class OwnerReservationCommandPersistenceTest {
     private BookingSlotRepository slotRepository;
     @Autowired
     private JdbcTemplate jdbcTemplate;
+    @MockitoSpyBean
+    private ReservationPersistencePort reservationPersistencePort;
+    @MockitoSpyBean
+    private ReservationEventPersistencePort eventPersistencePort;
 
     private UUID restaurantId;
     private UUID actorId;
@@ -234,6 +244,88 @@ class OwnerReservationCommandPersistenceTest {
                 () -> service.checkIn(seatedId, restaurantId, actorId));
         assertEquals(0, eventRepository.findByReservationIdOrderByCreatedAtAscIdAsc(pendingId).size());
         assertEquals(0, eventRepository.findByReservationIdOrderByCreatedAtAscIdAsc(seatedId).size());
+    }
+
+    @Test
+    void ownerCancellationReleasesCapacityAndPersistsAuditOnce() {
+        UUID reservationId = insertConfirmedReservation(VisitStatus.EXPECTED);
+        jdbcTemplate.update("update booking_slots set capacity_reserved = 2 where id = ?", slotId);
+
+        var cancelled = service.cancel(
+                reservationId, restaurantId, actorId, "  Restaurant closed unexpectedly  ");
+        var replay = service.cancel(reservationId, restaurantId, actorId, "Restaurant closed unexpectedly");
+
+        assertEquals(ReservationStatus.CANCELLED, cancelled.status());
+        assertEquals(cancelled.id(), replay.id());
+        assertEquals(0, slotRepository.findById(slotId).orElseThrow().getCapacityReserved());
+        var events = eventRepository.findByReservationIdOrderByCreatedAtAscIdAsc(reservationId);
+        assertEquals(1, events.size());
+        assertEquals(ReservationEventType.CANCELLED_BY_RESTAURANT, events.get(0).getEventType());
+        assertEquals(actorId, events.get(0).getActorUserId());
+        assertTrue(events.get(0).getMetadata().contains("Restaurant closed unexpectedly"));
+    }
+
+    @Test
+    void ownerCancellationRejectsPendingAndPostArrivalReservations() {
+        UUID pendingId = insertPendingReservation(2);
+        UUID arrivedId = insertConfirmedReservation(VisitStatus.ARRIVED);
+        UUID seatedId = insertConfirmedReservation(VisitStatus.SEATED);
+        UUID completedId = insertConfirmedReservation(VisitStatus.COMPLETED);
+
+        for (UUID reservationId : List.of(pendingId, arrivedId, seatedId, completedId)) {
+            assertThrows(InvalidReservationStateException.class,
+                    () -> service.cancel(reservationId, restaurantId, actorId, "Closed"));
+            assertEquals(0, eventRepository.findByReservationIdOrderByCreatedAtAscIdAsc(reservationId).size());
+        }
+    }
+
+    @Test
+    void ownerCancellationReleaseFailureChangesNothing() {
+        UUID reservationId = insertConfirmedReservation(VisitStatus.EXPECTED);
+        jdbcTemplate.update("update booking_slots set capacity_reserved = 1 where id = ?", slotId);
+
+        assertThrows(InvalidReservationStateException.class,
+                () -> service.cancel(reservationId, restaurantId, actorId, "Closed"));
+
+        assertEquals(1, slotRepository.findById(slotId).orElseThrow().getCapacityReserved());
+        assertEquals(ReservationStatus.CONFIRMED,
+                reservationRepository.findById(reservationId).orElseThrow().getStatus());
+        assertEquals(0, eventRepository.findByReservationIdOrderByCreatedAtAscIdAsc(reservationId).size());
+    }
+
+    @Test
+    void ownerCancellationSaveFailureRollsBackCapacityRelease() {
+        UUID reservationId = insertConfirmedReservation(VisitStatus.EXPECTED);
+        jdbcTemplate.update("update booking_slots set capacity_reserved = 2 where id = ?", slotId);
+        doThrow(new IllegalStateException("reservation save failure"))
+                .when(reservationPersistencePort).save(any(Reservation.class));
+
+        assertThrows(IllegalStateException.class,
+                () -> service.cancel(reservationId, restaurantId, actorId, "Closed"));
+
+        assertCancellationRolledBack(reservationId);
+    }
+
+    @Test
+    void ownerCancellationEventFailureRollsBackReservationAndCapacity() {
+        UUID reservationId = insertConfirmedReservation(VisitStatus.EXPECTED);
+        jdbcTemplate.update("update booking_slots set capacity_reserved = 2 where id = ?", slotId);
+        doThrow(new IllegalStateException("event persistence failure"))
+                .when(eventPersistencePort).append(any());
+
+        assertThrows(IllegalStateException.class,
+                () -> service.cancel(reservationId, restaurantId, actorId, "Closed"));
+
+        assertCancellationRolledBack(reservationId);
+    }
+
+    private void assertCancellationRolledBack(UUID reservationId) {
+        assertEquals(2, slotRepository.findById(slotId).orElseThrow().getCapacityReserved());
+        assertEquals(ReservationStatus.CONFIRMED,
+                reservationRepository.findById(reservationId).orElseThrow().getStatus());
+        assertEquals(VisitStatus.EXPECTED,
+                reservationRepository.findById(reservationId).orElseThrow().getVisitStatus());
+        assertEquals(0, eventRepository.findByReservationIdOrderByCreatedAtAscIdAsc(reservationId).size());
     }
 
     private Callable<Boolean> confirm(UUID reservationId) {

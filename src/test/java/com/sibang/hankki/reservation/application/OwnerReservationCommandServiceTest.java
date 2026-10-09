@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sibang.hankki.reservation.application.exception.InvalidReservationRequestException;
 import com.sibang.hankki.reservation.application.exception.InvalidReservationStateException;
 import com.sibang.hankki.reservation.application.exception.ReservationCapacityUnavailableException;
 import com.sibang.hankki.reservation.application.exception.ReservationNotFoundException;
@@ -137,6 +138,79 @@ class OwnerReservationCommandServiceTest {
                 .willReturn(Optional.of(cancelled));
         assertThatThrownBy(() -> service.confirm(RESERVATION_ID, RESTAURANT_ID, ACTOR_ID))
                 .isInstanceOf(InvalidReservationStateException.class);
+    }
+
+    @Test
+    void cancelsConfirmedExpectedReservationAndReleasesCapacity() {
+        Reservation confirmed = reservation(ReservationStatus.CONFIRMED, VisitStatus.EXPECTED);
+        given(reservationPort.findByIdAndRestaurantIdForUpdate(RESERVATION_ID, RESTAURANT_ID))
+                .willReturn(Optional.of(confirmed));
+        given(slotPort.lockByIdAndRestaurantId(SLOT_ID, RESTAURANT_ID)).willReturn(true);
+        given(slotPort.releaseCapacity(SLOT_ID, 2)).willReturn(true);
+        given(reservationPort.save(org.mockito.ArgumentMatchers.any())).willAnswer(invocation -> invocation.getArgument(0));
+
+        Reservation cancelled = service.cancel(
+                RESERVATION_ID, RESTAURANT_ID, ACTOR_ID, "  Restaurant closed unexpectedly  ");
+
+        assertThat(cancelled.status()).isEqualTo(ReservationStatus.CANCELLED);
+        assertThat(cancelled.visitStatus()).isNull();
+        verify(slotPort).releaseCapacity(SLOT_ID, 2);
+        ArgumentCaptor<ReservationEvent> event = ArgumentCaptor.forClass(ReservationEvent.class);
+        verify(eventPort).append(event.capture());
+        assertThat(event.getValue().eventType()).isEqualTo(ReservationEventType.CANCELLED_BY_RESTAURANT);
+        assertThat(event.getValue().actorUserId()).isEqualTo(ACTOR_ID);
+        assertThat(event.getValue().metadata())
+                .isEqualTo("{\"reason\":\"Restaurant closed unexpectedly\"}");
+    }
+
+    @Test
+    void repeatedOwnerCancellationDoesNotReleaseOrAppendAgain() {
+        Reservation cancelled = reservation(ReservationStatus.CANCELLED, null);
+        given(reservationPort.findByIdAndRestaurantIdForUpdate(RESERVATION_ID, RESTAURANT_ID))
+                .willReturn(Optional.of(cancelled));
+
+        assertThat(service.cancel(RESERVATION_ID, RESTAURANT_ID, ACTOR_ID, "Closed")).isSameAs(cancelled);
+
+        verify(reservationPort, never()).save(org.mockito.ArgumentMatchers.any());
+        verifyNoInteractions(slotPort, eventPort);
+    }
+
+    @Test
+    void ownerCancellationRejectsPendingAndPostArrivalStates() {
+        given(reservationPort.findByIdAndRestaurantIdForUpdate(RESERVATION_ID, RESTAURANT_ID))
+                .willReturn(
+                        Optional.of(reservation(ReservationStatus.PENDING, null)),
+                        Optional.of(reservation(ReservationStatus.CONFIRMED, VisitStatus.ARRIVED)),
+                        Optional.of(reservation(ReservationStatus.CONFIRMED, VisitStatus.SEATED)),
+                        Optional.of(reservation(ReservationStatus.CONFIRMED, VisitStatus.COMPLETED)));
+
+        for (int attempt = 0; attempt < 4; attempt++) {
+            assertThatThrownBy(() -> service.cancel(RESERVATION_ID, RESTAURANT_ID, ACTOR_ID, "Closed"))
+                    .isInstanceOf(InvalidReservationStateException.class);
+        }
+
+        verify(reservationPort, never()).save(org.mockito.ArgumentMatchers.any());
+        verifyNoInteractions(slotPort, eventPort);
+    }
+
+    @Test
+    void ownerCancellationRequiresReasonWithinLimit() {
+        assertThatThrownBy(() -> service.cancel(RESERVATION_ID, RESTAURANT_ID, ACTOR_ID, "   "))
+                .isInstanceOf(InvalidReservationRequestException.class);
+        assertThatThrownBy(() -> service.cancel(RESERVATION_ID, RESTAURANT_ID, ACTOR_ID, "x".repeat(501)))
+                .isInstanceOf(InvalidReservationRequestException.class);
+
+        verifyNoInteractions(reservationPort, slotPort, eventPort);
+    }
+
+    @Test
+    void ownerCancellationFromAnotherRestaurantIsNotFound() {
+        given(reservationPort.findByIdAndRestaurantIdForUpdate(RESERVATION_ID, RESTAURANT_ID))
+                .willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.cancel(RESERVATION_ID, RESTAURANT_ID, ACTOR_ID, "Closed"))
+                .isInstanceOf(ReservationNotFoundException.class);
+        verifyNoInteractions(slotPort, eventPort);
     }
 
     @Test

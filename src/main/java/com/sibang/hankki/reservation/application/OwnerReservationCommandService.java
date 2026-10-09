@@ -2,6 +2,7 @@ package com.sibang.hankki.reservation.application;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sibang.hankki.reservation.application.exception.InvalidReservationRequestException;
 import com.sibang.hankki.reservation.application.exception.InvalidReservationStateException;
 import com.sibang.hankki.reservation.application.exception.ReservationCapacityUnavailableException;
 import com.sibang.hankki.reservation.application.exception.ReservationNotFoundException;
@@ -78,6 +79,33 @@ public class OwnerReservationCommandService implements OwnerReservationCommandUs
                 reservation, ReservationStatus.DECLINED, null));
         appendEvent(declined, ReservationEventType.DECLINED, actorUserId, reasonMetadata(reason));
         return declined;
+    }
+
+    @Override
+    @Transactional
+    public Reservation cancel(UUID reservationId, UUID restaurantId, UUID actorUserId, String reason) {
+        String cancellationReason = normalizeCancellationReason(reason);
+        Reservation reservation = lock(reservationId, restaurantId);
+        if (reservation.status() == ReservationStatus.CANCELLED) {
+            return reservation;
+        }
+        if (reservation.status() != ReservationStatus.CONFIRMED
+                || reservation.visitStatus() != VisitStatus.EXPECTED) {
+            throw new InvalidReservationStateException(
+                    "Reservation must be CONFIRMED and EXPECTED for cancellation");
+        }
+        if (reservation.bookingSlotId() == null
+                || !bookingSlotPort.lockByIdAndRestaurantId(reservation.bookingSlotId(), restaurantId)) {
+            throw new InvalidReservationStateException("Reservation has no matching booking slot");
+        }
+        if (!bookingSlotPort.releaseCapacity(reservation.bookingSlotId(), reservation.partySize())) {
+            throw new InvalidReservationStateException("Reserved capacity could not be released");
+        }
+
+        Reservation cancelled = reservationPersistencePort.save(cancelled(reservation));
+        appendEvent(cancelled, ReservationEventType.CANCELLED_BY_RESTAURANT,
+                actorUserId, reasonMetadata(cancellationReason));
+        return cancelled;
     }
 
     @Override
@@ -191,6 +219,17 @@ public class OwnerReservationCommandService implements OwnerReservationCommandUs
                 reservation.createdAt(), reservation.updatedAt());
     }
 
+    private Reservation cancelled(Reservation reservation) {
+        return new Reservation(
+                reservation.id(), reservation.reference(), reservation.idempotencyKey(), reservation.requestFingerprint(),
+                reservation.restaurantId(), reservation.bookingSlotId(), reservation.customerId(), reservation.customerName(),
+                reservation.customerEmail(), reservation.customerPhone(), reservation.startsAt(), reservation.endsAt(),
+                reservation.partySize(), ReservationStatus.CANCELLED, false, null,
+                reservation.specialRequest(), reservation.preOrderNote(), reservation.managementTokenHash(),
+                reservation.checkInTokenHash(), reservation.checkedInAt(), reservation.checkedInBy(), reservation.version(),
+                reservation.createdAt(), reservation.updatedAt());
+    }
+
     private void appendEvent(
             Reservation reservation, ReservationEventType type, UUID actorUserId, String metadata) {
         eventPersistencePort.append(new ReservationEvent(
@@ -211,7 +250,18 @@ public class OwnerReservationCommandService implements OwnerReservationCommandUs
         try {
             return objectMapper.writeValueAsString(Map.of("reason", reason));
         } catch (JsonProcessingException exception) {
-            throw new IllegalStateException("Could not serialize decline reason", exception);
+            throw new IllegalStateException("Could not serialize reservation reason", exception);
         }
+    }
+
+    private String normalizeCancellationReason(String reason) {
+        if (reason == null || reason.isBlank()) {
+            throw new InvalidReservationRequestException("Cancellation reason is required");
+        }
+        String normalized = reason.strip();
+        if (normalized.length() > 500) {
+            throw new InvalidReservationRequestException("Cancellation reason must not exceed 500 characters");
+        }
+        return normalized;
     }
 }

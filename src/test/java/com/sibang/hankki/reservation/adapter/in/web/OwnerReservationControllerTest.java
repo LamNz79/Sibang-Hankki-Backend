@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.sibang.hankki.auth.OwnerSessionUserDetailsService;
 import com.sibang.hankki.auth.config.SecurityConfig;
+import com.sibang.hankki.reservation.application.exception.InvalidReservationRequestException;
 import com.sibang.hankki.reservation.application.exception.ReservationNotFoundException;
 import com.sibang.hankki.reservation.application.port.in.OwnerReservationCommandUseCase;
 import com.sibang.hankki.reservation.application.port.in.OwnerReservationReadUseCase;
@@ -167,6 +168,88 @@ class OwnerReservationControllerTest {
                         .with(csrf())
                         .session(login("customer")))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void ownerAndStaffCanCancelUsingSessionScope() throws Exception {
+        String reason = "Restaurant closed unexpectedly";
+        Reservation cancelled = reservation(ReservationStatus.CANCELLED, null);
+        given(commandUseCase.cancel(RESERVATION_ID, RESTAURANT_ID, OWNER_ID, reason)).willReturn(cancelled);
+        given(commandUseCase.cancel(RESERVATION_ID, RESTAURANT_ID, STAFF_ID, reason)).willReturn(cancelled);
+
+        for (String userid : new String[] {"owner", "staff"}) {
+            mockMvc.perform(post("/api/owner/reservations/{id}/cancel", RESERVATION_ID)
+                            .with(csrf())
+                            .session(login(userid))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"reason\":\"" + reason + "\"}"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value("CANCELLED"))
+                    .andExpect(jsonPath("$.visitStatus").doesNotExist());
+        }
+
+        verify(commandUseCase).cancel(RESERVATION_ID, RESTAURANT_ID, OWNER_ID, reason);
+        verify(commandUseCase).cancel(RESERVATION_ID, RESTAURANT_ID, STAFF_ID, reason);
+    }
+
+    @Test
+    void ownerCancellationRequiresCsrfAndOwnerOrStaffRole() throws Exception {
+        String body = "{\"reason\":\"Closed\"}";
+        mockMvc.perform(post("/api/owner/reservations/{id}/cancel", RESERVATION_ID)
+                        .session(login("owner"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/owner/reservations/{id}/cancel", RESERVATION_ID)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(post("/api/owner/reservations/{id}/cancel", RESERVATION_ID)
+                        .with(csrf())
+                        .session(login("customer"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void ownerCancellationFromAnotherRestaurantReturnsNotFound() throws Exception {
+        given(commandUseCase.cancel(RESERVATION_ID, RESTAURANT_ID, OWNER_ID, "Closed"))
+                .willThrow(new ReservationNotFoundException(RESERVATION_ID));
+
+        mockMvc.perform(post("/api/owner/reservations/{id}/cancel", RESERVATION_ID)
+                        .with(csrf())
+                        .session(login("owner"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"Closed\"}"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void ownerCancellationRejectsMissingBlankAndLongReason() throws Exception {
+        given(commandUseCase.cancel(RESERVATION_ID, RESTAURANT_ID, OWNER_ID, "   "))
+                .willThrow(new InvalidReservationRequestException("Cancellation reason is required"));
+        String longReason = "x".repeat(501);
+        given(commandUseCase.cancel(RESERVATION_ID, RESTAURANT_ID, OWNER_ID, longReason))
+                .willThrow(new InvalidReservationRequestException("Cancellation reason is too long"));
+
+        mockMvc.perform(post("/api/owner/reservations/{id}/cancel", RESERVATION_ID)
+                        .with(csrf())
+                        .session(login("owner")))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(post("/api/owner/reservations/{id}/cancel", RESERVATION_ID)
+                        .with(csrf())
+                        .session(login("owner"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"   \"}"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(post("/api/owner/reservations/{id}/cancel", RESERVATION_ID)
+                        .with(csrf())
+                        .session(login("owner"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"" + longReason + "\"}"))
+                .andExpect(status().isBadRequest());
     }
 
     @Test
