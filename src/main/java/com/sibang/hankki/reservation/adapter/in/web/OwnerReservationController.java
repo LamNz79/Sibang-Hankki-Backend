@@ -52,6 +52,15 @@ public class OwnerReservationController {
         return OwnerReservationResponse.from(commandUseCase.decline(id, user.restaurantId(), user.id(), reason));
     }
 
+    @PostMapping("/{id}/cancel")
+    public OwnerReservationResponse cancel(
+            @PathVariable UUID id,
+            @RequestBody CancelReservationRequest request,
+            @AuthenticationPrincipal SessionUser user) {
+        return OwnerReservationResponse.from(
+                commandUseCase.cancel(id, user.restaurantId(), user.id(), request.reason()));
+    }
+
     @PostMapping("/{id}/check-in")
     public OwnerReservationResponse checkIn(
             @PathVariable UUID id, @AuthenticationPrincipal SessionUser user) {
@@ -71,6 +80,9 @@ public class OwnerReservationController {
     }
 
     public record DeclineReservationRequest(String reason) {
+    }
+
+    public record CancelReservationRequest(String reason) {
     }
 
 }
