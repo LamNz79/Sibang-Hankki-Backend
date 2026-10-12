@@ -2,14 +2,18 @@ package com.sibang.hankki.reservation.adapter.in.web;
 
 import com.sibang.hankki.auth.SessionUser;
 import com.sibang.hankki.reservation.application.port.in.OwnerReservationCommandUseCase;
+import com.sibang.hankki.reservation.application.port.in.OwnerReservationCommandUseCase.OwnerWalkInCommand;
 import com.sibang.hankki.reservation.application.port.in.OwnerReservationReadUseCase;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -30,6 +34,23 @@ public class OwnerReservationController {
     @GetMapping
     public List<OwnerReservationResponse> findAll(@AuthenticationPrincipal SessionUser user) {
         return readUseCase.findAll(user.restaurantId()).stream().map(OwnerReservationResponse::from).toList();
+    }
+
+    @PostMapping("/walk-ins")
+    public ResponseEntity<OwnerReservationResponse> createWalkIn(
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+            @RequestBody OwnerWalkInRequest request,
+            @AuthenticationPrincipal SessionUser user) {
+        var result = commandUseCase.createWalkIn(new OwnerWalkInCommand(
+                idempotencyKey,
+                user.restaurantId(),
+                user.id(),
+                request.customerName(),
+                request.customerPhone(),
+                request.partySize(),
+                request.specialRequest()));
+        return ResponseEntity.status(result.idempotentReplay() ? HttpStatus.OK : HttpStatus.CREATED)
+                .body(OwnerReservationResponse.from(result.reservation()));
     }
 
     @GetMapping("/paged")
@@ -97,6 +118,13 @@ public class OwnerReservationController {
     }
 
     public record CancelReservationRequest(String reason) {
+    }
+
+    public record OwnerWalkInRequest(
+            String customerName,
+            String customerPhone,
+            int partySize,
+            String specialRequest) {
     }
 
 }
