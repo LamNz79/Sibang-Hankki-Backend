@@ -531,6 +531,50 @@ class OwnerReservationControllerTest {
                 .andExpect(status().isForbidden());
     }
 
+    @Test
+    void ownerAndStaffCanMarkNoShowUsingSessionScope() throws Exception {
+        Reservation noShow = reservation(ReservationStatus.CONFIRMED, VisitStatus.NO_SHOW);
+        given(commandUseCase.markNoShow(RESERVATION_ID, RESTAURANT_ID, OWNER_ID)).willReturn(noShow);
+        given(commandUseCase.markNoShow(RESERVATION_ID, RESTAURANT_ID, STAFF_ID)).willReturn(noShow);
+
+        for (String userid : new String[] {"owner", "staff"}) {
+            mockMvc.perform(post("/api/owner/reservations/{id}/no-show", RESERVATION_ID)
+                            .with(csrf())
+                            .session(login(userid)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value("CONFIRMED"))
+                    .andExpect(jsonPath("$.visitStatus").value("NO_SHOW"));
+        }
+
+        verify(commandUseCase).markNoShow(RESERVATION_ID, RESTAURANT_ID, OWNER_ID);
+        verify(commandUseCase).markNoShow(RESERVATION_ID, RESTAURANT_ID, STAFF_ID);
+    }
+
+    @Test
+    void noShowRequiresCsrfAndOwnerOrStaffRole() throws Exception {
+        mockMvc.perform(post("/api/owner/reservations/{id}/no-show", RESERVATION_ID)
+                        .session(login("owner")))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/owner/reservations/{id}/no-show", RESERVATION_ID)
+                        .with(csrf()))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(post("/api/owner/reservations/{id}/no-show", RESERVATION_ID)
+                        .with(csrf())
+                        .session(login("customer")))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void noShowFromAnotherRestaurantReturnsNotFound() throws Exception {
+        given(commandUseCase.markNoShow(RESERVATION_ID, RESTAURANT_ID, OWNER_ID))
+                .willThrow(new ReservationNotFoundException(RESERVATION_ID));
+
+        mockMvc.perform(post("/api/owner/reservations/{id}/no-show", RESERVATION_ID)
+                        .with(csrf())
+                        .session(login("owner")))
+                .andExpect(status().isNotFound());
+    }
+
     private MockHttpSession login(String userid) throws Exception {
         MvcResult result = mockMvc.perform(post("/api/auth/login")
                         .with(csrf())

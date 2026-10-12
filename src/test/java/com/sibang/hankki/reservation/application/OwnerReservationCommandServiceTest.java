@@ -24,6 +24,9 @@ import com.sibang.hankki.reservation.domain.model.ReservationStatus;
 import com.sibang.hankki.reservation.domain.model.VisitStatus;
 import com.sibang.hankki.restaurant.application.port.out.BookingSlotPort;
 import com.sibang.hankki.restaurant.application.port.out.BookingSlotData;
+import com.sibang.hankki.restaurant.application.port.out.BookingSettings;
+import com.sibang.hankki.restaurant.application.port.out.BookingSettingsPort;
+import com.sibang.hankki.restaurant.domain.model.ConfirmationMode;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -53,6 +56,8 @@ class OwnerReservationCommandServiceTest {
     private ReservationEventPersistencePort eventPort;
     @Mock
     private BookingSlotPort slotPort;
+    @Mock
+    private BookingSettingsPort settingsPort;
 
     private OwnerReservationCommandService service;
 
@@ -62,6 +67,7 @@ class OwnerReservationCommandServiceTest {
                 reservationPort,
                 eventPort,
                 slotPort,
+                settingsPort,
                 new ObjectMapper(),
                 Clock.fixed(NOW, ZoneOffset.UTC));
     }
@@ -473,6 +479,76 @@ class OwnerReservationCommandServiceTest {
         verifyNoInteractions(eventPort, slotPort);
     }
 
+    @Test
+    void marksEligibleReservationNoShowAndRecordsActorWithoutTouchingCapacity() {
+        Reservation expected = reservationAt(
+                ReservationStatus.CONFIRMED, VisitStatus.EXPECTED, NOW.minusSeconds(15 * 60L));
+        given(reservationPort.findByIdAndRestaurantIdForUpdate(RESERVATION_ID, RESTAURANT_ID))
+                .willReturn(Optional.of(expected));
+        given(settingsPort.findByRestaurantId(RESTAURANT_ID)).willReturn(Optional.of(settings(15)));
+        given(reservationPort.save(org.mockito.ArgumentMatchers.any())).willAnswer(invocation -> invocation.getArgument(0));
+
+        Reservation result = service.markNoShow(RESERVATION_ID, RESTAURANT_ID, ACTOR_ID);
+
+        assertThat(result.status()).isEqualTo(ReservationStatus.CONFIRMED);
+        assertThat(result.visitStatus()).isEqualTo(VisitStatus.NO_SHOW);
+        assertThat(result.checkedInAt()).isEqualTo(expected.checkedInAt());
+        assertThat(result.checkedInBy()).isEqualTo(expected.checkedInBy());
+        ArgumentCaptor<ReservationEvent> event = ArgumentCaptor.forClass(ReservationEvent.class);
+        verify(eventPort).append(event.capture());
+        assertThat(event.getValue().eventType()).isEqualTo(ReservationEventType.NO_SHOW);
+        assertThat(event.getValue().actorUserId()).isEqualTo(ACTOR_ID);
+        verifyNoInteractions(slotPort);
+    }
+
+    @Test
+    void noShowRejectsBeforeGraceAndWhenGraceIsNotConfigured() {
+        Reservation expected = reservationAt(
+                ReservationStatus.CONFIRMED, VisitStatus.EXPECTED, NOW.minusSeconds(14 * 60L));
+        given(reservationPort.findByIdAndRestaurantIdForUpdate(RESERVATION_ID, RESTAURANT_ID))
+                .willReturn(Optional.of(expected), Optional.of(expected));
+        given(settingsPort.findByRestaurantId(RESTAURANT_ID))
+                .willReturn(Optional.of(settings(15)), Optional.of(settings(null)));
+
+        assertThatThrownBy(() -> service.markNoShow(RESERVATION_ID, RESTAURANT_ID, ACTOR_ID))
+                .isInstanceOf(InvalidReservationStateException.class)
+                .hasMessageContaining("not yet eligible");
+        assertThatThrownBy(() -> service.markNoShow(RESERVATION_ID, RESTAURANT_ID, ACTOR_ID))
+                .isInstanceOf(InvalidReservationStateException.class)
+                .hasMessageContaining("not configured");
+
+        verify(reservationPort, never()).save(org.mockito.ArgumentMatchers.any());
+        verifyNoInteractions(slotPort, eventPort);
+    }
+
+    @Test
+    void noShowRejectsInvalidStateAndAnotherRestaurant() {
+        Reservation pending = reservationAt(ReservationStatus.PENDING, null, NOW.minusSeconds(3600));
+        given(reservationPort.findByIdAndRestaurantIdForUpdate(RESERVATION_ID, RESTAURANT_ID))
+                .willReturn(Optional.of(pending), Optional.empty());
+
+        assertThatThrownBy(() -> service.markNoShow(RESERVATION_ID, RESTAURANT_ID, ACTOR_ID))
+                .isInstanceOf(InvalidReservationStateException.class);
+        assertThatThrownBy(() -> service.markNoShow(RESERVATION_ID, RESTAURANT_ID, ACTOR_ID))
+                .isInstanceOf(ReservationNotFoundException.class);
+
+        verifyNoInteractions(settingsPort, slotPort, eventPort);
+        verify(reservationPort, never()).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void repeatedNoShowIsIdempotent() {
+        Reservation noShow = reservationAt(
+                ReservationStatus.CONFIRMED, VisitStatus.NO_SHOW, NOW.minusSeconds(3600));
+        given(reservationPort.findByIdAndRestaurantIdForUpdate(RESERVATION_ID, RESTAURANT_ID))
+                .willReturn(Optional.of(noShow));
+
+        assertThat(service.markNoShow(RESERVATION_ID, RESTAURANT_ID, ACTOR_ID)).isSameAs(noShow);
+
+        verifyNoInteractions(settingsPort, slotPort, eventPort);
+        verify(reservationPort, never()).save(org.mockito.ArgumentMatchers.any());
+    }
+
     private Reservation reservation(ReservationStatus status, VisitStatus visitStatus) {
         return reservation(status, visitStatus, null, null);
     }
@@ -484,6 +560,19 @@ class OwnerReservationCommandServiceTest {
 
     private Reservation reservation(
             ReservationStatus status, VisitStatus visitStatus, Instant checkedInAt, UUID checkedInBy) {
+        return reservationAt(status, visitStatus, Instant.parse("2026-10-10T11:30:00Z"), checkedInAt, checkedInBy);
+    }
+
+    private Reservation reservationAt(ReservationStatus status, VisitStatus visitStatus, Instant startsAt) {
+        return reservationAt(status, visitStatus, startsAt, null, null);
+    }
+
+    private Reservation reservationAt(
+            ReservationStatus status,
+            VisitStatus visitStatus,
+            Instant startsAt,
+            Instant checkedInAt,
+            UUID checkedInBy) {
         return new Reservation(
                 RESERVATION_ID,
                 "SHK-COMMAND-1",
@@ -495,8 +584,8 @@ class OwnerReservationCommandServiceTest {
                 "Minh Lam",
                 null,
                 "0900000000",
-                Instant.parse("2026-10-10T11:30:00Z"),
-                Instant.parse("2026-10-10T13:00:00Z"),
+                startsAt,
+                startsAt.plusSeconds(90 * 60L),
                 2,
                 status,
                 false,
@@ -510,5 +599,11 @@ class OwnerReservationCommandServiceTest {
                 0,
                 Instant.parse("2026-10-01T00:00:00Z"),
                 Instant.parse("2026-10-01T00:00:00Z"));
+    }
+
+    private BookingSettings settings(Integer noShowGraceMinutes) {
+        return new BookingSettings(
+                RESTAURANT_ID, 20, 60, 90, ConfirmationMode.HYBRID, 7,
+                30, 1, 10, 11, 120, noShowGraceMinutes);
     }
 }

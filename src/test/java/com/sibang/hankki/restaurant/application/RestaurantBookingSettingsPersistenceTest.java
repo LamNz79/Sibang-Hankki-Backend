@@ -50,6 +50,7 @@ class RestaurantBookingSettingsPersistenceTest {
 
         assertEquals(restaurantId, service.getByRestaurantId(restaurantId).restaurantId());
         assertEquals(ConfirmationMode.AUTO, service.getByRestaurantSlug("anan-saigon").confirmationMode());
+        assertEquals(15, service.getByRestaurantId(restaurantId).noShowGraceMinutes());
     }
 
     @Test

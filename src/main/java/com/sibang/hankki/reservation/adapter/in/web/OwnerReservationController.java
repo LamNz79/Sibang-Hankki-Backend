@@ -114,6 +114,12 @@ public class OwnerReservationController {
         return OwnerReservationResponse.from(commandUseCase.complete(id, user.restaurantId(), user.id()));
     }
 
+    @PostMapping("/{id}/no-show")
+    public OwnerReservationResponse markNoShow(
+            @PathVariable UUID id, @AuthenticationPrincipal SessionUser user) {
+        return OwnerReservationResponse.from(commandUseCase.markNoShow(id, user.restaurantId(), user.id()));
+    }
+
     public record DeclineReservationRequest(String reason) {
     }
 

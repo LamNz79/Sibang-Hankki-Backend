@@ -79,6 +79,14 @@ class OwnerReservationCommandPersistenceTest {
                     (id, restaurant_id, starts_at, ends_at, capacity_total, capacity_reserved)
                 values (?, ?, ?, ?, 4, 0)
                 """, slotId, restaurantId, Timestamp.from(STARTS_AT), Timestamp.from(ENDS_AT));
+        jdbcTemplate.update("""
+                insert into restaurant_booking_settings (
+                    restaurant_id, guest_capacity, booking_interval_minutes, dining_duration_minutes,
+                    checkout_hold_minutes, pending_expiry_minutes, confirmation_mode,
+                    booking_window_days, minimum_party_size, maximum_online_party_size,
+                    large_party_threshold, no_show_grace_minutes)
+                values (?, 20, 60, 90, 10, 30, 'AUTO', 30, 1, 10, 11, 15)
+                """, restaurantId);
     }
 
     @AfterEach
@@ -86,6 +94,7 @@ class OwnerReservationCommandPersistenceTest {
         jdbcTemplate.update("delete from reservation_events where reservation_id in (select id from reservations where restaurant_id = ?)", restaurantId);
         jdbcTemplate.update("delete from reservations where restaurant_id = ?", restaurantId);
         jdbcTemplate.update("delete from booking_slots where restaurant_id = ?", restaurantId);
+        jdbcTemplate.update("delete from restaurant_booking_settings where restaurant_id = ?", restaurantId);
         jdbcTemplate.update("delete from users where id = ?", actorId);
         jdbcTemplate.update("delete from restaurants where id = ?", restaurantId);
     }
@@ -244,6 +253,26 @@ class OwnerReservationCommandPersistenceTest {
                 () -> service.checkIn(seatedId, restaurantId, actorId));
         assertEquals(0, eventRepository.findByReservationIdOrderByCreatedAtAscIdAsc(pendingId).size());
         assertEquals(0, eventRepository.findByReservationIdOrderByCreatedAtAscIdAsc(seatedId).size());
+    }
+
+    @Test
+    void noShowPersistsOnceWithoutChangingCapacity() {
+        UUID reservationId = insertConfirmedReservation(VisitStatus.EXPECTED);
+        jdbcTemplate.update("update booking_slots set capacity_reserved = 2 where id = ?", slotId);
+
+        var noShow = service.markNoShow(reservationId, restaurantId, actorId);
+        var replay = service.markNoShow(reservationId, restaurantId, actorId);
+
+        assertEquals(ReservationStatus.CONFIRMED, noShow.status());
+        assertEquals(VisitStatus.NO_SHOW, noShow.visitStatus());
+        assertEquals(noShow.id(), replay.id());
+        assertEquals(2, slotRepository.findById(slotId).orElseThrow().getCapacityReserved());
+        assertEquals(VisitStatus.NO_SHOW,
+                reservationRepository.findById(reservationId).orElseThrow().getVisitStatus());
+        var events = eventRepository.findByReservationIdOrderByCreatedAtAscIdAsc(reservationId);
+        assertEquals(1, events.size());
+        assertEquals(ReservationEventType.NO_SHOW, events.get(0).getEventType());
+        assertEquals(actorId, events.get(0).getActorUserId());
     }
 
     @Test
