@@ -19,8 +19,10 @@ import com.sibang.hankki.reservation.domain.model.ReservationEventType;
 import com.sibang.hankki.reservation.domain.model.ReservationStatus;
 import com.sibang.hankki.reservation.domain.model.VisitStatus;
 import com.sibang.hankki.restaurant.application.port.out.BookingSlotPort;
+import com.sibang.hankki.restaurant.application.port.out.BookingSettingsPort;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -32,6 +34,7 @@ public class OwnerReservationCommandService implements OwnerReservationCommandUs
     private final ReservationPersistencePort reservationPersistencePort;
     private final ReservationEventPersistencePort eventPersistencePort;
     private final BookingSlotPort bookingSlotPort;
+    private final BookingSettingsPort bookingSettingsPort;
     private final ObjectMapper objectMapper;
     private final Clock clock;
 
@@ -39,11 +42,13 @@ public class OwnerReservationCommandService implements OwnerReservationCommandUs
             ReservationPersistencePort reservationPersistencePort,
             ReservationEventPersistencePort eventPersistencePort,
             BookingSlotPort bookingSlotPort,
+            BookingSettingsPort bookingSettingsPort,
             ObjectMapper objectMapper,
             Clock clock) {
         this.reservationPersistencePort = reservationPersistencePort;
         this.eventPersistencePort = eventPersistencePort;
         this.bookingSlotPort = bookingSlotPort;
+        this.bookingSettingsPort = bookingSettingsPort;
         this.objectMapper = objectMapper;
         this.clock = clock;
     }
@@ -304,6 +309,37 @@ public class OwnerReservationCommandService implements OwnerReservationCommandUs
     private void appendEvent(
             Reservation reservation, ReservationEventType type, UUID actorUserId, String metadata) {
         appendEvent(reservation, type, actorUserId, metadata, Instant.now(clock));
+    }
+
+    @Override
+    @Transactional
+    public Reservation markNoShow(UUID reservationId, UUID restaurantId, UUID actorUserId) {
+        Reservation reservation = lock(reservationId, restaurantId);
+        if (reservation.status() == ReservationStatus.CONFIRMED
+                && reservation.visitStatus() == VisitStatus.NO_SHOW) {
+            return reservation;
+        }
+        if (reservation.status() != ReservationStatus.CONFIRMED
+                || reservation.visitStatus() != VisitStatus.EXPECTED) {
+            throw new InvalidReservationStateException(
+                    "Reservation must be CONFIRMED and EXPECTED to mark no-show");
+        }
+
+        Integer graceMinutes = bookingSettingsPort.findByRestaurantId(restaurantId)
+                .map(settings -> settings.noShowGraceMinutes())
+                .orElse(null);
+        if (graceMinutes == null) {
+            throw new InvalidReservationStateException("No-show marking is not configured");
+        }
+        Instant eligibleAt = reservation.startsAt().plus(graceMinutes, ChronoUnit.MINUTES);
+        if (Instant.now(clock).isBefore(eligibleAt)) {
+            throw new InvalidReservationStateException("Reservation is not yet eligible to be marked no-show");
+        }
+
+        Reservation noShow = reservationPersistencePort.save(
+                transition(reservation, ReservationStatus.CONFIRMED, VisitStatus.NO_SHOW));
+        appendEvent(noShow, ReservationEventType.NO_SHOW, actorUserId, null);
+        return noShow;
     }
 
     private void appendEvent(

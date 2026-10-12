@@ -21,6 +21,8 @@ public interface OwnerReservationCommandUseCase {
 
     Reservation complete(UUID reservationId, UUID restaurantId, UUID actorUserId);
 
+    Reservation markNoShow(UUID reservationId, UUID restaurantId, UUID actorUserId);
+
     record OwnerWalkInCommand(
             String idempotencyKey,
             UUID restaurantId,

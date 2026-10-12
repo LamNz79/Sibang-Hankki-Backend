@@ -142,6 +142,10 @@ public class RestaurantBookingSettings {
         return customerCancellationCutoffMinutes;
     }
 
+    public Integer getNoShowGraceMinutes() {
+        return noShowGraceMinutes;
+    }
+
     public void updateOwnerSettings(
             int guestCapacity,
             int bookingIntervalMinutes,
