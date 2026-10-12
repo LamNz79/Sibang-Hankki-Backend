@@ -13,6 +13,8 @@ import com.sibang.hankki.auth.config.SecurityConfig;
 import com.sibang.hankki.reservation.application.exception.InvalidReservationRequestException;
 import com.sibang.hankki.reservation.application.exception.ReservationNotFoundException;
 import com.sibang.hankki.reservation.application.port.in.OwnerReservationCommandUseCase;
+import com.sibang.hankki.reservation.application.port.in.OwnerReservationCommandUseCase.OwnerWalkInCommand;
+import com.sibang.hankki.reservation.application.port.in.OwnerReservationCommandUseCase.OwnerWalkInResult;
 import com.sibang.hankki.reservation.application.port.in.OwnerReservationReadUseCase;
 import com.sibang.hankki.reservation.application.port.in.OwnerReservationReadUseCase.OwnerReservationPage;
 import com.sibang.hankki.reservation.application.port.in.OwnerReservationReadUseCase.OwnerReservationSummary;
@@ -207,6 +209,94 @@ class OwnerReservationControllerTest {
                 .andExpect(jsonPath("$.visitStatus").value("EXPECTED"));
 
         verify(commandUseCase).confirm(RESERVATION_ID, RESTAURANT_ID, OWNER_ID);
+    }
+
+    @Test
+    void ownerAndStaffCanCreateWalkInUsingOnlySessionScope() throws Exception {
+        Reservation arrived = reservation(ReservationStatus.CONFIRMED, VisitStatus.ARRIVED);
+        OwnerWalkInCommand ownerCommand = new OwnerWalkInCommand(
+                "owner-walk-in", RESTAURANT_ID, OWNER_ID, "Nguyen Van A", "0901234567", 4, "Window");
+        OwnerWalkInCommand staffCommand = new OwnerWalkInCommand(
+                "staff-walk-in", RESTAURANT_ID, STAFF_ID, "Nguyen Van A", "0901234567", 4, "Window");
+        given(commandUseCase.createWalkIn(ownerCommand)).willReturn(new OwnerWalkInResult(arrived, false));
+        given(commandUseCase.createWalkIn(staffCommand)).willReturn(new OwnerWalkInResult(arrived, false));
+
+        for (String userid : new String[] {"owner", "staff"}) {
+            mockMvc.perform(post("/api/owner/reservations/walk-ins")
+                            .with(csrf())
+                            .session(login(userid))
+                            .header("Idempotency-Key", userid + "-walk-in")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {
+                                      "customerName": "Nguyen Van A",
+                                      "customerPhone": "0901234567",
+                                      "partySize": 4,
+                                      "specialRequest": "Window"
+                                    }
+                                    """))
+                    .andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.status").value("CONFIRMED"))
+                    .andExpect(jsonPath("$.visitStatus").value("ARRIVED"));
+        }
+
+        verify(commandUseCase).createWalkIn(ownerCommand);
+        verify(commandUseCase).createWalkIn(staffCommand);
+    }
+
+    @Test
+    void walkInReplayReturnsOkAndConflictsExposeNoActiveSlotMessage() throws Exception {
+        OwnerWalkInCommand command = new OwnerWalkInCommand(
+                "walk-in", RESTAURANT_ID, OWNER_ID, "Guest", "0901234567", 2, null);
+        given(commandUseCase.createWalkIn(command))
+                .willReturn(new OwnerWalkInResult(
+                        reservation(ReservationStatus.CONFIRMED, VisitStatus.ARRIVED), true))
+                .willThrow(new com.sibang.hankki.reservation.application.exception.NoActiveBookingSlotException());
+        String body = "{\"customerName\":\"Guest\",\"customerPhone\":\"0901234567\",\"partySize\":2}";
+        MockHttpSession owner = login("owner");
+
+        mockMvc.perform(post("/api/owner/reservations/walk-ins")
+                        .with(csrf()).session(owner).header("Idempotency-Key", "walk-in")
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/owner/reservations/walk-ins")
+                        .with(csrf()).session(owner).header("Idempotency-Key", "walk-in")
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("No current service slot is available"));
+    }
+
+    @Test
+    void walkInBlocksAnonymousCustomerAndMissingCsrf() throws Exception {
+        String body = "{\"customerName\":\"Guest\",\"customerPhone\":\"0901234567\",\"partySize\":2}";
+        mockMvc.perform(post("/api/owner/reservations/walk-ins")
+                        .with(csrf()).header("Idempotency-Key", "anonymous")
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(post("/api/owner/reservations/walk-ins")
+                        .with(csrf()).session(login("customer")).header("Idempotency-Key", "customer")
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/owner/reservations/walk-ins")
+                        .session(login("owner")).header("Idempotency-Key", "owner")
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void invalidWalkInInputReturnsBadRequest() throws Exception {
+        given(commandUseCase.createWalkIn(org.mockito.ArgumentMatchers.any()))
+                .willThrow(new InvalidReservationRequestException("invalid walk-in"));
+        for (String body : new String[] {
+                "{\"customerName\":\"\",\"customerPhone\":\"0901234567\",\"partySize\":2}",
+                "{\"customerName\":\"Guest\",\"customerPhone\":\"\",\"partySize\":2}",
+                "{\"customerName\":\"Guest\",\"customerPhone\":\"0901234567\",\"partySize\":0}"
+        }) {
+            mockMvc.perform(post("/api/owner/reservations/walk-ins")
+                            .with(csrf()).session(login("owner")).header("Idempotency-Key", "invalid")
+                            .contentType(MediaType.APPLICATION_JSON).content(body))
+                    .andExpect(status().isBadRequest());
+        }
     }
 
     @Test

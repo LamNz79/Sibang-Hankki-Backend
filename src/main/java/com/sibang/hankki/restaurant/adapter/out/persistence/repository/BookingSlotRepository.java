@@ -21,6 +21,9 @@ public interface BookingSlotRepository extends JpaRepository<BookingSlot, UUID> 
 
     Optional<BookingSlot> findByRestaurantIdAndStartsAt(UUID restaurantId, Instant startsAt);
 
+    Optional<BookingSlot> findFirstByRestaurantIdAndStartsAtLessThanEqualAndEndsAtGreaterThanOrderByStartsAtDesc(
+            UUID restaurantId, Instant startsAt, Instant endsAt);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select slot from BookingSlot slot where slot.id = :slotId and slot.restaurantId = :restaurantId")
     Optional<BookingSlot> findByIdAndRestaurantIdForUpdate(

@@ -4,9 +4,13 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sibang.hankki.reservation.application.exception.InvalidReservationRequestException;
 import com.sibang.hankki.reservation.application.exception.InvalidReservationStateException;
+import com.sibang.hankki.reservation.application.exception.NoActiveBookingSlotException;
 import com.sibang.hankki.reservation.application.exception.ReservationCapacityUnavailableException;
+import com.sibang.hankki.reservation.application.exception.ReservationIdempotencyConflictException;
 import com.sibang.hankki.reservation.application.exception.ReservationNotFoundException;
 import com.sibang.hankki.reservation.application.port.in.OwnerReservationCommandUseCase;
+import com.sibang.hankki.reservation.application.port.in.OwnerReservationCommandUseCase.OwnerWalkInCommand;
+import com.sibang.hankki.reservation.application.port.in.OwnerReservationCommandUseCase.OwnerWalkInResult;
 import com.sibang.hankki.reservation.application.port.out.ReservationEventPersistencePort;
 import com.sibang.hankki.reservation.application.port.out.ReservationPersistencePort;
 import com.sibang.hankki.reservation.domain.model.Reservation;
@@ -42,6 +46,73 @@ public class OwnerReservationCommandService implements OwnerReservationCommandUs
         this.bookingSlotPort = bookingSlotPort;
         this.objectMapper = objectMapper;
         this.clock = clock;
+    }
+
+    @Override
+    @Transactional
+    public OwnerWalkInResult createWalkIn(OwnerWalkInCommand command) {
+        String customerName = required(command.customerName(), "customerName", 120);
+        String customerPhone = required(command.customerPhone(), "customerPhone", 30);
+        String specialRequest = optional(command.specialRequest());
+        if (command.idempotencyKey() == null || command.idempotencyKey().isBlank()
+                || command.idempotencyKey().length() > 255) {
+            throw new InvalidReservationRequestException(
+                    "Idempotency-Key is required and must be at most 255 characters");
+        }
+        if (command.partySize() <= 0) {
+            throw new InvalidReservationRequestException("partySize must be positive");
+        }
+
+        String fingerprint = walkInFingerprint(
+                command.restaurantId(), customerName, customerPhone, command.partySize(), specialRequest);
+        reservationPersistencePort.lockIdempotencyKey(command.idempotencyKey());
+        Reservation previous = reservationPersistencePort
+                .findByIdempotencyKey(command.idempotencyKey()).orElse(null);
+        if (previous != null) {
+            if (!previous.restaurantId().equals(command.restaurantId())
+                    || !previous.requestFingerprint().equals(fingerprint)) {
+                throw new ReservationIdempotencyConflictException();
+            }
+            return new OwnerWalkInResult(previous, true);
+        }
+
+        Instant now = Instant.now(clock);
+        var slot = bookingSlotPort.findLatestActive(command.restaurantId(), now)
+                .orElseThrow(NoActiveBookingSlotException::new);
+        if (!bookingSlotPort.reserveCapacity(slot.id(), command.partySize())) {
+            throw new ReservationCapacityUnavailableException();
+        }
+
+        Reservation walkIn = reservationPersistencePort.save(new Reservation(
+                UUID.randomUUID(),
+                CreateReservationService.newReference(),
+                command.idempotencyKey(),
+                fingerprint,
+                command.restaurantId(),
+                slot.id(),
+                null,
+                customerName,
+                null,
+                customerPhone,
+                slot.startsAt(),
+                slot.endsAt(),
+                command.partySize(),
+                ReservationStatus.CONFIRMED,
+                false,
+                VisitStatus.ARRIVED,
+                specialRequest,
+                null,
+                null,
+                null,
+                now,
+                command.actorUserId(),
+                0,
+                now,
+                now));
+        appendEvent(walkIn, ReservationEventType.REQUESTED, command.actorUserId(), null, now);
+        appendEvent(walkIn, ReservationEventType.CONFIRMED, command.actorUserId(), null, now.plusNanos(1_000));
+        appendEvent(walkIn, ReservationEventType.CHECKED_IN, command.actorUserId(), null, now.plusNanos(2_000));
+        return new OwnerWalkInResult(walkIn, false);
     }
 
     @Override
@@ -232,6 +303,15 @@ public class OwnerReservationCommandService implements OwnerReservationCommandUs
 
     private void appendEvent(
             Reservation reservation, ReservationEventType type, UUID actorUserId, String metadata) {
+        appendEvent(reservation, type, actorUserId, metadata, Instant.now(clock));
+    }
+
+    private void appendEvent(
+            Reservation reservation,
+            ReservationEventType type,
+            UUID actorUserId,
+            String metadata,
+            Instant createdAt) {
         eventPersistencePort.append(new ReservationEvent(
                 UUID.randomUUID(),
                 reservation.id(),
@@ -240,7 +320,32 @@ public class OwnerReservationCommandService implements OwnerReservationCommandUs
                 "owner-" + type.name().toLowerCase() + ":" + reservation.id(),
                 null,
                 metadata,
-                Instant.now(clock)));
+                createdAt));
+    }
+
+    private String required(String value, String field, int maxLength) {
+        if (value == null || value.isBlank()) {
+            throw new InvalidReservationRequestException(field + " is required");
+        }
+        String normalized = value.strip();
+        if (normalized.length() > maxLength) {
+            throw new InvalidReservationRequestException(field + " must not exceed " + maxLength + " characters");
+        }
+        return normalized;
+    }
+
+    private String optional(String value) {
+        return value == null || value.isBlank() ? null : value.strip();
+    }
+
+    private String walkInFingerprint(
+            UUID restaurantId, String customerName, String customerPhone, int partySize, String specialRequest) {
+        return ReservationToken.hash("walk-in" + value(restaurantId.toString()) + value(customerName)
+                + value(customerPhone) + partySize + value(specialRequest));
+    }
+
+    private String value(String value) {
+        return value == null ? "-1:" : value.length() + ":" + value;
     }
 
     private String reasonMetadata(String reason) {

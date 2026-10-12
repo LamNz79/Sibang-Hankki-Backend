@@ -10,8 +10,11 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sibang.hankki.reservation.application.exception.InvalidReservationRequestException;
 import com.sibang.hankki.reservation.application.exception.InvalidReservationStateException;
+import com.sibang.hankki.reservation.application.exception.NoActiveBookingSlotException;
 import com.sibang.hankki.reservation.application.exception.ReservationCapacityUnavailableException;
+import com.sibang.hankki.reservation.application.exception.ReservationIdempotencyConflictException;
 import com.sibang.hankki.reservation.application.exception.ReservationNotFoundException;
+import com.sibang.hankki.reservation.application.port.in.OwnerReservationCommandUseCase.OwnerWalkInCommand;
 import com.sibang.hankki.reservation.application.port.out.ReservationEventPersistencePort;
 import com.sibang.hankki.reservation.application.port.out.ReservationPersistencePort;
 import com.sibang.hankki.reservation.domain.model.Reservation;
@@ -20,11 +23,13 @@ import com.sibang.hankki.reservation.domain.model.ReservationEventType;
 import com.sibang.hankki.reservation.domain.model.ReservationStatus;
 import com.sibang.hankki.reservation.domain.model.VisitStatus;
 import com.sibang.hankki.restaurant.application.port.out.BookingSlotPort;
+import com.sibang.hankki.restaurant.application.port.out.BookingSlotData;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -59,6 +64,111 @@ class OwnerReservationCommandServiceTest {
                 slotPort,
                 new ObjectMapper(),
                 Clock.fixed(NOW, ZoneOffset.UTC));
+    }
+
+    @Test
+    void createsCapacitySafeWalkInAndReplaysWithoutDuplicates() {
+        String idempotencyKey = "walk-in-1";
+        OwnerWalkInCommand command = new OwnerWalkInCommand(
+                idempotencyKey, RESTAURANT_ID, ACTOR_ID, "  Nguyen Van A  ", " 0901234567 ", 4, " Window ");
+        BookingSlotData slot = new BookingSlotData(
+                SLOT_ID, RESTAURANT_ID, NOW.minusSeconds(900), NOW.plusSeconds(2700));
+        AtomicReference<Reservation> persisted = new AtomicReference<>();
+        given(reservationPort.findByIdempotencyKey(idempotencyKey))
+                .willAnswer(invocation -> Optional.ofNullable(persisted.get()));
+        given(slotPort.findLatestActive(RESTAURANT_ID, NOW)).willReturn(Optional.of(slot));
+        given(slotPort.reserveCapacity(SLOT_ID, 4)).willReturn(true);
+        given(reservationPort.save(org.mockito.ArgumentMatchers.any())).willAnswer(invocation -> {
+            Reservation reservation = invocation.getArgument(0);
+            persisted.set(reservation);
+            return reservation;
+        });
+
+        var created = service.createWalkIn(command);
+        var replay = service.createWalkIn(command);
+
+        assertThat(created.idempotentReplay()).isFalse();
+        assertThat(replay.idempotentReplay()).isTrue();
+        assertThat(replay.reservation().id()).isEqualTo(created.reservation().id());
+        Reservation reservation = created.reservation();
+        assertThat(reservation.restaurantId()).isEqualTo(RESTAURANT_ID);
+        assertThat(reservation.bookingSlotId()).isEqualTo(SLOT_ID);
+        assertThat(reservation.startsAt()).isEqualTo(slot.startsAt());
+        assertThat(reservation.endsAt()).isEqualTo(slot.endsAt());
+        assertThat(reservation.customerName()).isEqualTo("Nguyen Van A");
+        assertThat(reservation.customerPhone()).isEqualTo("0901234567");
+        assertThat(reservation.partySize()).isEqualTo(4);
+        assertThat(reservation.status()).isEqualTo(ReservationStatus.CONFIRMED);
+        assertThat(reservation.visitStatus()).isEqualTo(VisitStatus.ARRIVED);
+        assertThat(reservation.checkedInAt()).isEqualTo(NOW);
+        assertThat(reservation.checkedInBy()).isEqualTo(ACTOR_ID);
+        verify(slotPort).reserveCapacity(SLOT_ID, 4);
+        verify(reservationPort).save(org.mockito.ArgumentMatchers.any());
+        ArgumentCaptor<ReservationEvent> events = ArgumentCaptor.forClass(ReservationEvent.class);
+        verify(eventPort, org.mockito.Mockito.times(3)).append(events.capture());
+        assertThat(events.getAllValues()).extracting(ReservationEvent::eventType)
+                .containsExactly(
+                        ReservationEventType.REQUESTED,
+                        ReservationEventType.CONFIRMED,
+                        ReservationEventType.CHECKED_IN);
+        assertThat(events.getAllValues()).extracting(ReservationEvent::actorUserId)
+                .containsOnly(ACTOR_ID);
+        assertThat(events.getAllValues()).extracting(ReservationEvent::createdAt)
+                .containsExactly(NOW, NOW.plusNanos(1_000), NOW.plusNanos(2_000));
+    }
+
+    @Test
+    void walkInRejectsMissingSlotAndInsufficientCapacityWithoutSaving() {
+        OwnerWalkInCommand command = walkInCommand("walk-in-unavailable", RESTAURANT_ID);
+        given(reservationPort.findByIdempotencyKey(command.idempotencyKey())).willReturn(Optional.empty());
+        given(slotPort.findLatestActive(RESTAURANT_ID, NOW))
+                .willReturn(Optional.empty(), Optional.of(new BookingSlotData(
+                        SLOT_ID, RESTAURANT_ID, NOW.minusSeconds(60), NOW.plusSeconds(60))));
+        given(slotPort.reserveCapacity(SLOT_ID, 4)).willReturn(false);
+
+        assertThatThrownBy(() -> service.createWalkIn(command))
+                .isInstanceOf(NoActiveBookingSlotException.class);
+        assertThatThrownBy(() -> service.createWalkIn(command))
+                .isInstanceOf(ReservationCapacityUnavailableException.class);
+
+        verify(reservationPort, never()).save(org.mockito.ArgumentMatchers.any());
+        verifyNoInteractions(eventPort);
+    }
+
+    @Test
+    void walkInIdempotencyNeverReturnsAnotherRestaurantsReservation() {
+        OwnerWalkInCommand command = walkInCommand("shared-key", RESTAURANT_ID);
+        Reservation otherRestaurantReservation = new Reservation(
+                RESERVATION_ID, "SHK-OTHER", "shared-key", "a".repeat(64), UUID.randomUUID(), SLOT_ID,
+                null, "Guest", null, "0901234567", NOW.minusSeconds(60), NOW.plusSeconds(60), 4,
+                ReservationStatus.CONFIRMED, false, VisitStatus.ARRIVED, null, null, null, null,
+                NOW, ACTOR_ID, 0, NOW, NOW);
+        given(reservationPort.findByIdempotencyKey("shared-key"))
+                .willReturn(Optional.of(otherRestaurantReservation));
+
+        assertThatThrownBy(() -> service.createWalkIn(command))
+                .isInstanceOf(ReservationIdempotencyConflictException.class);
+
+        verifyNoInteractions(slotPort, eventPort);
+        verify(reservationPort, never()).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void walkInValidatesRequiredInputBeforePersistence() {
+        assertThatThrownBy(() -> service.createWalkIn(new OwnerWalkInCommand(
+                "key", RESTAURANT_ID, ACTOR_ID, " ", "0901234567", 4, null)))
+                .isInstanceOf(InvalidReservationRequestException.class);
+        assertThatThrownBy(() -> service.createWalkIn(new OwnerWalkInCommand(
+                "key", RESTAURANT_ID, ACTOR_ID, "Guest", " ", 4, null)))
+                .isInstanceOf(InvalidReservationRequestException.class);
+        assertThatThrownBy(() -> service.createWalkIn(new OwnerWalkInCommand(
+                "key", RESTAURANT_ID, ACTOR_ID, "Guest", "0901234567", 0, null)))
+                .isInstanceOf(InvalidReservationRequestException.class);
+        assertThatThrownBy(() -> service.createWalkIn(new OwnerWalkInCommand(
+                " ", RESTAURANT_ID, ACTOR_ID, "Guest", "0901234567", 4, null)))
+                .isInstanceOf(InvalidReservationRequestException.class);
+
+        verifyNoInteractions(reservationPort, slotPort, eventPort);
     }
 
     @Test
@@ -365,6 +475,11 @@ class OwnerReservationCommandServiceTest {
 
     private Reservation reservation(ReservationStatus status, VisitStatus visitStatus) {
         return reservation(status, visitStatus, null, null);
+    }
+
+    private OwnerWalkInCommand walkInCommand(String idempotencyKey, UUID restaurantId) {
+        return new OwnerWalkInCommand(
+                idempotencyKey, restaurantId, ACTOR_ID, "Guest", "0901234567", 4, null);
     }
 
     private Reservation reservation(

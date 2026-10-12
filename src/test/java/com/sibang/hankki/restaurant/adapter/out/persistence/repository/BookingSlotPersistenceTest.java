@@ -61,6 +61,22 @@ class BookingSlotPersistenceTest {
     }
 
     @Test
+    void findsLatestActiveSlotAtAnInstant() {
+        Instant now = testStart.plusSeconds(1500);
+        BookingSlot earlier = repository.saveAndFlush(slot(testStart, 20, 0));
+        BookingSlot latest = repository.saveAndFlush(slot(testStart.plusSeconds(600), 20, 0));
+        repository.saveAndFlush(slot(testStart.plusSeconds(1600), 20, 0));
+
+        BookingSlot found = repository
+                .findFirstByRestaurantIdAndStartsAtLessThanEqualAndEndsAtGreaterThanOrderByStartsAtDesc(
+                        restaurantId, now, now)
+                .orElseThrow();
+
+        assertEquals(latest.getId(), found.getId());
+        org.junit.jupiter.api.Assertions.assertNotEquals(earlier.getId(), found.getId());
+    }
+
+    @Test
     void rejectsEndAtOrBeforeStartAt() {
         assertThrows(DataIntegrityViolationException.class,
                 () -> repository.saveAndFlush(new BookingSlot(

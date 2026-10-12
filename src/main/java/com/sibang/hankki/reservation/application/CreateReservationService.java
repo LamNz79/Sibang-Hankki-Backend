@@ -130,7 +130,7 @@ public class CreateReservationService implements CreateReservationUseCase {
         String managementToken = customerId == null ? ReservationToken.generate() : null;
         Reservation reservation = new Reservation(
                 UUID.randomUUID(),
-                "SHK-" + UUID.randomUUID().toString().replace("-", "").substring(0, 28).toUpperCase(),
+                newReference(),
                 command.idempotencyKey(),
                 fingerprint,
                 restaurant.id(),
@@ -250,5 +250,9 @@ public class CreateReservationService implements CreateReservationUseCase {
 
     private boolean isBlank(String value) {
         return value == null || value.isBlank();
+    }
+
+    static String newReference() {
+        return "SHK-" + UUID.randomUUID().toString().replace("-", "").substring(0, 28).toUpperCase();
     }
 }

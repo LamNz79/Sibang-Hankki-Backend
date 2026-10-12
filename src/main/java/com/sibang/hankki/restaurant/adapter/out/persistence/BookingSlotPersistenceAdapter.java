@@ -34,8 +34,15 @@ public class BookingSlotPersistenceAdapter implements BookingSlotPort {
     @Override
     public Optional<BookingSlotData> findByRestaurantIdAndStartsAt(UUID restaurantId, Instant startsAt) {
         return repository.findByRestaurantIdAndStartsAt(restaurantId, startsAt)
-                .map(slot -> new BookingSlotData(
-                        slot.getId(), slot.getRestaurantId(), slot.getStartsAt(), slot.getEndsAt()));
+                .map(this::toData);
+    }
+
+    @Override
+    public Optional<BookingSlotData> findLatestActive(UUID restaurantId, Instant now) {
+        return repository
+                .findFirstByRestaurantIdAndStartsAtLessThanEqualAndEndsAtGreaterThanOrderByStartsAtDesc(
+                        restaurantId, now, now)
+                .map(this::toData);
     }
 
     @Override
@@ -64,5 +71,9 @@ public class BookingSlotPersistenceAdapter implements BookingSlotPort {
     @Override
     public int deleteUnreferencedSlots(UUID restaurantId, Instant startsAt, Instant endsAt) {
         return repository.deleteUnreferencedSlots(restaurantId, startsAt, endsAt);
+    }
+
+    private BookingSlotData toData(BookingSlot slot) {
+        return new BookingSlotData(slot.getId(), slot.getRestaurantId(), slot.getStartsAt(), slot.getEndsAt());
     }
 }

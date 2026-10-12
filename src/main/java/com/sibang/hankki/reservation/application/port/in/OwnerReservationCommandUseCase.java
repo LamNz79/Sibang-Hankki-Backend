@@ -5,6 +5,8 @@ import java.util.UUID;
 
 public interface OwnerReservationCommandUseCase {
 
+    OwnerWalkInResult createWalkIn(OwnerWalkInCommand command);
+
     Reservation confirm(UUID reservationId, UUID restaurantId, UUID actorUserId);
 
     Reservation decline(UUID reservationId, UUID restaurantId, UUID actorUserId, String reason);
@@ -18,4 +20,17 @@ public interface OwnerReservationCommandUseCase {
     Reservation seat(UUID reservationId, UUID restaurantId, UUID actorUserId);
 
     Reservation complete(UUID reservationId, UUID restaurantId, UUID actorUserId);
+
+    record OwnerWalkInCommand(
+            String idempotencyKey,
+            UUID restaurantId,
+            UUID actorUserId,
+            String customerName,
+            String customerPhone,
+            int partySize,
+            String specialRequest) {
+    }
+
+    record OwnerWalkInResult(Reservation reservation, boolean idempotentReplay) {
+    }
 }
