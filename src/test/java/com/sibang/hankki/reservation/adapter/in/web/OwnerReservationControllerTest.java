@@ -18,7 +18,11 @@ import com.sibang.hankki.reservation.application.port.in.OwnerReservationCommand
 import com.sibang.hankki.reservation.application.port.in.OwnerReservationReadUseCase;
 import com.sibang.hankki.reservation.application.port.in.OwnerReservationReadUseCase.OwnerReservationPage;
 import com.sibang.hankki.reservation.application.port.in.OwnerReservationReadUseCase.OwnerReservationSummary;
+import com.sibang.hankki.reservation.application.port.in.ReservationProposalUseCase;
+import com.sibang.hankki.reservation.application.port.in.ReservationProposalUseCase.ProposalResult;
 import com.sibang.hankki.reservation.domain.model.Reservation;
+import com.sibang.hankki.reservation.domain.model.ReservationProposal;
+import com.sibang.hankki.reservation.domain.model.ReservationProposalStatus;
 import com.sibang.hankki.reservation.domain.model.ReservationStatus;
 import com.sibang.hankki.reservation.domain.model.VisitStatus;
 import com.sibang.hankki.user.adapter.out.persistence.entity.UserEntity;
@@ -61,6 +65,9 @@ class OwnerReservationControllerTest {
 
     @MockitoBean
     private OwnerReservationCommandUseCase commandUseCase;
+
+    @MockitoBean
+    private ReservationProposalUseCase proposalUseCase;
 
     @MockitoBean
     private UserAuthenticationRepository userRepository;
@@ -575,6 +582,27 @@ class OwnerReservationControllerTest {
                 .andExpect(status().isNotFound());
     }
 
+    @Test
+    void ownerCreatesProposalWithCsrfAndResponseIncludesProposal() throws Exception {
+        Reservation alternative = reservation(ReservationStatus.ALTERNATIVE_PROPOSED, null);
+        ReservationProposal proposal = proposal();
+        given(proposalUseCase.create(org.mockito.ArgumentMatchers.any()))
+                .willReturn(new ProposalResult(alternative, proposal));
+
+        mockMvc.perform(post("/api/owner/reservations/{id}/proposals", RESERVATION_ID)
+                        .with(csrf())
+                        .session(login("owner"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"proposedDate":"2026-10-14","proposedTime":"18:00",
+                                 "message":"Later table","respondBy":"2026-10-14T10:00:00Z"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ALTERNATIVE_PROPOSED"))
+                .andExpect(jsonPath("$.alternativeProposal.id").value(proposal.id().toString()))
+                .andExpect(jsonPath("$.alternativeProposal.status").value("PENDING"));
+    }
+
     private MockHttpSession login(String userid) throws Exception {
         MvcResult result = mockMvc.perform(post("/api/auth/login")
                         .with(csrf())
@@ -627,5 +655,13 @@ class OwnerReservationControllerTest {
                 3,
                 Instant.parse("2026-10-01T00:00:00Z"),
                 Instant.parse("2026-10-02T00:00:00Z"));
+    }
+
+    private ReservationProposal proposal() {
+        return new ReservationProposal(
+                UUID.randomUUID(), RESERVATION_ID, UUID.randomUUID(),
+                Instant.parse("2026-10-14T11:00:00Z"), 2, 4, "Later table",
+                Instant.parse("2026-10-14T10:00:00Z"), ReservationProposalStatus.PENDING,
+                OWNER_ID, Instant.parse("2026-10-13T02:00:00Z"), null, null);
     }
 }

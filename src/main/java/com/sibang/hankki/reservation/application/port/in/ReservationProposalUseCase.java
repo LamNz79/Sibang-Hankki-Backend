@@ -1,0 +1,34 @@
+package com.sibang.hankki.reservation.application.port.in;
+
+import com.sibang.hankki.reservation.domain.model.Reservation;
+import com.sibang.hankki.reservation.domain.model.ReservationProposal;
+import java.util.Optional;
+import java.util.UUID;
+
+public interface ReservationProposalUseCase {
+
+    ProposalResult create(OwnerProposalCommand command);
+
+    ProposalResult acceptForAccount(UUID reservationId, UUID proposalId, UUID customerId);
+
+    ProposalResult declineForAccount(UUID reservationId, UUID proposalId, UUID customerId);
+
+    ProposalResult acceptForGuest(UUID reservationId, UUID proposalId, String managementToken);
+
+    ProposalResult declineForGuest(UUID reservationId, UUID proposalId, String managementToken);
+
+    Optional<ReservationProposal> findLatest(UUID reservationId);
+
+    record OwnerProposalCommand(
+            UUID reservationId,
+            UUID restaurantId,
+            UUID actorUserId,
+            String proposedDate,
+            String proposedTime,
+            String message,
+            String respondBy) {
+    }
+
+    record ProposalResult(Reservation reservation, ReservationProposal proposal) {
+    }
+}

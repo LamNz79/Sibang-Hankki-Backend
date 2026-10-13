@@ -38,6 +38,11 @@ public class BookingSlotPersistenceAdapter implements BookingSlotPort {
     }
 
     @Override
+    public boolean hasAvailableCapacity(UUID slotId, int partySize) {
+        return repository.hasAvailableCapacity(slotId, partySize);
+    }
+
+    @Override
     public Optional<BookingSlotData> findLatestActive(UUID restaurantId, Instant now) {
         return repository
                 .findFirstByRestaurantIdAndStartsAtLessThanEqualAndEndsAtGreaterThanOrderByStartsAtDesc(

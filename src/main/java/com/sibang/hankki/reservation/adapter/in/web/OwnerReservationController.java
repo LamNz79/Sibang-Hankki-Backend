@@ -4,6 +4,8 @@ import com.sibang.hankki.auth.SessionUser;
 import com.sibang.hankki.reservation.application.port.in.OwnerReservationCommandUseCase;
 import com.sibang.hankki.reservation.application.port.in.OwnerReservationCommandUseCase.OwnerWalkInCommand;
 import com.sibang.hankki.reservation.application.port.in.OwnerReservationReadUseCase;
+import com.sibang.hankki.reservation.application.port.in.ReservationProposalUseCase;
+import com.sibang.hankki.reservation.application.port.in.ReservationProposalUseCase.OwnerProposalCommand;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
@@ -24,11 +26,15 @@ public class OwnerReservationController {
 
     private final OwnerReservationReadUseCase readUseCase;
     private final OwnerReservationCommandUseCase commandUseCase;
+    private final ReservationProposalUseCase proposalUseCase;
 
     public OwnerReservationController(
-            OwnerReservationReadUseCase readUseCase, OwnerReservationCommandUseCase commandUseCase) {
+            OwnerReservationReadUseCase readUseCase,
+            OwnerReservationCommandUseCase commandUseCase,
+            ReservationProposalUseCase proposalUseCase) {
         this.readUseCase = readUseCase;
         this.commandUseCase = commandUseCase;
+        this.proposalUseCase = proposalUseCase;
     }
 
     @GetMapping
@@ -69,7 +75,20 @@ public class OwnerReservationController {
     @GetMapping("/{id}")
     public OwnerReservationResponse findById(
             @PathVariable UUID id, @AuthenticationPrincipal SessionUser user) {
-        return OwnerReservationResponse.from(readUseCase.findById(id, user.restaurantId()));
+        var reservation = readUseCase.findById(id, user.restaurantId());
+        return OwnerReservationResponse.from(
+                reservation, proposalUseCase.findLatest(reservation.id()).orElse(null));
+    }
+
+    @PostMapping("/{id}/proposals")
+    public OwnerReservationResponse proposeAlternative(
+            @PathVariable UUID id,
+            @RequestBody AlternativeProposalRequest request,
+            @AuthenticationPrincipal SessionUser user) {
+        var result = proposalUseCase.create(new OwnerProposalCommand(
+                id, user.restaurantId(), user.id(), request.proposedDate(), request.proposedTime(),
+                request.message(), request.respondBy()));
+        return OwnerReservationResponse.from(result.reservation(), result.proposal());
     }
 
     @PostMapping("/{id}/confirm")
@@ -131,6 +150,13 @@ public class OwnerReservationController {
             String customerPhone,
             int partySize,
             String specialRequest) {
+    }
+
+    public record AlternativeProposalRequest(
+            String proposedDate,
+            String proposedTime,
+            String message,
+            String respondBy) {
     }
 
 }
