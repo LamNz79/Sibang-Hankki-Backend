@@ -23,6 +23,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.annotation.Transactional;
 
 @SpringBootTest
 @Import(ReservationProposalPersistenceTest.FixedClockConfiguration.class)
@@ -131,6 +132,7 @@ class ReservationProposalPersistenceTest {
     }
 
     @Test
+    @Transactional
     void slotRegenerationKeepsSlotsReferencedByReservationsAndProposals() {
         createProposal();
 
