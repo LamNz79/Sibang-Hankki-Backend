@@ -49,6 +49,9 @@ public class OwnerSettingsService implements OwnerSettingsUseCase {
                 && update.customerCancellationCutoffMinutes() < 0) {
             throw new InvalidBookingRequestException("customerCancellationCutoffMinutes must not be negative");
         }
+        if (update.noShowGraceMinutes() != null && update.noShowGraceMinutes() < 0) {
+            throw new InvalidBookingRequestException("noShowGraceMinutes must not be negative");
+        }
         validateSmallint(update.bookingIntervalMinutes(), "bookingIntervalMinutes");
         validateSmallint(update.diningDurationMinutes(), "diningDurationMinutes");
         validateSmallint(update.bookingWindowDays(), "bookingWindowDays");
@@ -76,7 +79,7 @@ public class OwnerSettingsService implements OwnerSettingsUseCase {
                 update.guestCapacity(), update.bookingIntervalMinutes(), update.diningDurationMinutes(),
                 update.confirmationMode(), update.manualConfirmationMinPartySize(), update.bookingWindowDays(),
                 update.minimumPartySize(), update.maximumOnlinePartySize(), update.largePartyThreshold(),
-                update.customerCancellationCutoffMinutes());
+                update.customerCancellationCutoffMinutes(), update.noShowGraceMinutes());
     }
 
     private UUID requireRestaurantId(UUID restaurantId) {

@@ -54,14 +54,16 @@ public class OwnerSettingsController {
             int minimumPartySize,
             int maximumOnlinePartySize,
             int largePartyThreshold,
-            Integer customerCancellationCutoffMinutes) {
+            Integer customerCancellationCutoffMinutes,
+            Integer noShowGraceMinutes) {
 
         private OwnerSettingsUpdate toUpdate() {
             return new OwnerSettingsUpdate(
                     name, description, cuisineLabel, area, district, address, phone, email, priceRange,
                     guestCapacity, bookingIntervalMinutes, diningDurationMinutes, confirmationMode,
                     manualConfirmationMinPartySize, bookingWindowDays, minimumPartySize,
-                    maximumOnlinePartySize, largePartyThreshold, customerCancellationCutoffMinutes);
+                    maximumOnlinePartySize, largePartyThreshold, customerCancellationCutoffMinutes,
+                    noShowGraceMinutes);
         }
     }
 
@@ -88,7 +90,8 @@ public class OwnerSettingsController {
             int minimumPartySize,
             int maximumOnlinePartySize,
             int largePartyThreshold,
-            Integer customerCancellationCutoffMinutes) {
+            Integer customerCancellationCutoffMinutes,
+            Integer noShowGraceMinutes) {
 
         private static OwnerSettingsResponse from(OwnerSettings settings) {
             return new OwnerSettingsResponse(
@@ -99,7 +102,8 @@ public class OwnerSettingsController {
                     settings.diningDurationMinutes(), settings.confirmationMode(),
                     settings.manualConfirmationMinPartySize(), settings.bookingWindowDays(),
                     settings.minimumPartySize(), settings.maximumOnlinePartySize(),
-                    settings.largePartyThreshold(), settings.customerCancellationCutoffMinutes());
+                    settings.largePartyThreshold(), settings.customerCancellationCutoffMinutes(),
+                    settings.noShowGraceMinutes());
         }
     }
 }

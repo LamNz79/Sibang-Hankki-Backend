@@ -43,6 +43,7 @@ class OwnerSettingsServiceTest {
         assertThat(captured.getValue().name()).isEqualTo("The Royal Pavilion");
         assertThat(captured.getValue().description()).isNull();
         assertThat(captured.getValue().manualConfirmationMinPartySize()).isEqualTo(6);
+        assertThat(captured.getValue().noShowGraceMinutes()).isEqualTo(15);
     }
 
     @Test
@@ -59,7 +60,7 @@ class OwnerSettingsServiceTest {
         OwnerSettingsUpdate update = new OwnerSettingsUpdate(
                 "Restaurant", null, null, null, null, null, null, null, null,
                 40, Short.MAX_VALUE + 1, 90, ConfirmationMode.AUTO, null,
-                30, 1, 6, 10, 120);
+                30, 1, 6, 10, 120, 15);
 
         assertThatThrownBy(() -> service.update(RESTAURANT_ID, update))
                 .isInstanceOf(InvalidBookingRequestException.class);
@@ -67,10 +68,40 @@ class OwnerSettingsServiceTest {
                 org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
     }
 
+    @Test
+    void acceptsZeroAndRejectsNegativeNoShowGraceMinutes() {
+        OwnerSettingsUpdate zero = update(ConfirmationMode.AUTO, null, 0);
+
+        service.update(RESTAURANT_ID, zero);
+
+        verify(port).update(
+                org.mockito.ArgumentMatchers.eq(RESTAURANT_ID),
+                org.mockito.ArgumentMatchers.argThat(update -> update.noShowGraceMinutes() == 0));
+
+        assertThatThrownBy(() -> service.update(
+                RESTAURANT_ID, update(ConfirmationMode.AUTO, null, -1)))
+                .isInstanceOf(InvalidBookingRequestException.class)
+                .hasMessageContaining("noShowGraceMinutes");
+    }
+
+    @Test
+    void acceptsNullNoShowGraceMinutes() {
+        service.update(RESTAURANT_ID, update(ConfirmationMode.AUTO, null, null));
+
+        verify(port).update(
+                org.mockito.ArgumentMatchers.eq(RESTAURANT_ID),
+                org.mockito.ArgumentMatchers.argThat(update -> update.noShowGraceMinutes() == null));
+    }
+
     private OwnerSettingsUpdate update(ConfirmationMode mode, Integer manualThreshold) {
+        return update(mode, manualThreshold, 15);
+    }
+
+    private OwnerSettingsUpdate update(
+            ConfirmationMode mode, Integer manualThreshold, Integer noShowGraceMinutes) {
         return new OwnerSettingsUpdate(
                 "  The Royal Pavilion  ", "  ", " Chinese ", " District 1 ", " District 1 ",
                 " 123 Street ", " 0900000000 ", " owner@example.com ", " $$$ ",
-                48, 30, 90, mode, manualThreshold, 30, 1, 6, 10, 120);
+                48, 30, 90, mode, manualThreshold, 30, 1, 6, 10, 120, noShowGraceMinutes);
     }
 }

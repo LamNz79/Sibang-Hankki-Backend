@@ -3,6 +3,8 @@ import com.sibang.hankki.restaurant.adapter.out.persistence.entity.RestaurantBoo
 import com.sibang.hankki.restaurant.adapter.out.persistence.repository.RestaurantBookingSettingsRepository;
 import com.sibang.hankki.restaurant.application.exception.BookingSettingsNotConfiguredException;
 import com.sibang.hankki.restaurant.application.exception.RestaurantNotFoundException;
+import com.sibang.hankki.restaurant.application.model.OwnerSettingsUpdate;
+import com.sibang.hankki.restaurant.application.port.out.OwnerSettingsPort;
 import com.sibang.hankki.restaurant.domain.model.ConfirmationMode;
 
 import java.util.UUID;
@@ -31,6 +33,9 @@ class RestaurantBookingSettingsPersistenceTest {
 
     @Autowired
     private RestaurantBookingSettingsService service;
+
+    @Autowired
+    private OwnerSettingsPort ownerSettingsPort;
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -72,6 +77,26 @@ class RestaurantBookingSettingsPersistenceTest {
         repository.saveAndFlush(settings(ConfirmationMode.HYBRID, (short) 7));
 
         assertEquals((short) 7, repository.findById(restaurantId).orElseThrow().getManualConfirmationMinPartySize());
+    }
+
+    @Test
+    void ownerUpdatePersistsNoShowGraceWithoutOverwritingInternalSettings() {
+        repository.saveAndFlush(settings(ConfirmationMode.AUTO, null));
+
+        ownerSettingsPort.update(restaurantId, new OwnerSettingsUpdate(
+                "Anan Saigon", null, null, null, null, null, null, null, null,
+                20, 15, 90, ConfirmationMode.AUTO, null, 30, 1, 6, 7, 120, 0));
+        repository.flush();
+
+        RestaurantBookingSettings updated = repository.findById(restaurantId).orElseThrow();
+        assertEquals(0, updated.getNoShowGraceMinutes());
+        assertEquals(10, jdbcTemplate.queryForObject(
+                "select checkout_hold_minutes from restaurant_booking_settings where restaurant_id = ?",
+                Integer.class, restaurantId));
+        assertEquals(30, jdbcTemplate.queryForObject(
+                "select pending_expiry_minutes from restaurant_booking_settings where restaurant_id = ?",
+                Integer.class, restaurantId));
+        assertEquals(120, updated.getCustomerCancellationCutoffMinutes());
     }
 
     @Test

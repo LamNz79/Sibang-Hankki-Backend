@@ -21,5 +21,6 @@ public record OwnerSettingsUpdate(
         int minimumPartySize,
         int maximumOnlinePartySize,
         int largePartyThreshold,
-        Integer customerCancellationCutoffMinutes) {
+        Integer customerCancellationCutoffMinutes,
+        Integer noShowGraceMinutes) {
 }

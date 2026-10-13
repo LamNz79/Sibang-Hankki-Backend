@@ -156,7 +156,8 @@ public class RestaurantBookingSettings {
             int minimumPartySize,
             int maximumOnlinePartySize,
             int largePartyThreshold,
-            Integer customerCancellationCutoffMinutes) {
+            Integer customerCancellationCutoffMinutes,
+            Integer noShowGraceMinutes) {
         this.guestCapacity = guestCapacity;
         this.bookingIntervalMinutes = (short) bookingIntervalMinutes;
         this.diningDurationMinutes = (short) diningDurationMinutes;
@@ -169,5 +170,6 @@ public class RestaurantBookingSettings {
         this.maximumOnlinePartySize = (short) maximumOnlinePartySize;
         this.largePartyThreshold = (short) largePartyThreshold;
         this.customerCancellationCutoffMinutes = customerCancellationCutoffMinutes;
+        this.noShowGraceMinutes = noShowGraceMinutes;
     }
 }
