@@ -129,4 +129,9 @@ public class UserEntity {
     public Instant getUpdatedAt() {
         return updatedAt;
     }
+
+    public void updateStatus(String status, Instant statusChangedAt) {
+        this.status = status;
+        this.statusChangedAt = statusChangedAt;
+    }
 }
