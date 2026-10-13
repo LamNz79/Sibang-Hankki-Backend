@@ -12,6 +12,8 @@ public interface BookingSlotPort {
 
     Optional<BookingSlotData> findByRestaurantIdAndStartsAt(UUID restaurantId, Instant startsAt);
 
+    boolean hasAvailableCapacity(UUID slotId, int partySize);
+
     Optional<BookingSlotData> findLatestActive(UUID restaurantId, Instant now);
 
     boolean reserveCapacity(UUID slotId, int partySize);

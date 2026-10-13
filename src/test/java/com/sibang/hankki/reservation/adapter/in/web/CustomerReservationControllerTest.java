@@ -10,7 +10,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.sibang.hankki.auth.config.SecurityConfig;
 import com.sibang.hankki.reservation.application.exception.ReservationNotFoundException;
 import com.sibang.hankki.reservation.application.port.in.CustomerReservationUseCase;
+import com.sibang.hankki.reservation.application.port.in.ReservationProposalUseCase;
+import com.sibang.hankki.reservation.application.port.in.ReservationProposalUseCase.ProposalResult;
 import com.sibang.hankki.reservation.domain.model.Reservation;
+import com.sibang.hankki.reservation.domain.model.ReservationProposal;
+import com.sibang.hankki.reservation.domain.model.ReservationProposalStatus;
 import com.sibang.hankki.reservation.domain.model.ReservationStatus;
 import com.sibang.hankki.reservation.domain.model.VisitStatus;
 import java.time.Instant;
@@ -34,6 +38,9 @@ class CustomerReservationControllerTest {
 
     @MockitoBean
     private CustomerReservationUseCase useCase;
+
+    @MockitoBean
+    private ReservationProposalUseCase proposalUseCase;
 
     @Test
     void readsCurrentStatusWithHeaderToken() throws Exception {
@@ -81,6 +88,23 @@ class CustomerReservationControllerTest {
                 .andExpect(jsonPath("$.checkInTokenHash").doesNotExist());
 
         verify(useCase).issueCheckInToken(RESERVATION_ID, TOKEN);
+    }
+
+    @Test
+    void guestAcceptsProposalWithManagementTokenAndWithoutCsrf() throws Exception {
+        Reservation confirmed = reservation(ReservationStatus.CONFIRMED, VisitStatus.EXPECTED);
+        ReservationProposal proposal = new ReservationProposal(
+                UUID.randomUUID(), RESERVATION_ID, UUID.randomUUID(), confirmed.startsAt(), 2, 1,
+                "Later", null, ReservationProposalStatus.ACCEPTED, UUID.randomUUID(),
+                Instant.parse("2026-10-01T00:00:00Z"), null, Instant.parse("2026-10-01T01:00:00Z"));
+        given(proposalUseCase.acceptForGuest(RESERVATION_ID, proposal.id(), TOKEN))
+                .willReturn(new ProposalResult(confirmed, proposal));
+
+        mockMvc.perform(post("/api/customer/reservations/{id}/proposals/{proposalId}/accept",
+                        RESERVATION_ID, proposal.id())
+                        .header(CustomerReservationController.MANAGEMENT_TOKEN_HEADER, TOKEN))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.alternativeProposal.status").value("ACCEPTED"));
     }
 
     private Reservation reservation(ReservationStatus status, VisitStatus visitStatus) {

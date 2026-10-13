@@ -1,6 +1,8 @@
 package com.sibang.hankki.reservation.adapter.in.web;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.sibang.hankki.reservation.domain.model.Reservation;
+import com.sibang.hankki.reservation.domain.model.ReservationProposal;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -18,9 +20,14 @@ public record OwnerReservationResponse(
         String specialRequest,
         String preOrderNote,
         Instant createdAt,
-        Instant updatedAt) {
+        Instant updatedAt,
+        @JsonInclude(JsonInclude.Include.NON_NULL) AlternativeProposalResponse alternativeProposal) {
 
     static OwnerReservationResponse from(Reservation reservation) {
+        return from(reservation, null);
+    }
+
+    static OwnerReservationResponse from(Reservation reservation, ReservationProposal proposal) {
         return new OwnerReservationResponse(
                 reservation.id(),
                 reservation.reference(),
@@ -35,6 +42,7 @@ public record OwnerReservationResponse(
                 reservation.specialRequest(),
                 reservation.preOrderNote(),
                 reservation.createdAt(),
-                reservation.updatedAt());
+                reservation.updatedAt(),
+                AlternativeProposalResponse.from(proposal));
     }
 }

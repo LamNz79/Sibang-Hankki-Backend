@@ -14,7 +14,11 @@ import com.sibang.hankki.auth.config.SecurityConfig;
 import com.sibang.hankki.reservation.application.exception.ReservationNotFoundException;
 import com.sibang.hankki.reservation.application.port.in.CustomerAccountReservationUseCase;
 import com.sibang.hankki.reservation.application.port.in.CustomerAccountReservationUseCase.CustomerAccountReservation;
+import com.sibang.hankki.reservation.application.port.in.ReservationProposalUseCase;
+import com.sibang.hankki.reservation.application.port.in.ReservationProposalUseCase.ProposalResult;
 import com.sibang.hankki.reservation.domain.model.Reservation;
+import com.sibang.hankki.reservation.domain.model.ReservationProposal;
+import com.sibang.hankki.reservation.domain.model.ReservationProposalStatus;
 import com.sibang.hankki.reservation.domain.model.ReservationStatus;
 import com.sibang.hankki.reservation.domain.model.VisitStatus;
 import com.sibang.hankki.user.adapter.out.persistence.entity.UserEntity;
@@ -48,6 +52,8 @@ class CustomerAccountReservationControllerTest {
     private PasswordEncoder passwordEncoder;
     @MockitoBean
     private CustomerAccountReservationUseCase useCase;
+    @MockitoBean
+    private ReservationProposalUseCase proposalUseCase;
     @MockitoBean
     private UserAuthenticationRepository userRepository;
 
@@ -140,6 +146,23 @@ class CustomerAccountReservationControllerTest {
                 .andExpect(status().isForbidden());
     }
 
+    @Test
+    void accountCustomerAcceptsOwnProposalWithCsrf() throws Exception {
+        CustomerAccountReservation confirmed = view(ReservationStatus.CONFIRMED, VisitStatus.EXPECTED);
+        ReservationProposal proposal = proposal(ReservationProposalStatus.ACCEPTED);
+        given(proposalUseCase.acceptForAccount(RESERVATION_ID, proposal.id(), CUSTOMER_ID))
+                .willReturn(new ProposalResult(confirmed.reservation(), proposal));
+        given(useCase.findAccountReservation(RESERVATION_ID, CUSTOMER_ID)).willReturn(confirmed);
+
+        mockMvc.perform(post("/api/customer/account/reservations/{id}/proposals/{proposalId}/accept",
+                        RESERVATION_ID, proposal.id())
+                        .with(csrf())
+                        .session(login("customer")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CONFIRMED"))
+                .andExpect(jsonPath("$.alternativeProposal.status").value("ACCEPTED"));
+    }
+
     private void configureUser(String userid, String role, UUID id) {
         UserEntity user = org.mockito.Mockito.mock(UserEntity.class);
         given(user.getId()).willReturn(id);
@@ -169,5 +192,13 @@ class CustomerAccountReservationControllerTest {
                 null, null, null, null, 0, Instant.parse("2026-10-01T00:00:00Z"),
                 Instant.parse("2026-10-01T00:00:00Z"));
         return new CustomerAccountReservation(reservation, "the-royal-pavilion", "The Royal Pavilion");
+    }
+
+    private ReservationProposal proposal(ReservationProposalStatus status) {
+        return new ReservationProposal(
+                UUID.randomUUID(), RESERVATION_ID, UUID.randomUUID(),
+                Instant.parse("2026-10-14T11:00:00Z"), 2, 1, "Later", null, status,
+                UUID.randomUUID(), Instant.parse("2026-10-13T02:00:00Z"), CUSTOMER_ID,
+                Instant.parse("2026-10-13T03:00:00Z"));
     }
 }

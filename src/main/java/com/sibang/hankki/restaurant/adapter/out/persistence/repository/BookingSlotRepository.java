@@ -21,6 +21,12 @@ public interface BookingSlotRepository extends JpaRepository<BookingSlot, UUID> 
 
     Optional<BookingSlot> findByRestaurantIdAndStartsAt(UUID restaurantId, Instant startsAt);
 
+    @Query("select count(slot) > 0 from BookingSlot slot "
+            + "where slot.id = :slotId "
+            + "and slot.capacityTotal > 0 "
+            + "and slot.capacityTotal - slot.capacityReserved >= :partySize")
+    boolean hasAvailableCapacity(@Param("slotId") UUID slotId, @Param("partySize") int partySize);
+
     Optional<BookingSlot> findFirstByRestaurantIdAndStartsAtLessThanEqualAndEndsAtGreaterThanOrderByStartsAtDesc(
             UUID restaurantId, Instant startsAt, Instant endsAt);
 
@@ -58,6 +64,10 @@ public interface BookingSlotRepository extends JpaRepository<BookingSlot, UUID> 
               and not exists (
                   select 1 from reservations reservation
                   where reservation.booking_slot_id = slot.id
+              )
+              and not exists (
+                  select 1 from reservation_proposals proposal
+                  where proposal.proposed_booking_slot_id = slot.id
               )
             """, nativeQuery = true)
     int deleteUnreferencedSlots(
