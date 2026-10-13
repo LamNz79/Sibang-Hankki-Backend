@@ -25,4 +25,10 @@ public class OwnerSessionUserDetailsService implements UserDetailsService {
         return new SessionUser(
                 user.getId(), user.getUserid(), user.getPasswordHash(), user.getRole(), user.getRestaurantId());
     }
+
+    public boolean isActive(SessionUser sessionUser) {
+        return repository.findByUseridAndStatusAndDeletedAtIsNull(sessionUser.userid(), ACTIVE)
+                .map(user -> user.getId().equals(sessionUser.id()))
+                .orElse(false);
+    }
 }

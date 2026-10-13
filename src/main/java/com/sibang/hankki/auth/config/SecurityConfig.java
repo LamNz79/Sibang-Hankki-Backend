@@ -1,5 +1,8 @@
 package com.sibang.hankki.auth.config;
 
+import com.sibang.hankki.auth.ActiveSessionFilter;
+import com.sibang.hankki.auth.OwnerSessionUserDetailsService;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatus;
@@ -9,13 +12,18 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.authentication.logout.HttpStatusReturningLogoutSuccessHandler;
+import org.springframework.security.web.context.SecurityContextHolderFilter;
 
 @Configuration
 public class SecurityConfig {
 
     @Bean
-    SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    SecurityFilterChain securityFilterChain(
+            HttpSecurity http,
+            ObjectProvider<OwnerSessionUserDetailsService> userDetailsService)
+            throws Exception {
         http
+                .addFilterAfter(new ActiveSessionFilter(userDetailsService), SecurityContextHolderFilter.class)
                 .csrf(csrf -> csrf.ignoringRequestMatchers(
                         "/api/reservations",
                         "/api/customer/reservations/*/cancel",

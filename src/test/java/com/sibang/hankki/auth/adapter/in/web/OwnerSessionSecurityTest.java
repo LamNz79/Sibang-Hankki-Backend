@@ -1,5 +1,6 @@
 package com.sibang.hankki.auth.adapter.in.web;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -92,6 +93,18 @@ class OwnerSessionSecurityTest {
                 .andExpect(jsonPath("$.userid").value("owner"))
                 .andExpect(jsonPath("$.role").value("OWNER"))
                 .andExpect(jsonPath("$.restaurantId").value(RESTAURANT_ID.toString()));
+    }
+
+    @Test
+    void inactiveAccountLosesItsExistingSession() throws Exception {
+        MockHttpSession session = login("owner");
+        given(repository.findByUseridAndStatusAndDeletedAtIsNull("owner", "ACTIVE"))
+                .willReturn(Optional.empty());
+
+        mockMvc.perform(get("/api/owner/probe").session(session))
+                .andExpect(status().isUnauthorized());
+
+        assertThat(session.isInvalid()).isTrue();
     }
 
     @Test
