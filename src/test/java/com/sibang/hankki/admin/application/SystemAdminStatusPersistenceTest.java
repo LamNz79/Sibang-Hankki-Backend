@@ -30,7 +30,7 @@ class SystemAdminStatusPersistenceTest {
     @Test
     void userStatusAndTimestampArePersistedAndAnIdempotentReplayDoesNotRewriteThem() {
         UUID userId = UUID.randomUUID();
-        insertUser(userId, "status-" + userId, "CUSTOMER", "ACTIVE", null);
+        insertUser(userId, "status-" + shortId(userId), "CUSTOMER", "ACTIVE", null);
 
         var changed = service.updateUserStatus(userId, "SUSPENDED");
         Instant persistedTime = jdbcTemplate.queryForObject(
@@ -61,7 +61,7 @@ class SystemAdminStatusPersistenceTest {
     void softDeletedResourcesAreNotFound() {
         UUID userId = UUID.randomUUID();
         UUID restaurantId = UUID.randomUUID();
-        insertUser(userId, "deleted-" + userId, "CUSTOMER", "ACTIVE", ORIGINAL_TIME);
+        insertUser(userId, "deleted-" + shortId(userId), "CUSTOMER", "ACTIVE", ORIGINAL_TIME);
         insertRestaurant(restaurantId, "deleted-" + restaurantId, "PENDING", ORIGINAL_TIME);
 
         assertThatThrownBy(() -> service.updateUserStatus(userId, "SUSPENDED"))
@@ -94,5 +94,9 @@ class SystemAdminStatusPersistenceTest {
 
     private Timestamp timestamp(Instant value) {
         return value == null ? null : Timestamp.from(value);
+    }
+
+    private String shortId(UUID id) {
+        return id.toString().substring(0, 8);
     }
 }
