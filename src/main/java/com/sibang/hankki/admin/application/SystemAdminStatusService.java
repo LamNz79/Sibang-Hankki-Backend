@@ -13,6 +13,7 @@ import com.sibang.hankki.admin.application.port.out.SystemAdminQueryPort.UserSta
 import com.sibang.hankki.admin.application.port.out.SystemAdminStatusPort;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.EnumSet;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -52,7 +53,8 @@ public class SystemAdminStatusService implements SystemAdminStatusUseCase {
             return toUser(user);
         }
 
-        return toUser(statusPort.updateUserStatus(userId, target, Instant.now(clock)));
+        Instant statusChangedAt = Instant.now(clock).truncatedTo(ChronoUnit.MICROS);
+        return toUser(statusPort.updateUserStatus(userId, target, statusChangedAt));
     }
 
     @Override
