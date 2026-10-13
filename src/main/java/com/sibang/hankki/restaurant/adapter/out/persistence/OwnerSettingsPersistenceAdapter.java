@@ -48,7 +48,7 @@ public class OwnerSettingsPersistenceAdapter implements OwnerSettingsPort {
                 update.guestCapacity(), update.bookingIntervalMinutes(), update.diningDurationMinutes(),
                 update.confirmationMode(), update.manualConfirmationMinPartySize(), update.bookingWindowDays(),
                 update.minimumPartySize(), update.maximumOnlinePartySize(), update.largePartyThreshold(),
-                update.customerCancellationCutoffMinutes());
+                update.customerCancellationCutoffMinutes(), update.noShowGraceMinutes());
         return toOwnerSettings(restaurant, settings);
     }
 
@@ -64,6 +64,6 @@ public class OwnerSettingsPersistenceAdapter implements OwnerSettingsPort {
                         : settings.getManualConfirmationMinPartySize().intValue(),
                 settings.getBookingWindowDays(), settings.getMinimumPartySize(),
                 settings.getMaximumOnlinePartySize(), settings.getLargePartyThreshold(),
-                settings.getCustomerCancellationCutoffMinutes());
+                settings.getCustomerCancellationCutoffMinutes(), settings.getNoShowGraceMinutes());
     }
 }

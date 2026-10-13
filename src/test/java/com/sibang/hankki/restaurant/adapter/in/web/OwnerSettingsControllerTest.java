@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.sibang.hankki.auth.OwnerSessionUserDetailsService;
 import com.sibang.hankki.auth.config.SecurityConfig;
+import com.sibang.hankki.restaurant.application.exception.InvalidBookingRequestException;
 import com.sibang.hankki.restaurant.application.model.OwnerSettings;
 import com.sibang.hankki.restaurant.application.port.in.OwnerSettingsUseCase;
 import com.sibang.hankki.restaurant.domain.model.ConfirmationMode;
@@ -64,7 +65,8 @@ class OwnerSettingsControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.restaurantId").value(RESTAURANT_ID.toString()))
                 .andExpect(jsonPath("$.name").value("The Royal Pavilion"))
-                .andExpect(jsonPath("$.confirmationMode").value("AUTO"));
+                .andExpect(jsonPath("$.confirmationMode").value("AUTO"))
+                .andExpect(jsonPath("$.noShowGraceMinutes").value(15));
 
         verify(useCase).get(RESTAURANT_ID);
     }
@@ -99,11 +101,31 @@ class OwnerSettingsControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestJson()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.guestCapacity").value(48));
+                .andExpect(jsonPath("$.guestCapacity").value(48))
+                .andExpect(jsonPath("$.noShowGraceMinutes").value(15));
 
         verify(useCase).update(
                 org.mockito.ArgumentMatchers.eq(RESTAURANT_ID),
-                org.mockito.ArgumentMatchers.argThat(update -> update.name().equals("The Royal Pavilion")));
+                org.mockito.ArgumentMatchers.argThat(update -> update.name().equals("The Royal Pavilion")
+                        && update.noShowGraceMinutes() == 15));
+    }
+
+    @Test
+    void negativeNoShowGraceMinutesReturnsBadRequest() throws Exception {
+        given(useCase.update(
+                org.mockito.ArgumentMatchers.eq(RESTAURANT_ID),
+                org.mockito.ArgumentMatchers.argThat(update -> update.noShowGraceMinutes() != null
+                        && update.noShowGraceMinutes() < 0)))
+                .willThrow(new InvalidBookingRequestException("noShowGraceMinutes must not be negative"));
+
+        mockMvc.perform(put("/api/owner/settings")
+                        .session(login("owner"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson().replace(
+                                "\"noShowGraceMinutes\": 15",
+                                "\"noShowGraceMinutes\": -1")))
+                .andExpect(status().isBadRequest());
     }
 
     private MockHttpSession login(String userid) throws Exception {
@@ -132,7 +154,7 @@ class OwnerSettingsControllerTest {
                 RESTAURANT_ID, "royal-pavilion", "The Royal Pavilion", null, "Chinese",
                 "ho-chi-minh-city", "District 1", "District 1", null, null, null,
                 "Asia/Ho_Chi_Minh", "$$$", 48, 30, 90, ConfirmationMode.AUTO,
-                null, 30, 1, 6, 10, 120);
+                null, 30, 1, 6, 10, 120, 15);
     }
 
     private String requestJson() {
@@ -147,7 +169,8 @@ class OwnerSettingsControllerTest {
                   "minimumPartySize": 1,
                   "maximumOnlinePartySize": 6,
                   "largePartyThreshold": 10,
-                  "customerCancellationCutoffMinutes": 120
+                  "customerCancellationCutoffMinutes": 120,
+                  "noShowGraceMinutes": 15
                 }
                 """;
     }
