@@ -162,4 +162,8 @@ public class RestaurantEntity {
         this.email = email;
         this.priceRange = priceRange;
     }
+
+    public void updateApprovalStatus(String approvalStatus) {
+        this.approvalStatus = approvalStatus;
+    }
 }
