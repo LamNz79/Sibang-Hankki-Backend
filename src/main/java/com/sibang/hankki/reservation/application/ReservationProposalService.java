@@ -90,6 +90,10 @@ public class ReservationProposalService implements ReservationProposalUseCase {
         }
         BookingSlotData slot = bookingSlotPort.findByRestaurantIdAndStartsAt(command.restaurantId(), startsAt)
                 .orElseThrow(ReservationSlotNotFoundException::new);
+        if (slot.id().equals(reservation.bookingSlotId()) || slot.startsAt().equals(reservation.startsAt())) {
+            throw new InvalidReservationStateException(
+                    "Proposed time must differ from the requested reservation time");
+        }
         if (!bookingSlotPort.hasAvailableCapacity(slot.id(), reservation.partySize())) {
             throw new ReservationCapacityUnavailableException();
         }
@@ -150,6 +154,13 @@ public class ReservationProposalService implements ReservationProposalUseCase {
 
     private ProposalResult accept(Reservation reservation, UUID proposalId, UUID actorUserId) {
         ReservationProposal proposal = lockAndValidate(reservation, proposalId);
+        Instant now = Instant.now(clock);
+        if (!now.isBefore(proposal.proposedStartsAt())) {
+            throw new InvalidReservationStateException("Proposed time has already passed");
+        }
+        if (proposal.respondBy() != null && !now.isBefore(proposal.respondBy())) {
+            throw new InvalidReservationStateException("Proposal response deadline has passed");
+        }
         if (!bookingSlotPort.lockByIdAndRestaurantId(
                 proposal.proposedBookingSlotId(), reservation.restaurantId())) {
             throw new InvalidReservationStateException("Proposed booking slot is no longer available");
@@ -161,7 +172,6 @@ public class ReservationProposalService implements ReservationProposalUseCase {
                 .findByRestaurantIdAndStartsAt(reservation.restaurantId(), proposal.proposedStartsAt())
                 .filter(candidate -> candidate.id().equals(proposal.proposedBookingSlotId()))
                 .orElseThrow(() -> new InvalidReservationStateException("Proposed booking slot is stale"));
-        Instant now = Instant.now(clock);
         Reservation acceptedReservation = reservationPort.save(withScheduleAndStatus(
                 reservation, slot.id(), slot.startsAt(), slot.endsAt(),
                 ReservationStatus.CONFIRMED, VisitStatus.EXPECTED));

@@ -65,6 +65,10 @@ public interface BookingSlotRepository extends JpaRepository<BookingSlot, UUID> 
                   select 1 from reservations reservation
                   where reservation.booking_slot_id = slot.id
               )
+              and not exists (
+                  select 1 from reservation_proposals proposal
+                  where proposal.proposed_booking_slot_id = slot.id
+              )
             """, nativeQuery = true)
     int deleteUnreferencedSlots(
             @Param("restaurantId") UUID restaurantId,

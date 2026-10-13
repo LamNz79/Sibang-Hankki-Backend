@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.sibang.hankki.reservation.application.exception.InvalidReservationStateException;
+import com.sibang.hankki.reservation.application.exception.ReservationNotFoundException;
 import com.sibang.hankki.reservation.application.port.in.ReservationProposalUseCase.OwnerProposalCommand;
 import com.sibang.hankki.reservation.application.port.out.ReservationEventPersistencePort;
 import com.sibang.hankki.reservation.application.port.out.ReservationPersistencePort;
@@ -20,6 +21,7 @@ import com.sibang.hankki.restaurant.application.port.out.BookingSlotData;
 import com.sibang.hankki.restaurant.application.port.out.BookingSlotPort;
 import com.sibang.hankki.restaurant.application.port.out.RestaurantCatalogPort;
 import com.sibang.hankki.user.application.port.in.CustomerProfileUseCase;
+import com.sibang.hankki.user.application.port.in.CustomerProfileUseCase.CustomerProfile;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -142,6 +144,88 @@ class ReservationProposalServiceTest {
         verify(bookingSlotPort, never()).releaseCapacity(any(), any(Integer.class));
     }
 
+    @Test
+    void acceptRejectsProposedTimeAtOrBeforeCurrentTime() {
+        Reservation alternative = reservation(ReservationStatus.ALTERNATIVE_PROPOSED, 1);
+        ReservationProposal elapsed = proposal(1, NOW, null);
+        stubGuestReservation(alternative, elapsed);
+
+        assertThrows(InvalidReservationStateException.class,
+                () -> service.acceptForGuest(RESERVATION_ID, elapsed.id(), "management-token"));
+
+        verify(bookingSlotPort, never()).reserveCapacity(any(), any(Integer.class));
+    }
+
+    @Test
+    void acceptRejectsExpiredRespondByDeadline() {
+        Reservation alternative = reservation(ReservationStatus.ALTERNATIVE_PROPOSED, 1);
+        ReservationProposal expired = proposal(
+                1, Instant.parse("2026-10-14T11:00:00Z"), NOW);
+        stubGuestReservation(alternative, expired);
+
+        assertThrows(InvalidReservationStateException.class,
+                () -> service.acceptForGuest(RESERVATION_ID, expired.id(), "management-token"));
+
+        verify(bookingSlotPort, never()).reserveCapacity(any(), any(Integer.class));
+    }
+
+    @Test
+    void ownerCannotProposeTheOriginallyRequestedSlot() {
+        Reservation pending = reservation(ReservationStatus.PENDING, 0);
+        when(restaurantCatalogPort.findTimezoneById(RESTAURANT_ID)).thenReturn(Optional.of("Asia/Ho_Chi_Minh"));
+        when(reservationPort.findByIdAndRestaurantIdForUpdate(RESERVATION_ID, RESTAURANT_ID))
+                .thenReturn(Optional.of(pending));
+        when(proposalPort.findPendingByReservationId(RESERVATION_ID)).thenReturn(Optional.empty());
+        when(bookingSlotPort.findByRestaurantIdAndStartsAt(RESTAURANT_ID, pending.startsAt()))
+                .thenReturn(Optional.of(new BookingSlotData(
+                        pending.bookingSlotId(), RESTAURANT_ID, pending.startsAt(), pending.endsAt())));
+
+        assertThrows(InvalidReservationStateException.class, () -> service.create(new OwnerProposalCommand(
+                RESERVATION_ID, RESTAURANT_ID, ACTOR_ID, "2026-10-14", "17:00", null, null)));
+
+        verify(bookingSlotPort, never()).hasAvailableCapacity(any(), any(Integer.class));
+    }
+
+    @Test
+    void otherRestaurantOwnerGetsNotFoundWithoutCapacityAccess() {
+        UUID otherRestaurantId = UUID.randomUUID();
+        when(restaurantCatalogPort.findTimezoneById(otherRestaurantId)).thenReturn(Optional.of("Asia/Ho_Chi_Minh"));
+        when(reservationPort.findByIdAndRestaurantIdForUpdate(RESERVATION_ID, otherRestaurantId))
+                .thenReturn(Optional.empty());
+
+        assertThrows(ReservationNotFoundException.class, () -> service.create(new OwnerProposalCommand(
+                RESERVATION_ID, otherRestaurantId, ACTOR_ID, "2026-10-14", "18:00", null, null)));
+
+        verify(bookingSlotPort, never()).reserveCapacity(any(), any(Integer.class));
+    }
+
+    @Test
+    void otherAccountGetsNotFoundWithoutCapacityAccess() {
+        UUID otherCustomerId = UUID.randomUUID();
+        UUID proposalId = UUID.randomUUID();
+        when(customerProfileUseCase.get(otherCustomerId)).thenReturn(new CustomerProfile(
+                otherCustomerId, "other-customer", "Other Customer", "other@example.com", null));
+        when(reservationPort.findByIdAndCustomerIdForUpdate(RESERVATION_ID, otherCustomerId))
+                .thenReturn(Optional.empty());
+
+        assertThrows(ReservationNotFoundException.class,
+                () -> service.acceptForAccount(RESERVATION_ID, proposalId, otherCustomerId));
+
+        verify(bookingSlotPort, never()).reserveCapacity(any(), any(Integer.class));
+    }
+
+    @Test
+    void invalidGuestTokenGetsNotFoundWithoutCapacityAccess() {
+        UUID proposalId = UUID.randomUUID();
+        when(reservationPort.findByIdAndManagementTokenHashForUpdate(any(), any()))
+                .thenReturn(Optional.empty());
+
+        assertThrows(ReservationNotFoundException.class,
+                () -> service.acceptForGuest(RESERVATION_ID, proposalId, "wrong-token"));
+
+        verify(bookingSlotPort, never()).reserveCapacity(any(), any(Integer.class));
+    }
+
     private Reservation reservation(ReservationStatus status, int version) {
         return new Reservation(
                 RESERVATION_ID, "SHK-TEST", "idem", "a".repeat(64), RESTAURANT_ID,
@@ -152,10 +236,21 @@ class ReservationProposalServiceTest {
     }
 
     private ReservationProposal proposal(int reservationVersion) {
+        return proposal(reservationVersion, Instant.parse("2026-10-14T11:00:00Z"), null);
+    }
+
+    private ReservationProposal proposal(int reservationVersion, Instant startsAt, Instant respondBy) {
         return new ReservationProposal(
-                UUID.randomUUID(), RESERVATION_ID, SLOT_ID, Instant.parse("2026-10-14T11:00:00Z"),
-                2, reservationVersion, "Later", null, ReservationProposalStatus.PENDING,
+                UUID.randomUUID(), RESERVATION_ID, SLOT_ID, startsAt,
+                2, reservationVersion, "Later", respondBy, ReservationProposalStatus.PENDING,
                 ACTOR_ID, NOW, null, null);
+    }
+
+    private void stubGuestReservation(Reservation reservation, ReservationProposal proposal) {
+        when(reservationPort.findByIdAndManagementTokenHashForUpdate(any(), any()))
+                .thenReturn(Optional.of(reservation));
+        when(proposalPort.findByIdAndReservationIdForUpdate(proposal.id(), RESERVATION_ID))
+                .thenReturn(Optional.of(proposal));
     }
 
     private Reservation withVersion(Reservation reservation, int version) {

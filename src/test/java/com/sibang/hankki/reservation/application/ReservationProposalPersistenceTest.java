@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import com.sibang.hankki.reservation.application.exception.InvalidReservationStateException;
 import com.sibang.hankki.reservation.application.exception.ReservationCapacityUnavailableException;
 import com.sibang.hankki.reservation.application.port.in.ReservationProposalUseCase.OwnerProposalCommand;
+import com.sibang.hankki.restaurant.application.port.out.BookingSlotPort;
 import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Instant;
@@ -34,6 +35,7 @@ class ReservationProposalPersistenceTest {
 
     @Autowired private ReservationProposalService service;
     @Autowired private JdbcTemplate jdbcTemplate;
+    @Autowired private BookingSlotPort bookingSlotPort;
 
     private UUID restaurantId;
     private UUID actorId;
@@ -126,6 +128,18 @@ class ReservationProposalPersistenceTest {
         assertEquals("DECLINED", declined.proposal().status().name());
         assertEquals(0, capacityReserved());
         assertEquals(1, eventCount("ALTERNATIVE_DECLINED"));
+    }
+
+    @Test
+    void slotRegenerationKeepsSlotsReferencedByReservationsAndProposals() {
+        createProposal();
+
+        int deleted = bookingSlotPort.deleteUnreferencedSlots(
+                restaurantId, ORIGINAL_START.minusSeconds(1), PROPOSED_START.plusSeconds(1));
+
+        assertEquals(0, deleted);
+        assertEquals(2, jdbcTemplate.queryForObject(
+                "select count(*) from booking_slots where restaurant_id = ?", Integer.class, restaurantId));
     }
 
     private com.sibang.hankki.reservation.application.port.in.ReservationProposalUseCase.ProposalResult createProposal() {
