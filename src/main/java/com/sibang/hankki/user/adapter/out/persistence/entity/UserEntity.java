@@ -117,4 +117,16 @@ public class UserEntity {
     public UUID getRestaurantId() {
         return restaurantId;
     }
+
+    public Instant getStatusChangedAt() {
+        return statusChangedAt;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
+
+    public Instant getUpdatedAt() {
+        return updatedAt;
+    }
 }

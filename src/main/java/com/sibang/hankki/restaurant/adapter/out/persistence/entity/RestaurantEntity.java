@@ -130,6 +130,18 @@ public class RestaurantEntity {
         return priceRange;
     }
 
+    public String getApprovalStatus() {
+        return approvalStatus;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
+
+    public Instant getUpdatedAt() {
+        return updatedAt;
+    }
+
     public void updateOwnerProfile(
             String name,
             String description,
