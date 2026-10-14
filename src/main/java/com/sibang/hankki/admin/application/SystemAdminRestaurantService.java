@@ -7,6 +7,9 @@ import com.sibang.hankki.admin.application.port.in.SystemAdminRestaurantUseCase;
 import com.sibang.hankki.admin.application.port.out.SystemAdminRestaurantPort;
 import com.sibang.hankki.admin.application.port.out.SystemAdminRestaurantPort.RestaurantProfileData;
 import com.sibang.hankki.admin.application.port.out.SystemAdminRestaurantPort.RestaurantProfileUpdate;
+import com.sibang.hankki.location.application.port.in.LocationCatalogUseCase;
+import com.sibang.hankki.location.application.port.in.LocationCatalogUseCase.Province;
+import com.sibang.hankki.location.application.port.in.LocationCatalogUseCase.Ward;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -23,10 +26,15 @@ public class SystemAdminRestaurantService implements SystemAdminRestaurantUseCas
     private static final Pattern SLUG_PATTERN = Pattern.compile("[a-z0-9]+(?:-[a-z0-9]+)*");
 
     private final SystemAdminRestaurantPort restaurantPort;
+    private final LocationCatalogUseCase locationCatalog;
     private final Clock clock;
 
-    public SystemAdminRestaurantService(SystemAdminRestaurantPort restaurantPort, Clock clock) {
+    public SystemAdminRestaurantService(
+            SystemAdminRestaurantPort restaurantPort,
+            LocationCatalogUseCase locationCatalog,
+            Clock clock) {
         this.restaurantPort = restaurantPort;
+        this.locationCatalog = locationCatalog;
         this.clock = clock;
     }
 
@@ -50,15 +58,16 @@ public class SystemAdminRestaurantService implements SystemAdminRestaurantUseCas
             throw new AdminRestaurantConflictException("Restaurant slug already exists");
         }
 
+        LocationSelection location = resolveLocation(command.provinceCode(), command.wardCode());
         RestaurantProfileUpdate profile = profile(
                 command.name(), command.description(), command.cuisineType(), command.cuisineLabel(),
-                command.citySlug(), command.area(), command.district(), command.address(), command.phone(),
-                command.email(), command.timezone() == null || command.timezone().isBlank()
+                command.address(), command.phone(), command.email(), command.timezone() == null || command.timezone().isBlank()
                         ? DEFAULT_TIMEZONE : command.timezone(),
-                command.priceRange());
+                command.priceRange(), location, null);
         return toDetail(restaurantPort.create(new RestaurantProfileData(
                 UUID.randomUUID(), slug, profile.name(), profile.description(), profile.cuisineType(),
-                profile.cuisineLabel(), profile.citySlug(), profile.area(), profile.district(), profile.address(),
+                profile.cuisineLabel(), profile.citySlug(), profile.area(), profile.district(),
+                profile.provinceCode(), profile.provinceName(), profile.wardCode(), profile.wardName(), profile.address(),
                 profile.phone(), profile.email(), profile.timezone(), profile.priceRange(), "DRAFT", null, null)));
     }
 
@@ -68,11 +77,12 @@ public class SystemAdminRestaurantService implements SystemAdminRestaurantUseCas
         if (command == null) {
             throw invalid("Request body is required");
         }
-        findForUpdate(restaurantId);
+        RestaurantProfileData current = findForUpdate(restaurantId);
+        LocationSelection location = resolveLocation(command.provinceCode(), command.wardCode());
         RestaurantProfileUpdate profile = profile(
                 command.name(), command.description(), command.cuisineType(), command.cuisineLabel(),
-                command.citySlug(), command.area(), command.district(), command.address(), command.phone(),
-                command.email(), command.timezone(), command.priceRange());
+                command.address(), command.phone(), command.email(), command.timezone(), command.priceRange(),
+                location, current.area());
         return toDetail(restaurantPort.update(restaurantId, profile));
     }
 
@@ -110,14 +120,13 @@ public class SystemAdminRestaurantService implements SystemAdminRestaurantUseCas
             String description,
             String cuisineType,
             String cuisineLabel,
-            String citySlug,
-            String area,
-            String district,
             String address,
             String phone,
             String email,
             String timezone,
-            String priceRange) {
+            String priceRange,
+            LocationSelection location,
+            String area) {
         String normalizedTimezone = required(timezone, "timezone", 64);
         try {
             ZoneId.of(normalizedTimezone);
@@ -126,9 +135,24 @@ public class SystemAdminRestaurantService implements SystemAdminRestaurantUseCas
         }
         return new RestaurantProfileUpdate(
                 required(name, "name", 200), optional(description, Integer.MAX_VALUE), optional(cuisineType, 160),
-                optional(cuisineLabel, 160), required(citySlug, "citySlug", 160), optional(area, 160),
-                optional(district, 160), optional(address, Integer.MAX_VALUE), optional(phone, 30),
+                optional(cuisineLabel, 160), location.citySlug(), optional(area, 160), location.ward().name(),
+                location.province().code(), location.province().name(), location.ward().code(), location.ward().name(),
+                optional(address, Integer.MAX_VALUE), optional(phone, 30),
                 optional(email, 320), normalizedTimezone, optional(priceRange, 40));
+    }
+
+    private LocationSelection resolveLocation(Integer provinceCode, Integer wardCode) {
+        if (provinceCode == null) {
+            throw invalid("provinceCode is required");
+        }
+        if (wardCode == null) {
+            throw invalid("wardCode is required");
+        }
+        Province province = locationCatalog.findProvince(provinceCode)
+                .orElseThrow(() -> invalid("provinceCode is invalid"));
+        Ward ward = locationCatalog.findWard(provinceCode, wardCode)
+                .orElseThrow(() -> invalid("wardCode does not belong to provinceCode"));
+        return new LocationSelection(province, ward, province.codename().replace('_', '-'));
     }
 
     private String required(String value, String field, int maxLength) {
@@ -158,8 +182,12 @@ public class SystemAdminRestaurantService implements SystemAdminRestaurantUseCas
         return new AdminRestaurantDetail(
                 restaurant.id(), restaurant.slug(), restaurant.name(), restaurant.description(),
                 restaurant.cuisineType(), restaurant.cuisineLabel(), restaurant.citySlug(), restaurant.area(),
-                restaurant.district(), restaurant.address(), restaurant.phone(), restaurant.email(),
+                restaurant.district(), restaurant.provinceCode(), restaurant.provinceName(), restaurant.wardCode(),
+                restaurant.wardName(), restaurant.address(), restaurant.phone(), restaurant.email(),
                 restaurant.timezone(), restaurant.priceRange(), restaurant.approvalStatus(), restaurant.createdAt(),
                 restaurant.updatedAt());
+    }
+
+    private record LocationSelection(Province province, Ward ward, String citySlug) {
     }
 }

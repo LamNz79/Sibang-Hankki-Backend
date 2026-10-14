@@ -31,7 +31,9 @@ public class SecurityConfig {
                         "/api/customer/reservations/*/proposals/*/accept",
                         "/api/customer/reservations/*/proposals/*/decline"))
                 .authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers("/api/auth/csrf", "/api/auth/login", "/api/auth/register").permitAll()
+                        .requestMatchers(
+                                "/api/auth/csrf", "/api/auth/login", "/api/auth/register", "/api/locations/**")
+                        .permitAll()
                         .requestMatchers("/api/auth/me").authenticated()
                         .requestMatchers("/api/customer/account/**").hasRole("CUSTOMER")
                         .requestMatchers("/api/customer/profile").hasRole("CUSTOMER")

@@ -61,7 +61,8 @@ public class SystemAdminStatusPersistenceAdapter implements SystemAdminStatusPor
     private AdminRestaurantData toRestaurantData(RestaurantEntity restaurant) {
         return new AdminRestaurantData(
                 restaurant.getId(), restaurant.getSlug(), restaurant.getName(), restaurant.getCitySlug(),
-                restaurant.getArea(), restaurant.getDistrict(), restaurant.getApprovalStatus(),
+                restaurant.getArea(), restaurant.getDistrict(), restaurant.getProvinceCode(),
+                restaurant.getProvinceName(), restaurant.getApprovalStatus(),
                 restaurant.getCreatedAt(), restaurant.getUpdatedAt());
     }
 }

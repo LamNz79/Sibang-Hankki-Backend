@@ -45,18 +45,20 @@ public class SystemAdminReadService implements SystemAdminReadUseCase {
     @Override
     @Transactional(readOnly = true)
     public AdminRestaurantPage findRestaurants(
-            int page, int size, String query, String status, String citySlug) {
+            int page, int size, String query, String status, String citySlug, Integer provinceCode) {
         validatePage(page, size);
         var result = queryPort.findRestaurants(
                 page,
                 size,
                 normalize(query),
                 parse(status, RestaurantStatus.class, "status"),
-                normalize(citySlug));
+                normalize(citySlug),
+                provinceCode);
         return new AdminRestaurantPage(
                 result.items().stream().map(restaurant -> new AdminRestaurant(
                         restaurant.id(), restaurant.slug(), restaurant.name(), restaurant.citySlug(),
-                        restaurant.area(), restaurant.district(), restaurant.approvalStatus(),
+                        restaurant.area(), restaurant.district(), restaurant.provinceCode(), restaurant.provinceName(),
+                        restaurant.approvalStatus(),
                         restaurant.createdAt(), restaurant.updatedAt())).toList(),
                 page,
                 size,

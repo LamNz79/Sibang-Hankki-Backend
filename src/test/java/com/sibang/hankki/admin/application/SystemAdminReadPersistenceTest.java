@@ -84,14 +84,22 @@ class SystemAdminReadPersistenceTest {
         insertRestaurant(
                 uuid("83", 99), marker + "-deleted", "Deleted " + marker,
                 "ho-chi-minh", "ACTIVE", CREATED_AT);
+        jdbcTemplate.update(
+                "update restaurants set province_code = 79, province_name = 'Thành phố Hồ Chí Minh' where id = ?",
+                uuid("83", 1));
 
         var all = service.findRestaurants(0, 10, marker.toUpperCase(), null, null);
         var pending = service.findRestaurants(0, 10, marker, "PENDING", "da-nang");
+        var province = service.findRestaurants(0, 10, marker, null, null, 79);
 
         assertThat(all.totalElements()).isEqualTo(5);
         assertThat(all.items()).extracting(item -> item.approvalStatus())
                 .containsExactly("SUSPENDED", "ACTIVE", "CHANGES_REQUESTED", "PENDING", "DRAFT");
         assertThat(pending.items()).extracting(item -> item.id()).containsExactly(uuid("83", 2));
+        assertThat(province.items()).extracting(item -> item.id()).containsExactly(uuid("83", 1));
+        assertThat(province.items().get(0).provinceName()).isEqualTo("Thành phố Hồ Chí Minh");
+        assertThat(all.items().stream().filter(item -> item.id().equals(uuid("83", 2))).findFirst().orElseThrow()
+                .provinceCode()).isNull();
     }
 
     private void insertUser(

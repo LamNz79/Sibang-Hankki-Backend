@@ -19,14 +19,13 @@ public interface SystemAdminRestaurantUseCase {
             String description,
             String cuisineType,
             String cuisineLabel,
-            String citySlug,
-            String area,
-            String district,
             String address,
             String phone,
             String email,
             String timezone,
-            String priceRange) {
+            String priceRange,
+            Integer provinceCode,
+            Integer wardCode) {
     }
 
     record UpdateRestaurantCommand(
@@ -34,14 +33,13 @@ public interface SystemAdminRestaurantUseCase {
             String description,
             String cuisineType,
             String cuisineLabel,
-            String citySlug,
-            String area,
-            String district,
             String address,
             String phone,
             String email,
             String timezone,
-            String priceRange) {
+            String priceRange,
+            Integer provinceCode,
+            Integer wardCode) {
     }
 
     record AdminRestaurantDetail(
@@ -54,6 +52,10 @@ public interface SystemAdminRestaurantUseCase {
             String citySlug,
             String area,
             String district,
+            Integer provinceCode,
+            String provinceName,
+            Integer wardCode,
+            String wardName,
             String address,
             String phone,
             String email,
@@ -62,5 +64,14 @@ public interface SystemAdminRestaurantUseCase {
             String approvalStatus,
             Instant createdAt,
             Instant updatedAt) {
+
+        public AdminRestaurantDetail(
+                UUID id, String slug, String name, String description, String cuisineType, String cuisineLabel,
+                String citySlug, String area, String district, String address, String phone, String email,
+                String timezone, String priceRange, String approvalStatus, Instant createdAt, Instant updatedAt) {
+            this(id, slug, name, description, cuisineType, cuisineLabel, citySlug, area, district,
+                    null, null, null, null, address, phone, email, timezone, priceRange, approvalStatus,
+                    createdAt, updatedAt);
+        }
     }
 }

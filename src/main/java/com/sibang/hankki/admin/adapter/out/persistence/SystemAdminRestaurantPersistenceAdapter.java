@@ -45,6 +45,8 @@ public class SystemAdminRestaurantPersistenceAdapter implements SystemAdminResta
                 data.id(), data.slug(), data.name(), data.description(), data.cuisineType(), data.cuisineLabel(),
                 data.citySlug(), data.area(), data.district(), data.address(), data.phone(), data.email(),
                 data.timezone(), data.priceRange(), data.approvalStatus());
+        restaurant.updateAdministrativeLocation(
+                data.provinceCode(), data.provinceName(), data.wardCode(), data.wardName());
         try {
             entityManager.persist(restaurant);
             entityManager.flush();
@@ -63,7 +65,7 @@ public class SystemAdminRestaurantPersistenceAdapter implements SystemAdminResta
         restaurant.updateAdminProfile(
                 update.name(), update.description(), update.cuisineType(), update.cuisineLabel(), update.citySlug(),
                 update.area(), update.district(), update.address(), update.phone(), update.email(), update.timezone(),
-                update.priceRange());
+                update.priceRange(), update.provinceCode(), update.provinceName(), update.wardCode(), update.wardName());
         return toData(repository.saveAndFlush(restaurant));
     }
 
@@ -88,7 +90,9 @@ public class SystemAdminRestaurantPersistenceAdapter implements SystemAdminResta
         return new RestaurantProfileData(
                 restaurant.getId(), restaurant.getSlug(), restaurant.getName(), restaurant.getDescription(),
                 restaurant.getCuisineType(), restaurant.getCuisineLabel(), restaurant.getCitySlug(),
-                restaurant.getArea(), restaurant.getDistrict(), restaurant.getAddress(), restaurant.getPhone(),
+                restaurant.getArea(), restaurant.getDistrict(), restaurant.getProvinceCode(),
+                restaurant.getProvinceName(), restaurant.getWardCode(), restaurant.getWardName(),
+                restaurant.getAddress(), restaurant.getPhone(),
                 restaurant.getEmail(), restaurant.getTimezone(), restaurant.getPriceRange(),
                 restaurant.getApprovalStatus(), restaurant.getCreatedAt(), restaurant.getUpdatedAt());
     }

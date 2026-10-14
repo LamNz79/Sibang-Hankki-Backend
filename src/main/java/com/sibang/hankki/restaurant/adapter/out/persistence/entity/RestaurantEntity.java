@@ -40,6 +40,16 @@ public class RestaurantEntity {
     @Column(length = 160)
     private String district;
 
+    private Integer provinceCode;
+
+    @Column(length = 160)
+    private String provinceName;
+
+    private Integer wardCode;
+
+    @Column(length = 160)
+    private String wardName;
+
     @Column(columnDefinition = "text")
     private String address;
 
@@ -140,6 +150,22 @@ public class RestaurantEntity {
         return district;
     }
 
+    public Integer getProvinceCode() {
+        return provinceCode;
+    }
+
+    public String getProvinceName() {
+        return provinceName;
+    }
+
+    public Integer getWardCode() {
+        return wardCode;
+    }
+
+    public String getWardName() {
+        return wardName;
+    }
+
     public String getAddress() {
         return address;
     }
@@ -213,7 +239,11 @@ public class RestaurantEntity {
             String phone,
             String email,
             String timezone,
-            String priceRange) {
+            String priceRange,
+            Integer provinceCode,
+            String provinceName,
+            Integer wardCode,
+            String wardName) {
         this.name = name;
         this.description = description;
         this.cuisineType = cuisineType;
@@ -226,6 +256,18 @@ public class RestaurantEntity {
         this.email = email;
         this.timezone = timezone;
         this.priceRange = priceRange;
+        this.provinceCode = provinceCode;
+        this.provinceName = provinceName;
+        this.wardCode = wardCode;
+        this.wardName = wardName;
+    }
+
+    public void updateAdministrativeLocation(
+            Integer provinceCode, String provinceName, Integer wardCode, String wardName) {
+        this.provinceCode = provinceCode;
+        this.provinceName = provinceName;
+        this.wardCode = wardCode;
+        this.wardName = wardName;
     }
 
     public void archive(Instant deletedAt) {

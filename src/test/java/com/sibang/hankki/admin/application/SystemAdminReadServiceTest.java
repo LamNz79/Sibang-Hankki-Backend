@@ -45,12 +45,12 @@ class SystemAdminReadServiceTest {
 
     @Test
     void normalizesAndMapsRestaurantFilters() {
-        given(queryPort.findRestaurants(0, 20, "Royal", RestaurantStatus.SUSPENDED, "ho-chi-minh"))
+        given(queryPort.findRestaurants(0, 20, "Royal", RestaurantStatus.SUSPENDED, "ho-chi-minh", 79))
                 .willReturn(new PageData<>(List.of(), 0, 0));
 
-        service.findRestaurants(0, 20, " Royal ", "SUSPENDED", " ho-chi-minh ");
+        service.findRestaurants(0, 20, " Royal ", "SUSPENDED", " ho-chi-minh ", 79);
 
-        verify(queryPort).findRestaurants(0, 20, "Royal", RestaurantStatus.SUSPENDED, "ho-chi-minh");
+        verify(queryPort).findRestaurants(0, 20, "Royal", RestaurantStatus.SUSPENDED, "ho-chi-minh", 79);
     }
 
     @Test

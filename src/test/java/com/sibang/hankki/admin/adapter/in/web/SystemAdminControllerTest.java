@@ -28,6 +28,7 @@ import com.sibang.hankki.admin.application.port.in.SystemAdminRestaurantUseCase.
 import com.sibang.hankki.admin.application.port.in.SystemAdminRestaurantUseCase.UpdateRestaurantCommand;
 import com.sibang.hankki.admin.application.port.in.SystemAdminStatusUseCase;
 import com.sibang.hankki.auth.config.SecurityConfig;
+import com.sibang.hankki.location.application.exception.LocationCatalogUnavailableException;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -97,11 +98,11 @@ class SystemAdminControllerTest {
 
     @Test
     void adminListsRestaurantsWithFilters() throws Exception {
-        given(readUseCase.findRestaurants(1, 10, "Royal", "ACTIVE", "ho-chi-minh"))
+        given(readUseCase.findRestaurants(1, 10, "Royal", "ACTIVE", "ho-chi-minh", 79))
                 .willReturn(new AdminRestaurantPage(
                         List.of(new AdminRestaurant(
                                 RESTAURANT_ID, "royal-pavilion", "The Royal Pavilion", "ho-chi-minh",
-                                "District 1", "District 1", "ACTIVE", NOW, NOW)),
+                                "District 1", "Phường Bến Nghé", 79, "Thành phố Hồ Chí Minh", "ACTIVE", NOW, NOW)),
                         1, 10, 1, 1));
 
         mockMvc.perform(get("/api/admin/restaurants")
@@ -110,9 +111,12 @@ class SystemAdminControllerTest {
                         .param("query", "Royal")
                         .param("status", "ACTIVE")
                         .param("citySlug", "ho-chi-minh")
+                        .param("provinceCode", "79")
                         .with(user("admin").roles("ADMIN")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items[0].slug").value("royal-pavilion"))
+                .andExpect(jsonPath("$.items[0].provinceCode").value(79))
+                .andExpect(jsonPath("$.items[0].provinceName").value("Thành phố Hồ Chí Minh"))
                 .andExpect(jsonPath("$.items[0].approvalStatus").value("ACTIVE"));
     }
 
@@ -258,6 +262,8 @@ class SystemAdminControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.slug").value("restaurant-slug"))
                 .andExpect(jsonPath("$.description").value("Description"))
+                .andExpect(jsonPath("$.provinceCode").value(79))
+                .andExpect(jsonPath("$.wardCode").value(26734))
                 .andExpect(jsonPath("$.timezone").value("Asia/Ho_Chi_Minh"));
 
         mockMvc.perform(post("/api/admin/restaurants")
@@ -301,10 +307,25 @@ class SystemAdminControllerTest {
                 .andExpect(status().isForbidden());
     }
 
+    @Test
+    void restaurantCreateReturnsServiceUnavailableWhenLocationCatalogHasNoCache() throws Exception {
+        given(restaurantUseCase.create(any(CreateRestaurantCommand.class)))
+                .willThrow(new LocationCatalogUnavailableException());
+
+        mockMvc.perform(post("/api/admin/restaurants")
+                        .with(user("admin").roles("ADMIN"))
+                        .with(csrf())
+                        .contentType("application/json")
+                        .content(createRequest()))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.status").value(503));
+    }
+
     private AdminRestaurantDetail detail(String name, String status) {
         return new AdminRestaurantDetail(
                 RESTAURANT_ID, "restaurant-slug", name, "Description", "Vietnamese", "Vietnamese",
-                "ho-chi-minh", "District 1", "District 1", "1 Main Street", "0900000000",
+                "ho-chi-minh", "District 1", "Phường Bến Nghé", 79, "Thành phố Hồ Chí Minh", 26734,
+                "Phường Bến Nghé", "1 Main Street", "0900000000",
                 "restaurant@example.com", "Asia/Ho_Chi_Minh", "$$", status, NOW, NOW);
     }
 
@@ -313,8 +334,9 @@ class SystemAdminControllerTest {
                 {
                   "slug": "restaurant-slug",
                   "name": "Restaurant",
-                  "citySlug": "ho-chi-minh",
-                  "timezone": "Asia/Ho_Chi_Minh"
+                  "timezone": "Asia/Ho_Chi_Minh",
+                  "provinceCode": 79,
+                  "wardCode": 26734
                 }
                 """;
     }
@@ -323,8 +345,9 @@ class SystemAdminControllerTest {
         return """
                 {
                   "name": "Updated Restaurant",
-                  "citySlug": "ho-chi-minh",
-                  "timezone": "Asia/Ho_Chi_Minh"
+                  "timezone": "Asia/Ho_Chi_Minh",
+                  "provinceCode": 79,
+                  "wardCode": 26734
                 }
                 """;
     }
