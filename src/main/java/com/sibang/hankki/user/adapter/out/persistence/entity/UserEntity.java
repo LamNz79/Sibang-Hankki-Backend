@@ -134,4 +134,9 @@ public class UserEntity {
         this.status = status;
         this.statusChangedAt = statusChangedAt;
     }
+
+    public void updateRestaurantAccess(String role, UUID restaurantId) {
+        this.role = role;
+        this.restaurantId = restaurantId;
+    }
 }

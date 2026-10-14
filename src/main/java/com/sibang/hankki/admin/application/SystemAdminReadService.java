@@ -34,7 +34,7 @@ public class SystemAdminReadService implements SystemAdminReadUseCase {
         return new AdminUserPage(
                 result.items().stream().map(user -> new AdminUser(
                         user.id(), user.userid(), user.email(), user.name(), user.phone(),
-                        user.role(), user.status(), user.restaurantId(), user.statusChangedAt(),
+                        user.role(), user.status(), user.restaurantId(), user.restaurantName(), user.statusChangedAt(),
                         user.createdAt(), user.updatedAt())).toList(),
                 page,
                 size,

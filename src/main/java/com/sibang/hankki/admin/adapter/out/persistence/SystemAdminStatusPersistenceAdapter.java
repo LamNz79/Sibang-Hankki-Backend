@@ -54,8 +54,13 @@ public class SystemAdminStatusPersistenceAdapter implements SystemAdminStatusPor
     private AdminUserData toUserData(UserEntity user) {
         return new AdminUserData(
                 user.getId(), user.getUserid(), user.getEmail(), user.getName(), user.getPhone(), user.getRole(),
-                user.getStatus(), user.getRestaurantId(), user.getStatusChangedAt(), user.getCreatedAt(),
+                user.getStatus(), user.getRestaurantId(), restaurantName(user), user.getStatusChangedAt(), user.getCreatedAt(),
                 user.getUpdatedAt());
+    }
+
+    private String restaurantName(UserEntity user) {
+        return user.getRestaurantId() == null ? null : restaurantRepository.findById(user.getRestaurantId())
+                .map(RestaurantEntity::getName).orElse(null);
     }
 
     private AdminRestaurantData toRestaurantData(RestaurantEntity restaurant) {

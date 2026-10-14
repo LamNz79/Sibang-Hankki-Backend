@@ -2,6 +2,7 @@ package com.sibang.hankki.auth;
 
 import com.sibang.hankki.user.adapter.out.persistence.entity.UserEntity;
 import com.sibang.hankki.user.adapter.out.persistence.repository.UserAuthenticationRepository;
+import java.util.Objects;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -28,7 +29,9 @@ public class OwnerSessionUserDetailsService implements UserDetailsService {
 
     public boolean isActive(SessionUser sessionUser) {
         return repository.findByUseridAndStatusAndDeletedAtIsNull(sessionUser.userid(), ACTIVE)
-                .map(user -> user.getId().equals(sessionUser.id()))
+                .map(user -> user.getId().equals(sessionUser.id())
+                        && user.getRole().equals(sessionUser.role())
+                        && Objects.equals(user.getRestaurantId(), sessionUser.restaurantId()))
                 .orElse(false);
     }
 }

@@ -2,6 +2,7 @@ package com.sibang.hankki.admin.adapter.in.web;
 
 import com.sibang.hankki.admin.application.exception.AdminResourceNotFoundException;
 import com.sibang.hankki.admin.application.exception.AdminRestaurantConflictException;
+import com.sibang.hankki.admin.application.exception.AdminUserConflictException;
 import com.sibang.hankki.admin.application.exception.InvalidAdminQueryException;
 import com.sibang.hankki.admin.application.exception.InvalidAdminStatusTransitionException;
 import com.sibang.hankki.location.application.exception.InvalidProvinceCodeException;
@@ -13,7 +14,9 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-@RestControllerAdvice(assignableTypes = SystemAdminController.class)
+@RestControllerAdvice(assignableTypes = {
+        SystemAdminController.class, SystemAdminUserController.class, RestaurantAssignmentController.class
+})
 public class SystemAdminExceptionHandler {
 
     @ResponseStatus(HttpStatus.BAD_REQUEST)
@@ -29,7 +32,11 @@ public class SystemAdminExceptionHandler {
     }
 
     @ResponseStatus(HttpStatus.CONFLICT)
-    @ExceptionHandler({InvalidAdminStatusTransitionException.class, AdminRestaurantConflictException.class})
+    @ExceptionHandler({
+            InvalidAdminStatusTransitionException.class,
+            AdminRestaurantConflictException.class,
+            AdminUserConflictException.class
+    })
     ErrorResponse conflict(HttpServletRequest request) {
         return ErrorResponse.of(HttpStatus.CONFLICT, request.getRequestURI());
     }

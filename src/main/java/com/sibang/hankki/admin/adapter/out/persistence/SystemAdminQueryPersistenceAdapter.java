@@ -15,6 +15,9 @@ import jakarta.persistence.criteria.Predicate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.UUID;
+import java.util.stream.Collectors;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
@@ -58,8 +61,11 @@ public class SystemAdminQueryPersistenceAdapter implements SystemAdminQueryPort 
             return criteriaBuilder.and(predicates.toArray(Predicate[]::new));
         };
         var result = userRepository.findAll(specification, PageRequest.of(page, size, ADMIN_SORT));
+        Map<UUID, String> restaurantNames = restaurantRepository.findAllById(result.getContent().stream()
+                        .map(UserEntity::getRestaurantId).filter(java.util.Objects::nonNull).collect(Collectors.toSet()))
+                .stream().collect(Collectors.toMap(RestaurantEntity::getId, RestaurantEntity::getName));
         return new PageData<>(
-                result.getContent().stream().map(this::toUserData).toList(),
+                result.getContent().stream().map(user -> toUserData(user, restaurantNames)).toList(),
                 result.getTotalElements(),
                 result.getTotalPages());
     }
@@ -101,10 +107,11 @@ public class SystemAdminQueryPersistenceAdapter implements SystemAdminQueryPort 
                 .replace("_", "\\_") + "%";
     }
 
-    private AdminUserData toUserData(UserEntity user) {
+    private AdminUserData toUserData(UserEntity user, Map<UUID, String> restaurantNames) {
         return new AdminUserData(
                 user.getId(), user.getUserid(), user.getEmail(), user.getName(), user.getPhone(),
-                user.getRole(), user.getStatus(), user.getRestaurantId(), user.getStatusChangedAt(),
+                user.getRole(), user.getStatus(), user.getRestaurantId(), restaurantNames.get(user.getRestaurantId()),
+                user.getStatusChangedAt(),
                 user.getCreatedAt(), user.getUpdatedAt());
     }
 
