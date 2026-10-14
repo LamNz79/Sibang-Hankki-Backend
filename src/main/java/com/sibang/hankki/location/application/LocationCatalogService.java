@@ -7,9 +7,9 @@ import com.sibang.hankki.location.application.port.out.LocationCatalogPort.Sourc
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -19,8 +19,10 @@ public class LocationCatalogService implements LocationCatalogUseCase {
 
     private final LocationCatalogPort catalogPort;
     private final Clock clock;
-    private Cached<List<Province>> provinces;
-    private final Map<Integer, Cached<List<Ward>>> wardsByProvince = new HashMap<>();
+    private final Object provinceRefreshLock = new Object();
+    private volatile Cached<List<Province>> provinces;
+    private final ConcurrentMap<Integer, Cached<List<Ward>>> wardsByProvince = new ConcurrentHashMap<>();
+    private final ConcurrentMap<Integer, Object> wardRefreshLocks = new ConcurrentHashMap<>();
 
     public LocationCatalogService(LocationCatalogPort catalogPort, Clock clock) {
         this.catalogPort = catalogPort;
@@ -28,39 +30,55 @@ public class LocationCatalogService implements LocationCatalogUseCase {
     }
 
     @Override
-    public synchronized List<Province> findProvinces() {
+    public List<Province> findProvinces() {
         Instant now = clock.instant();
-        if (isFresh(provinces, now)) {
-            return provinces.value();
+        Cached<List<Province>> cached = provinces;
+        if (isFresh(cached, now)) {
+            return cached.value();
         }
-        try {
-            List<Province> fetched = List.copyOf(catalogPort.fetchProvinces());
-            provinces = new Cached<>(fetched, now);
-            return fetched;
-        } catch (SourceUnavailableException exception) {
-            if (provinces != null) {
-                return provinces.value();
+
+        synchronized (provinceRefreshLock) {
+            cached = provinces;
+            if (isFresh(cached, now)) {
+                return cached.value();
             }
-            throw new LocationCatalogUnavailableException();
+            try {
+                List<Province> fetched = List.copyOf(catalogPort.fetchProvinces());
+                provinces = new Cached<>(fetched, now);
+                return fetched;
+            } catch (SourceUnavailableException exception) {
+                if (cached != null) {
+                    return cached.value();
+                }
+                throw new LocationCatalogUnavailableException();
+            }
         }
     }
 
     @Override
-    public synchronized List<Ward> findWards(int provinceCode) {
+    public List<Ward> findWards(int provinceCode) {
         Instant now = clock.instant();
         Cached<List<Ward>> cached = wardsByProvince.get(provinceCode);
         if (isFresh(cached, now)) {
             return cached.value();
         }
-        try {
-            List<Ward> fetched = List.copyOf(catalogPort.fetchWards(provinceCode));
-            wardsByProvince.put(provinceCode, new Cached<>(fetched, now));
-            return fetched;
-        } catch (SourceUnavailableException exception) {
-            if (cached != null) {
+
+        Object refreshLock = wardRefreshLocks.computeIfAbsent(provinceCode, ignored -> new Object());
+        synchronized (refreshLock) {
+            cached = wardsByProvince.get(provinceCode);
+            if (isFresh(cached, now)) {
                 return cached.value();
             }
-            throw new LocationCatalogUnavailableException();
+            try {
+                List<Ward> fetched = List.copyOf(catalogPort.fetchWards(provinceCode));
+                wardsByProvince.put(provinceCode, new Cached<>(fetched, now));
+                return fetched;
+            } catch (SourceUnavailableException exception) {
+                if (cached != null) {
+                    return cached.value();
+                }
+                throw new LocationCatalogUnavailableException();
+            }
         }
     }
 

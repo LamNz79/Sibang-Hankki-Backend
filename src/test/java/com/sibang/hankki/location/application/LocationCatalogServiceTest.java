@@ -14,6 +14,9 @@ import com.sibang.hankki.location.application.port.out.LocationCatalogPort.Sourc
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -26,7 +29,7 @@ class LocationCatalogServiceTest {
     private static final Province PROVINCE =
             new Province(79, "ho_chi_minh", "Thành phố Hồ Chí Minh", "thành phố trung ương");
     private static final Ward WARD =
-            new Ward(26734, "phuong_ben_nghe", "Phường Bến Nghé", "phường", 79);
+            new Ward(27169, "phuong_dien_hong", "Phường Diên Hồng", "phường", 79);
 
     @Mock
     private LocationCatalogPort port;
@@ -73,5 +76,51 @@ class LocationCatalogServiceTest {
 
         assertThatThrownBy(() -> service.findWards(79))
                 .isInstanceOf(LocationCatalogUnavailableException.class);
+    }
+
+    @Test
+    void slowWardRefreshDoesNotBlockOtherCatalogRequests() throws Exception {
+        CountDownLatch slowWardStarted = new CountDownLatch(1);
+        CountDownLatch releaseSlowWard = new CountDownLatch(1);
+        LocationCatalogPort blockingPort = new LocationCatalogPort() {
+            @Override
+            public List<Province> fetchProvinces() {
+                return List.of(PROVINCE);
+            }
+
+            @Override
+            public List<Ward> fetchWards(int provinceCode) {
+                if (provinceCode == 79) {
+                    slowWardStarted.countDown();
+                    try {
+                        releaseSlowWard.await();
+                    } catch (InterruptedException exception) {
+                        Thread.currentThread().interrupt();
+                        throw new SourceUnavailableException("interrupted", exception);
+                    }
+                    return List.of(WARD);
+                }
+                return List.of(new Ward(1, "phuong_khac", "Phường khác", "phường", provinceCode));
+            }
+        };
+        var service = new LocationCatalogService(blockingPort, Clock.fixed(NOW, Clock.systemUTC().getZone()));
+        var executor = Executors.newFixedThreadPool(3);
+
+        try {
+            var slowRequest = executor.submit(() -> service.findWards(79));
+            assertThat(slowWardStarted.await(1, TimeUnit.SECONDS)).isTrue();
+
+            assertThat(executor.submit(service::findProvinces).get(1, TimeUnit.SECONDS))
+                    .containsExactly(PROVINCE);
+            assertThat(executor.submit(() -> service.findWards(1)).get(1, TimeUnit.SECONDS))
+                    .extracting(Ward::provinceCode)
+                    .containsExactly(1);
+
+            releaseSlowWard.countDown();
+            assertThat(slowRequest.get(1, TimeUnit.SECONDS)).containsExactly(WARD);
+        } finally {
+            releaseSlowWard.countDown();
+            executor.shutdownNow();
+        }
     }
 }

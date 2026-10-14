@@ -29,14 +29,19 @@ class VietnamProvincesHttpAdapterTest {
         server.expect(once(), requestTo("https://locations.test/w/?province=79"))
                 .andExpect(method(GET))
                 .andRespond(withSuccess("""
-                        [{"code":26734,"codename":"phuong_ben_nghe","name":"Phường Bến Nghé",
+                        [{"code":27169,"codename":"phuong_dien_hong","name":"Phường Diên Hồng",
                           "division_type":"phường"}]
                         """, MediaType.APPLICATION_JSON));
 
         var provinces = adapter.fetchProvinces();
         assertThat(provinces).hasSize(1);
         assertThat(provinces.get(0).codename()).isEqualTo("ho_chi_minh");
-        assertThat(adapter.fetchWards(79).get(0).provinceCode()).isEqualTo(79);
+        var ward = adapter.fetchWards(79).get(0);
+        assertThat(ward.code()).isEqualTo(27169);
+        assertThat(ward.name()).isEqualTo("Phường Diên Hồng");
+        assertThat(ward.codename()).isEqualTo("phuong_dien_hong");
+        assertThat(ward.divisionType()).isEqualTo("phường");
+        assertThat(ward.provinceCode()).isEqualTo(79);
         server.verify();
     }
 }
