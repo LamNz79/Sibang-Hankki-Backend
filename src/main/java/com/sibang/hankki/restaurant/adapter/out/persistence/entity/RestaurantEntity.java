@@ -2,8 +2,6 @@ package com.sibang.hankki.restaurant.adapter.out.persistence.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
@@ -16,7 +14,6 @@ import org.hibernate.annotations.UpdateTimestamp;
 public class RestaurantEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
     @Column(nullable = false, unique = true, length = 160)
@@ -72,6 +69,39 @@ public class RestaurantEntity {
     private Instant updatedAt;
 
     public RestaurantEntity() {
+    }
+
+    public RestaurantEntity(
+            UUID id,
+            String slug,
+            String name,
+            String description,
+            String cuisineType,
+            String cuisineLabel,
+            String citySlug,
+            String area,
+            String district,
+            String address,
+            String phone,
+            String email,
+            String timezone,
+            String priceRange,
+            String approvalStatus) {
+        this.id = id;
+        this.slug = slug;
+        this.name = name;
+        this.description = description;
+        this.cuisineType = cuisineType;
+        this.cuisineLabel = cuisineLabel;
+        this.citySlug = citySlug;
+        this.area = area;
+        this.district = district;
+        this.address = address;
+        this.phone = phone;
+        this.email = email;
+        this.timezone = timezone;
+        this.priceRange = priceRange;
+        this.approvalStatus = approvalStatus;
     }
 
     public UUID getId() {
@@ -142,6 +172,10 @@ public class RestaurantEntity {
         return updatedAt;
     }
 
+    public Instant getDeletedAt() {
+        return deletedAt;
+    }
+
     public void updateOwnerProfile(
             String name,
             String description,
@@ -165,5 +199,36 @@ public class RestaurantEntity {
 
     public void updateApprovalStatus(String approvalStatus) {
         this.approvalStatus = approvalStatus;
+    }
+
+    public void updateAdminProfile(
+            String name,
+            String description,
+            String cuisineType,
+            String cuisineLabel,
+            String citySlug,
+            String area,
+            String district,
+            String address,
+            String phone,
+            String email,
+            String timezone,
+            String priceRange) {
+        this.name = name;
+        this.description = description;
+        this.cuisineType = cuisineType;
+        this.cuisineLabel = cuisineLabel;
+        this.citySlug = citySlug;
+        this.area = area;
+        this.district = district;
+        this.address = address;
+        this.phone = phone;
+        this.email = email;
+        this.timezone = timezone;
+        this.priceRange = priceRange;
+    }
+
+    public void archive(Instant deletedAt) {
+        this.deletedAt = deletedAt;
     }
 }

@@ -1,11 +1,16 @@
 package com.sibang.hankki.admin.adapter.in.web;
 
 import static org.mockito.BDDMockito.given;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -17,6 +22,10 @@ import com.sibang.hankki.admin.application.port.in.SystemAdminReadUseCase.AdminR
 import com.sibang.hankki.admin.application.port.in.SystemAdminReadUseCase.AdminRestaurantPage;
 import com.sibang.hankki.admin.application.port.in.SystemAdminReadUseCase.AdminUser;
 import com.sibang.hankki.admin.application.port.in.SystemAdminReadUseCase.AdminUserPage;
+import com.sibang.hankki.admin.application.port.in.SystemAdminRestaurantUseCase;
+import com.sibang.hankki.admin.application.port.in.SystemAdminRestaurantUseCase.AdminRestaurantDetail;
+import com.sibang.hankki.admin.application.port.in.SystemAdminRestaurantUseCase.CreateRestaurantCommand;
+import com.sibang.hankki.admin.application.port.in.SystemAdminRestaurantUseCase.UpdateRestaurantCommand;
 import com.sibang.hankki.admin.application.port.in.SystemAdminStatusUseCase;
 import com.sibang.hankki.auth.config.SecurityConfig;
 import java.time.Instant;
@@ -45,6 +54,9 @@ class SystemAdminControllerTest {
 
     @MockitoBean
     private SystemAdminStatusUseCase statusUseCase;
+
+    @MockitoBean
+    private SystemAdminRestaurantUseCase restaurantUseCase;
 
     @Test
     void anonymousIsUnauthorized() throws Exception {
@@ -214,5 +226,106 @@ class SystemAdminControllerTest {
                         .content("{\"status\":\"ACTIVE\"}"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.status").value(404));
+    }
+
+    @Test
+    void restaurantCrudIsAdminOnly() throws Exception {
+        for (String role : List.of("CUSTOMER", "OWNER", "STAFF")) {
+            mockMvc.perform(get("/api/admin/restaurants/{id}", RESTAURANT_ID)
+                            .with(user(role.toLowerCase()).roles(role)))
+                    .andExpect(status().isForbidden());
+        }
+
+        mockMvc.perform(get("/api/admin/restaurants/{id}", RESTAURANT_ID))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(post("/api/admin/restaurants")
+                        .with(user("customer").roles("CUSTOMER"))
+                        .with(csrf())
+                        .contentType("application/json")
+                        .content(createRequest()))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void adminCanReadCreateUpdateAndArchiveRestaurant() throws Exception {
+        given(restaurantUseCase.findById(RESTAURANT_ID)).willReturn(detail("Restaurant", "DRAFT"));
+        given(restaurantUseCase.create(any(CreateRestaurantCommand.class))).willReturn(detail("Restaurant", "DRAFT"));
+        given(restaurantUseCase.update(eq(RESTAURANT_ID), any(UpdateRestaurantCommand.class)))
+                .willReturn(detail("Updated Restaurant", "DRAFT"));
+
+        mockMvc.perform(get("/api/admin/restaurants/{id}", RESTAURANT_ID)
+                        .with(user("admin").roles("ADMIN")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.slug").value("restaurant-slug"))
+                .andExpect(jsonPath("$.description").value("Description"))
+                .andExpect(jsonPath("$.timezone").value("Asia/Ho_Chi_Minh"));
+
+        mockMvc.perform(post("/api/admin/restaurants")
+                        .with(user("admin").roles("ADMIN"))
+                        .with(csrf())
+                        .contentType("application/json")
+                        .content(createRequest()))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.approvalStatus").value("DRAFT"));
+
+        mockMvc.perform(put("/api/admin/restaurants/{id}", RESTAURANT_ID)
+                        .with(user("admin").roles("ADMIN"))
+                        .with(csrf())
+                        .contentType("application/json")
+                        .content(updateRequest()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Updated Restaurant"));
+
+        mockMvc.perform(delete("/api/admin/restaurants/{id}", RESTAURANT_ID)
+                        .with(user("admin").roles("ADMIN"))
+                        .with(csrf()))
+                .andExpect(status().isNoContent());
+
+        verify(restaurantUseCase).archive(RESTAURANT_ID);
+    }
+
+    @Test
+    void restaurantWritesRequireCsrf() throws Exception {
+        mockMvc.perform(post("/api/admin/restaurants")
+                        .with(user("admin").roles("ADMIN"))
+                        .contentType("application/json")
+                        .content(createRequest()))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(put("/api/admin/restaurants/{id}", RESTAURANT_ID)
+                        .with(user("admin").roles("ADMIN"))
+                        .contentType("application/json")
+                        .content(updateRequest()))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(delete("/api/admin/restaurants/{id}", RESTAURANT_ID)
+                        .with(user("admin").roles("ADMIN")))
+                .andExpect(status().isForbidden());
+    }
+
+    private AdminRestaurantDetail detail(String name, String status) {
+        return new AdminRestaurantDetail(
+                RESTAURANT_ID, "restaurant-slug", name, "Description", "Vietnamese", "Vietnamese",
+                "ho-chi-minh", "District 1", "District 1", "1 Main Street", "0900000000",
+                "restaurant@example.com", "Asia/Ho_Chi_Minh", "$$", status, NOW, NOW);
+    }
+
+    private String createRequest() {
+        return """
+                {
+                  "slug": "restaurant-slug",
+                  "name": "Restaurant",
+                  "citySlug": "ho-chi-minh",
+                  "timezone": "Asia/Ho_Chi_Minh"
+                }
+                """;
+    }
+
+    private String updateRequest() {
+        return """
+                {
+                  "name": "Updated Restaurant",
+                  "citySlug": "ho-chi-minh",
+                  "timezone": "Asia/Ho_Chi_Minh"
+                }
+                """;
     }
 }
