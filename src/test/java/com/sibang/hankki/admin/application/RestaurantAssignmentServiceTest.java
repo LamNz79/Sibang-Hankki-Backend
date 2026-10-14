@@ -33,7 +33,7 @@ class RestaurantAssignmentServiceTest {
     @Test
     void assignsActiveCustomerAsOwnerToDraftRestaurant() {
         given(port.findUserForUpdate(USER_ID)).willReturn(Optional.of(user("CUSTOMER", "ACTIVE", null)));
-        given(port.findRestaurant(RESTAURANT_ID))
+        given(port.findRestaurantForUpdate(RESTAURANT_ID))
                 .willReturn(Optional.of(new RestaurantData(RESTAURANT_ID, "draft-place", "Draft Place", "DRAFT")));
         given(port.updateAccess(USER_ID, "OWNER", RESTAURANT_ID)).willReturn(new AssignmentData(
                 USER_ID, "owner01", "Owner", "owner@example.com", "ACTIVE", "OWNER", RESTAURANT_ID,
@@ -49,7 +49,7 @@ class RestaurantAssignmentServiceTest {
     @Test
     void assignsCustomerAsStaff() {
         given(port.findUserForUpdate(USER_ID)).willReturn(Optional.of(user("CUSTOMER", "ACTIVE", null)));
-        given(port.findRestaurant(RESTAURANT_ID))
+        given(port.findRestaurantForUpdate(RESTAURANT_ID))
                 .willReturn(Optional.of(new RestaurantData(RESTAURANT_ID, "place", "Place", "ACTIVE")));
         given(port.updateAccess(USER_ID, "STAFF", RESTAURANT_ID)).willReturn(assignment("STAFF", RESTAURANT_ID));
         var service = new RestaurantAssignmentService(port);
@@ -75,7 +75,7 @@ class RestaurantAssignmentServiceTest {
     @Test
     void ownerCanBeReassignedAndChangedToStaff() {
         given(port.findUserForUpdate(USER_ID)).willReturn(Optional.of(user("OWNER", "ACTIVE", RESTAURANT_ID)));
-        given(port.findRestaurant(OTHER_RESTAURANT_ID)).willReturn(Optional.of(
+        given(port.findRestaurantForUpdate(OTHER_RESTAURANT_ID)).willReturn(Optional.of(
                 new RestaurantData(OTHER_RESTAURANT_ID, "other", "Other", "SUSPENDED")));
         given(port.updateAccess(USER_ID, "STAFF", OTHER_RESTAURANT_ID))
                 .willReturn(assignment("STAFF", OTHER_RESTAURANT_ID));

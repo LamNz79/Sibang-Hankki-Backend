@@ -11,7 +11,7 @@ public interface RestaurantAssignmentPort {
 
     Optional<AdminUserData> findUserForUpdate(UUID userId);
 
-    Optional<RestaurantData> findRestaurant(UUID restaurantId);
+    Optional<RestaurantData> findRestaurantForUpdate(UUID restaurantId);
 
     AssignmentData updateAccess(UUID userId, String role, UUID restaurantId);
 

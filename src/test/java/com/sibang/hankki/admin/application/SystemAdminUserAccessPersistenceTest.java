@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.sibang.hankki.admin.application.exception.AdminResourceNotFoundException;
+import com.sibang.hankki.admin.application.exception.AdminRestaurantConflictException;
 import com.sibang.hankki.admin.application.exception.AdminUserConflictException;
 import com.sibang.hankki.admin.application.port.in.RestaurantAssignmentUseCase.AssignmentCommand;
 import com.sibang.hankki.admin.application.port.in.SystemAdminUserUseCase.CreateUserCommand;
@@ -13,6 +14,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -37,6 +39,9 @@ class SystemAdminUserAccessPersistenceTest {
 
     @Autowired
     private SystemAdminReadService readService;
+
+    @Autowired
+    private SystemAdminRestaurantService restaurantService;
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -120,6 +125,49 @@ class SystemAdminUserAccessPersistenceTest {
             assertThat(results).containsExactlyInAnyOrder(true, false);
             assertThat(jdbcTemplate.queryForObject("select role from users where id = ?", String.class, user.id()))
                     .isEqualTo("OWNER");
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
+    void concurrentAssignmentAndArchiveReturnOnlyDomainOutcomes() throws Exception {
+        var user = userService.create(new CreateUserCommand(
+                "archive-race-" + shortId(UUID.randomUUID()), null, "CustomerTest@2026!", "Customer", null));
+        userIds.add(user.id());
+        UUID restaurantId = insertRestaurant("DRAFT", false);
+        var start = new CountDownLatch(1);
+        var executor = Executors.newFixedThreadPool(2);
+        try {
+            var assignment = executor.submit(() -> {
+                start.await();
+                try {
+                    assignmentService.create(new AssignmentCommand(user.id(), restaurantId, "OWNER"));
+                    return "assigned";
+                } catch (AdminResourceNotFoundException exception) {
+                    return "restaurant-archived";
+                }
+            });
+            var archive = executor.submit(() -> {
+                start.await();
+                try {
+                    restaurantService.archive(restaurantId);
+                    return "archived";
+                } catch (AdminRestaurantConflictException exception) {
+                    return "user-assigned";
+                }
+            });
+            start.countDown();
+            var outcomes = List.of(assignment, archive).stream().map(future -> {
+                try {
+                    return future.get();
+                } catch (Exception exception) {
+                    throw new RuntimeException(exception);
+                }
+            }).toList();
+
+            assertThat(outcomes.equals(List.of("assigned", "user-assigned"))
+                    || outcomes.equals(List.of("restaurant-archived", "archived"))).isTrue();
         } finally {
             executor.shutdownNow();
         }

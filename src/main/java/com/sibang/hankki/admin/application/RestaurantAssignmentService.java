@@ -105,7 +105,7 @@ public class RestaurantAssignmentService implements RestaurantAssignmentUseCase 
     }
 
     private void findRestaurant(UUID restaurantId) {
-        assignmentPort.findRestaurant(restaurantId)
+        assignmentPort.findRestaurantForUpdate(restaurantId)
                 .orElseThrow(() -> new AdminResourceNotFoundException("Restaurant not found"));
     }
 

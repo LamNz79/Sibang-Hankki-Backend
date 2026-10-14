@@ -49,8 +49,8 @@ public class RestaurantAssignmentPersistenceAdapter implements RestaurantAssignm
     }
 
     @Override
-    public Optional<RestaurantData> findRestaurant(UUID restaurantId) {
-        return restaurantRepository.findByIdAndDeletedAtIsNull(restaurantId).map(this::toRestaurantData);
+    public Optional<RestaurantData> findRestaurantForUpdate(UUID restaurantId) {
+        return restaurantRepository.findByIdAndDeletedAtIsNullForUpdate(restaurantId).map(this::toRestaurantData);
     }
 
     @Override
