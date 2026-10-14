@@ -112,7 +112,7 @@ public class SystemAdminStatusService implements SystemAdminStatusUseCase {
     private AdminUser toUser(AdminUserData user) {
         return new AdminUser(
                 user.id(), user.userid(), user.email(), user.name(), user.phone(), user.role(), user.status(),
-                user.restaurantId(), user.statusChangedAt(), user.createdAt(), user.updatedAt());
+                user.restaurantId(), user.restaurantName(), user.statusChangedAt(), user.createdAt(), user.updatedAt());
     }
 
     private AdminRestaurant toRestaurant(AdminRestaurantData restaurant) {

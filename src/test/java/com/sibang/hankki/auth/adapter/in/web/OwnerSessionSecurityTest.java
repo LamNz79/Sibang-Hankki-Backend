@@ -108,6 +108,32 @@ class OwnerSessionSecurityTest {
     }
 
     @Test
+    void roleChangeInvalidatesExistingSession() throws Exception {
+        MockHttpSession session = login("owner");
+        UserEntity changed = user(OWNER_ID, "owner", "STAFF", RESTAURANT_ID);
+        given(repository.findByUseridAndStatusAndDeletedAtIsNull("owner", "ACTIVE"))
+                .willReturn(Optional.of(changed));
+
+        mockMvc.perform(get("/api/owner/probe").session(session))
+                .andExpect(status().isUnauthorized());
+
+        assertThat(session.isInvalid()).isTrue();
+    }
+
+    @Test
+    void restaurantReassignmentInvalidatesExistingSession() throws Exception {
+        MockHttpSession session = login("owner");
+        UserEntity changed = user(OWNER_ID, "owner", "OWNER", UUID.randomUUID());
+        given(repository.findByUseridAndStatusAndDeletedAtIsNull("owner", "ACTIVE"))
+                .willReturn(Optional.of(changed));
+
+        mockMvc.perform(get("/api/owner/probe").session(session))
+                .andExpect(status().isUnauthorized());
+
+        assertThat(session.isInvalid()).isTrue();
+    }
+
+    @Test
     void customerCannotAccessOwnerApi() throws Exception {
         mockMvc.perform(get("/api/owner/probe").session(login("customer")))
                 .andExpect(status().isForbidden());

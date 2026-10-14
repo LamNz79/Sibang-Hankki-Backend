@@ -25,9 +25,17 @@ public interface SystemAdminReadUseCase {
             String role,
             String status,
             UUID restaurantId,
+            String restaurantName,
             Instant statusChangedAt,
             Instant createdAt,
             Instant updatedAt) {
+
+        public AdminUser(
+                UUID id, String userid, String email, String name, String phone, String role, String status,
+                UUID restaurantId, Instant statusChangedAt, Instant createdAt, Instant updatedAt) {
+            this(id, userid, email, name, phone, role, status, restaurantId, null,
+                    statusChangedAt, createdAt, updatedAt);
+        }
     }
 
     record AdminUserPage(
