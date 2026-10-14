@@ -1,6 +1,7 @@
 package com.sibang.hankki.admin.adapter.in.web;
 
 import com.sibang.hankki.admin.application.exception.AdminResourceNotFoundException;
+import com.sibang.hankki.admin.application.exception.AdminRestaurantConflictException;
 import com.sibang.hankki.admin.application.exception.InvalidAdminQueryException;
 import com.sibang.hankki.admin.application.exception.InvalidAdminStatusTransitionException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -26,7 +27,7 @@ public class SystemAdminExceptionHandler {
     }
 
     @ResponseStatus(HttpStatus.CONFLICT)
-    @ExceptionHandler(InvalidAdminStatusTransitionException.class)
+    @ExceptionHandler({InvalidAdminStatusTransitionException.class, AdminRestaurantConflictException.class})
     ErrorResponse conflict(HttpServletRequest request) {
         return ErrorResponse.of(HttpStatus.CONFLICT, request.getRequestURI());
     }
