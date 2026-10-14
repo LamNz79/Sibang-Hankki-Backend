@@ -4,6 +4,7 @@ import com.sibang.hankki.admin.application.exception.AdminResourceNotFoundExcept
 import com.sibang.hankki.admin.application.exception.AdminRestaurantConflictException;
 import com.sibang.hankki.admin.application.exception.InvalidAdminQueryException;
 import com.sibang.hankki.admin.application.exception.InvalidAdminStatusTransitionException;
+import com.sibang.hankki.location.application.exception.InvalidProvinceCodeException;
 import com.sibang.hankki.location.application.exception.LocationCatalogUnavailableException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Instant;
@@ -16,7 +17,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 public class SystemAdminExceptionHandler {
 
     @ResponseStatus(HttpStatus.BAD_REQUEST)
-    @ExceptionHandler(InvalidAdminQueryException.class)
+    @ExceptionHandler({InvalidAdminQueryException.class, InvalidProvinceCodeException.class})
     ErrorResponse badRequest(HttpServletRequest request) {
         return ErrorResponse.of(HttpStatus.BAD_REQUEST, request.getRequestURI());
     }

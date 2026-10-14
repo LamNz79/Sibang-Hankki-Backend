@@ -3,9 +3,12 @@ package com.sibang.hankki.location.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+import com.sibang.hankki.location.application.exception.InvalidProvinceCodeException;
 import com.sibang.hankki.location.application.exception.LocationCatalogUnavailableException;
 import com.sibang.hankki.location.application.port.in.LocationCatalogUseCase.Province;
 import com.sibang.hankki.location.application.port.in.LocationCatalogUseCase.Ward;
@@ -28,6 +31,8 @@ class LocationCatalogServiceTest {
     private static final Instant NOW = Instant.parse("2026-10-14T02:00:00Z");
     private static final Province PROVINCE =
             new Province(79, "ho_chi_minh", "Thành phố Hồ Chí Minh", "thành phố trung ương");
+    private static final Province OTHER_PROVINCE =
+            new Province(1, "ha_noi", "Thành phố Hà Nội", "thành phố trung ương");
     private static final Ward WARD =
             new Ward(27169, "phuong_dien_hong", "Phường Diên Hồng", "phường", 79);
 
@@ -70,6 +75,7 @@ class LocationCatalogServiceTest {
     @Test
     void failsClearlyWhenSourceIsDownAndNoCacheExists() {
         given(clock.instant()).willReturn(NOW);
+        given(port.fetchProvinces()).willReturn(List.of(PROVINCE));
         given(port.fetchWards(79))
                 .willThrow(new SourceUnavailableException("down", new RuntimeException()));
         var service = new LocationCatalogService(port, clock);
@@ -79,13 +85,25 @@ class LocationCatalogServiceTest {
     }
 
     @Test
+    void rejectsUnknownProvinceWithoutFetchingOrCachingWards() {
+        given(clock.instant()).willReturn(NOW);
+        given(port.fetchProvinces()).willReturn(List.of(PROVINCE));
+        var service = new LocationCatalogService(port, clock);
+
+        assertThatThrownBy(() -> service.findWards(1))
+                .isInstanceOf(InvalidProvinceCodeException.class);
+
+        verify(port, never()).fetchWards(anyInt());
+    }
+
+    @Test
     void slowWardRefreshDoesNotBlockOtherCatalogRequests() throws Exception {
         CountDownLatch slowWardStarted = new CountDownLatch(1);
         CountDownLatch releaseSlowWard = new CountDownLatch(1);
         LocationCatalogPort blockingPort = new LocationCatalogPort() {
             @Override
             public List<Province> fetchProvinces() {
-                return List.of(PROVINCE);
+                return List.of(PROVINCE, OTHER_PROVINCE);
             }
 
             @Override
@@ -111,7 +129,7 @@ class LocationCatalogServiceTest {
             assertThat(slowWardStarted.await(1, TimeUnit.SECONDS)).isTrue();
 
             assertThat(executor.submit(service::findProvinces).get(1, TimeUnit.SECONDS))
-                    .containsExactly(PROVINCE);
+                    .containsExactly(PROVINCE, OTHER_PROVINCE);
             assertThat(executor.submit(() -> service.findWards(1)).get(1, TimeUnit.SECONDS))
                     .extracting(Ward::provinceCode)
                     .containsExactly(1);

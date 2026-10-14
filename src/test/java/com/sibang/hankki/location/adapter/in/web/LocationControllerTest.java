@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.sibang.hankki.auth.config.SecurityConfig;
+import com.sibang.hankki.location.application.exception.InvalidProvinceCodeException;
 import com.sibang.hankki.location.application.exception.LocationCatalogUnavailableException;
 import com.sibang.hankki.location.application.port.in.LocationCatalogUseCase;
 import com.sibang.hankki.location.application.port.in.LocationCatalogUseCase.Province;
@@ -33,7 +34,7 @@ class LocationControllerTest {
         given(locationCatalog.findProvinces()).willReturn(List.of(
                 new Province(79, "ho_chi_minh", "Thành phố Hồ Chí Minh", "thành phố trung ương")));
         given(locationCatalog.findWards(79)).willReturn(List.of(
-                new Ward(26734, "phuong_ben_nghe", "Phường Bến Nghé", "phường", 79)));
+                new Ward(27169, "phuong_dien_hong", "Phường Diên Hồng", "phường", 79)));
 
         mockMvc.perform(get("/api/locations/provinces"))
                 .andExpect(status().isOk())
@@ -42,7 +43,18 @@ class LocationControllerTest {
         mockMvc.perform(get("/api/locations/provinces/79/wards"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].provinceCode").value(79))
-                .andExpect(jsonPath("$[0].name").value("Phường Bến Nghé"));
+                .andExpect(jsonPath("$[0].name").value("Phường Diên Hồng"));
+    }
+
+    @Test
+    void unknownProvinceReturnsBadRequest() throws Exception {
+        given(locationCatalog.findWards(1)).willThrow(new InvalidProvinceCodeException());
+
+        mockMvc.perform(get("/api/locations/provinces/1/wards"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.error").value("Bad Request"))
+                .andExpect(jsonPath("$.path").value("/api/locations/provinces/1/wards"));
     }
 
     @Test

@@ -1,5 +1,6 @@
 package com.sibang.hankki.location.application;
 
+import com.sibang.hankki.location.application.exception.InvalidProvinceCodeException;
 import com.sibang.hankki.location.application.exception.LocationCatalogUnavailableException;
 import com.sibang.hankki.location.application.port.in.LocationCatalogUseCase;
 import com.sibang.hankki.location.application.port.out.LocationCatalogPort;
@@ -57,6 +58,10 @@ public class LocationCatalogService implements LocationCatalogUseCase {
 
     @Override
     public List<Ward> findWards(int provinceCode) {
+        if (findProvinces().stream().noneMatch(province -> province.code() == provinceCode)) {
+            throw new InvalidProvinceCodeException();
+        }
+
         Instant now = clock.instant();
         Cached<List<Ward>> cached = wardsByProvince.get(provinceCode);
         if (isFresh(cached, now)) {
