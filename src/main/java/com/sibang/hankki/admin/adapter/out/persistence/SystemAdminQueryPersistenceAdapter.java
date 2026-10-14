@@ -66,7 +66,7 @@ public class SystemAdminQueryPersistenceAdapter implements SystemAdminQueryPort 
 
     @Override
     public PageData<AdminRestaurantData> findRestaurants(
-            int page, int size, String query, RestaurantStatus status, String citySlug) {
+            int page, int size, String query, RestaurantStatus status, String citySlug, Integer provinceCode) {
         Specification<RestaurantEntity> specification = (root, criteriaQuery, criteriaBuilder) -> {
             List<Predicate> predicates = new ArrayList<>();
             predicates.add(criteriaBuilder.isNull(root.get("deletedAt")));
@@ -81,6 +81,9 @@ public class SystemAdminQueryPersistenceAdapter implements SystemAdminQueryPort 
             }
             if (citySlug != null) {
                 predicates.add(criteriaBuilder.equal(root.get("citySlug"), citySlug));
+            }
+            if (provinceCode != null) {
+                predicates.add(criteriaBuilder.equal(root.get("provinceCode"), provinceCode));
             }
             return criteriaBuilder.and(predicates.toArray(Predicate[]::new));
         };
@@ -108,7 +111,8 @@ public class SystemAdminQueryPersistenceAdapter implements SystemAdminQueryPort 
     private AdminRestaurantData toRestaurantData(RestaurantEntity restaurant) {
         return new AdminRestaurantData(
                 restaurant.getId(), restaurant.getSlug(), restaurant.getName(), restaurant.getCitySlug(),
-                restaurant.getArea(), restaurant.getDistrict(), restaurant.getApprovalStatus(),
+                restaurant.getArea(), restaurant.getDistrict(), restaurant.getProvinceCode(),
+                restaurant.getProvinceName(), restaurant.getApprovalStatus(),
                 restaurant.getCreatedAt(), restaurant.getUpdatedAt());
     }
 }

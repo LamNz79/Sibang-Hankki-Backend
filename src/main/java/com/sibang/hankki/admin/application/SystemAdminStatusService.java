@@ -118,6 +118,7 @@ public class SystemAdminStatusService implements SystemAdminStatusUseCase {
     private AdminRestaurant toRestaurant(AdminRestaurantData restaurant) {
         return new AdminRestaurant(
                 restaurant.id(), restaurant.slug(), restaurant.name(), restaurant.citySlug(), restaurant.area(),
-                restaurant.district(), restaurant.approvalStatus(), restaurant.createdAt(), restaurant.updatedAt());
+                restaurant.district(), restaurant.provinceCode(), restaurant.provinceName(),
+                restaurant.approvalStatus(), restaurant.createdAt(), restaurant.updatedAt());
     }
 }

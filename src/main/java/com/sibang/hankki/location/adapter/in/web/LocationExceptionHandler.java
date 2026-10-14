@@ -1,0 +1,24 @@
+package com.sibang.hankki.location.adapter.in.web;
+
+import com.sibang.hankki.location.application.exception.LocationCatalogUnavailableException;
+import jakarta.servlet.http.HttpServletRequest;
+import java.time.Instant;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+@RestControllerAdvice(assignableTypes = LocationController.class)
+public class LocationExceptionHandler {
+
+    @ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
+    @ExceptionHandler(LocationCatalogUnavailableException.class)
+    ErrorResponse unavailable(HttpServletRequest request) {
+        return new ErrorResponse(
+                Instant.now(), HttpStatus.SERVICE_UNAVAILABLE.value(),
+                HttpStatus.SERVICE_UNAVAILABLE.getReasonPhrase(), request.getRequestURI());
+    }
+
+    record ErrorResponse(Instant timestamp, int status, String error, String path) {
+    }
+}

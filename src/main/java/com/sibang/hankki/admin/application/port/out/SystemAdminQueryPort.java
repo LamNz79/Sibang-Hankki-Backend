@@ -10,7 +10,12 @@ public interface SystemAdminQueryPort {
             int page, int size, String query, UserRole role, UserStatus status);
 
     PageData<AdminRestaurantData> findRestaurants(
-            int page, int size, String query, RestaurantStatus status, String citySlug);
+            int page, int size, String query, RestaurantStatus status, String citySlug, Integer provinceCode);
+
+    default PageData<AdminRestaurantData> findRestaurants(
+            int page, int size, String query, RestaurantStatus status, String citySlug) {
+        return findRestaurants(page, size, query, status, citySlug, null);
+    }
 
     enum UserRole {
         CUSTOMER, OWNER, STAFF, ADMIN
@@ -48,8 +53,16 @@ public interface SystemAdminQueryPort {
             String citySlug,
             String area,
             String district,
+            Integer provinceCode,
+            String provinceName,
             String approvalStatus,
             Instant createdAt,
             Instant updatedAt) {
+
+        public AdminRestaurantData(
+                UUID id, String slug, String name, String citySlug, String area, String district,
+                String approvalStatus, Instant createdAt, Instant updatedAt) {
+            this(id, slug, name, citySlug, area, district, null, null, approvalStatus, createdAt, updatedAt);
+        }
     }
 }

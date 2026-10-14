@@ -56,8 +56,9 @@ public class SystemAdminController {
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(required = false) String query,
             @RequestParam(required = false) String status,
-            @RequestParam(required = false) String citySlug) {
-        return readUseCase.findRestaurants(page, size, query, status, citySlug);
+            @RequestParam(required = false) String citySlug,
+            @RequestParam(required = false) Integer provinceCode) {
+        return readUseCase.findRestaurants(page, size, query, status, citySlug, provinceCode);
     }
 
     @GetMapping("/restaurants/{restaurantId}")
@@ -106,19 +107,18 @@ public class SystemAdminController {
             String description,
             String cuisineType,
             String cuisineLabel,
-            String citySlug,
-            String area,
-            String district,
             String address,
             String phone,
             String email,
             String timezone,
-            String priceRange) {
+            String priceRange,
+            Integer provinceCode,
+            Integer wardCode) {
 
         CreateRestaurantCommand toCommand() {
             return new CreateRestaurantCommand(
-                    slug, name, description, cuisineType, cuisineLabel, citySlug, area, district, address, phone,
-                    email, timezone, priceRange);
+                    slug, name, description, cuisineType, cuisineLabel, address, phone, email, timezone, priceRange,
+                    provinceCode, wardCode);
         }
     }
 
@@ -127,19 +127,18 @@ public class SystemAdminController {
             String description,
             String cuisineType,
             String cuisineLabel,
-            String citySlug,
-            String area,
-            String district,
             String address,
             String phone,
             String email,
             String timezone,
-            String priceRange) {
+            String priceRange,
+            Integer provinceCode,
+            Integer wardCode) {
 
         UpdateRestaurantCommand toCommand() {
             return new UpdateRestaurantCommand(
-                    name, description, cuisineType, cuisineLabel, citySlug, area, district, address, phone, email,
-                    timezone, priceRange);
+                    name, description, cuisineType, cuisineLabel, address, phone, email, timezone, priceRange,
+                    provinceCode, wardCode);
         }
     }
 }

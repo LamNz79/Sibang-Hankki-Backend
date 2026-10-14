@@ -4,6 +4,7 @@ import com.sibang.hankki.admin.application.exception.AdminResourceNotFoundExcept
 import com.sibang.hankki.admin.application.exception.AdminRestaurantConflictException;
 import com.sibang.hankki.admin.application.exception.InvalidAdminQueryException;
 import com.sibang.hankki.admin.application.exception.InvalidAdminStatusTransitionException;
+import com.sibang.hankki.location.application.exception.LocationCatalogUnavailableException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Instant;
 import org.springframework.http.HttpStatus;
@@ -30,6 +31,12 @@ public class SystemAdminExceptionHandler {
     @ExceptionHandler({InvalidAdminStatusTransitionException.class, AdminRestaurantConflictException.class})
     ErrorResponse conflict(HttpServletRequest request) {
         return ErrorResponse.of(HttpStatus.CONFLICT, request.getRequestURI());
+    }
+
+    @ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
+    @ExceptionHandler(LocationCatalogUnavailableException.class)
+    ErrorResponse unavailable(HttpServletRequest request) {
+        return ErrorResponse.of(HttpStatus.SERVICE_UNAVAILABLE, request.getRequestURI());
     }
 
     record ErrorResponse(Instant timestamp, int status, String error, String path) {

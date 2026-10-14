@@ -9,7 +9,12 @@ public interface SystemAdminReadUseCase {
     AdminUserPage findUsers(int page, int size, String query, String role, String status);
 
     AdminRestaurantPage findRestaurants(
-            int page, int size, String query, String status, String citySlug);
+            int page, int size, String query, String status, String citySlug, Integer provinceCode);
+
+    default AdminRestaurantPage findRestaurants(
+            int page, int size, String query, String status, String citySlug) {
+        return findRestaurants(page, size, query, status, citySlug, null);
+    }
 
     record AdminUser(
             UUID id,
@@ -40,9 +45,17 @@ public interface SystemAdminReadUseCase {
             String citySlug,
             String area,
             String district,
+            Integer provinceCode,
+            String provinceName,
             String approvalStatus,
             Instant createdAt,
             Instant updatedAt) {
+
+        public AdminRestaurant(
+                UUID id, String slug, String name, String citySlug, String area, String district,
+                String approvalStatus, Instant createdAt, Instant updatedAt) {
+            this(id, slug, name, citySlug, area, district, null, null, approvalStatus, createdAt, updatedAt);
+        }
     }
 
     record AdminRestaurantPage(
