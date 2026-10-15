@@ -9,6 +9,7 @@ import com.sibang.hankki.location.application.exception.InvalidProvinceCodeExcep
 import com.sibang.hankki.location.application.exception.LocationCatalogUnavailableException;
 import com.sibang.hankki.restaurant.application.exception.BookingSettingsNotConfiguredException;
 import com.sibang.hankki.restaurant.application.exception.InvalidBookingRequestException;
+import com.sibang.hankki.restaurant.application.exception.MenuResourceNotFoundException;
 import com.sibang.hankki.restaurant.application.exception.RestaurantNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Instant;
@@ -19,7 +20,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @RestControllerAdvice(assignableTypes = {
         SystemAdminController.class, SystemAdminUserController.class, RestaurantAssignmentController.class,
-        SystemAdminReservationController.class, SystemAdminBookingConfigurationController.class
+        SystemAdminReservationController.class, SystemAdminBookingConfigurationController.class,
+        SystemAdminMenuController.class
 })
 public class SystemAdminExceptionHandler {
 
@@ -34,7 +36,11 @@ public class SystemAdminExceptionHandler {
     }
 
     @ResponseStatus(HttpStatus.NOT_FOUND)
-    @ExceptionHandler({AdminResourceNotFoundException.class, RestaurantNotFoundException.class})
+    @ExceptionHandler({
+            AdminResourceNotFoundException.class,
+            RestaurantNotFoundException.class,
+            MenuResourceNotFoundException.class
+    })
     ErrorResponse notFound(HttpServletRequest request) {
         return ErrorResponse.of(HttpStatus.NOT_FOUND, request.getRequestURI());
     }
