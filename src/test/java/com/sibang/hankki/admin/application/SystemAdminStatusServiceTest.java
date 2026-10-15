@@ -128,26 +128,47 @@ class SystemAdminStatusServiceTest {
         verify(statusPort, never()).updateRestaurantStatus(RESTAURANT_ID, RestaurantStatus.CHANGES_REQUESTED);
     }
 
-    @Test
-    void rejectsUnsupportedMissingAndInvalidRestaurantTransitions() {
+    @ParameterizedTest
+    @MethodSource("rejectedRestaurantTransitions")
+    void rejectsUnsupportedRestaurantTransitions(RestaurantStatus current, RestaurantStatus target) {
         given(statusPort.findRestaurantByIdForUpdate(RESTAURANT_ID))
-                .willReturn(Optional.of(restaurant(RestaurantStatus.DRAFT)));
-        assertThatThrownBy(() -> service.updateRestaurantStatus(RESTAURANT_ID, "ACTIVE"))
-                .isInstanceOf(InvalidAdminStatusTransitionException.class);
+                .willReturn(Optional.of(restaurant(current)));
 
+        assertThatThrownBy(() -> service.updateRestaurantStatus(RESTAURANT_ID, target.name()))
+                .isInstanceOf(InvalidAdminStatusTransitionException.class);
+        verify(statusPort, never()).updateRestaurantStatus(RESTAURANT_ID, target);
+    }
+
+    @Test
+    void rejectsMissingRestaurantAndInvalidOrMissingStatus() {
         given(statusPort.findRestaurantByIdForUpdate(RESTAURANT_ID)).willReturn(Optional.empty());
-        assertThatThrownBy(() -> service.updateRestaurantStatus(RESTAURANT_ID, "ACTIVE"))
-                .isInstanceOf(AdminResourceNotFoundException.class);
         assertThatThrownBy(() -> service.updateRestaurantStatus(RESTAURANT_ID, "PENDING"))
+                .isInstanceOf(AdminResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.updateRestaurantStatus(RESTAURANT_ID, "UNKNOWN"))
+                .isInstanceOf(InvalidAdminQueryException.class);
+        assertThatThrownBy(() -> service.updateRestaurantStatus(RESTAURANT_ID, null))
                 .isInstanceOf(InvalidAdminQueryException.class);
     }
 
     private static Stream<Arguments> allowedRestaurantTransitions() {
         return Stream.of(
+                Arguments.of(RestaurantStatus.DRAFT, RestaurantStatus.PENDING),
+                Arguments.of(RestaurantStatus.CHANGES_REQUESTED, RestaurantStatus.PENDING),
                 Arguments.of(RestaurantStatus.PENDING, RestaurantStatus.ACTIVE),
                 Arguments.of(RestaurantStatus.PENDING, RestaurantStatus.CHANGES_REQUESTED),
                 Arguments.of(RestaurantStatus.ACTIVE, RestaurantStatus.SUSPENDED),
                 Arguments.of(RestaurantStatus.SUSPENDED, RestaurantStatus.ACTIVE));
+    }
+
+    private static Stream<Arguments> rejectedRestaurantTransitions() {
+        return Stream.of(
+                Arguments.of(RestaurantStatus.DRAFT, RestaurantStatus.ACTIVE),
+                Arguments.of(RestaurantStatus.DRAFT, RestaurantStatus.SUSPENDED),
+                Arguments.of(RestaurantStatus.CHANGES_REQUESTED, RestaurantStatus.ACTIVE),
+                Arguments.of(RestaurantStatus.CHANGES_REQUESTED, RestaurantStatus.SUSPENDED),
+                Arguments.of(RestaurantStatus.PENDING, RestaurantStatus.SUSPENDED),
+                Arguments.of(RestaurantStatus.ACTIVE, RestaurantStatus.PENDING),
+                Arguments.of(RestaurantStatus.SUSPENDED, RestaurantStatus.PENDING));
     }
 
     private AdminUserData user(String role, String status, Instant statusChangedAt) {

@@ -25,7 +25,11 @@ public class SystemAdminStatusService implements SystemAdminStatusUseCase {
     private static final EnumSet<UserStatus> MUTABLE_USER_STATUSES =
             EnumSet.of(UserStatus.ACTIVE, UserStatus.SUSPENDED);
     private static final EnumSet<RestaurantStatus> REQUESTABLE_RESTAURANT_STATUSES =
-            EnumSet.of(RestaurantStatus.ACTIVE, RestaurantStatus.CHANGES_REQUESTED, RestaurantStatus.SUSPENDED);
+            EnumSet.of(
+                    RestaurantStatus.PENDING,
+                    RestaurantStatus.ACTIVE,
+                    RestaurantStatus.CHANGES_REQUESTED,
+                    RestaurantStatus.SUSPENDED);
 
     private final SystemAdminStatusPort statusPort;
     private final Clock clock;
@@ -103,7 +107,9 @@ public class SystemAdminStatusService implements SystemAdminStatusUseCase {
     }
 
     private boolean isAllowed(RestaurantStatus current, RestaurantStatus target) {
-        return current == RestaurantStatus.PENDING
+        return (current == RestaurantStatus.DRAFT || current == RestaurantStatus.CHANGES_REQUESTED)
+                        && target == RestaurantStatus.PENDING
+                || current == RestaurantStatus.PENDING
                         && (target == RestaurantStatus.ACTIVE || target == RestaurantStatus.CHANGES_REQUESTED)
                 || current == RestaurantStatus.ACTIVE && target == RestaurantStatus.SUSPENDED
                 || current == RestaurantStatus.SUSPENDED && target == RestaurantStatus.ACTIVE;
