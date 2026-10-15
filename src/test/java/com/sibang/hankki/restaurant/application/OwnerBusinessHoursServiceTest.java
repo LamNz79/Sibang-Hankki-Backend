@@ -10,6 +10,7 @@ import com.sibang.hankki.restaurant.application.port.in.OwnerSlotRegenerationUse
 import com.sibang.hankki.restaurant.application.port.out.OwnerBusinessHoursPort;
 import com.sibang.hankki.restaurant.application.port.out.RestaurantBusinessHourData;
 import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -51,6 +52,21 @@ class OwnerBusinessHoursServiceTest {
                 .isInstanceOf(InvalidBookingRequestException.class);
 
         verify(port, never()).replace(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void administrationUpdateRegeneratesInSelectedRestaurantTimezone() {
+        OwnerBusinessHoursService service = new OwnerBusinessHoursService(port, regeneration);
+        ZoneId timeZone = ZoneId.of("Asia/Bangkok");
+        given(regeneration.regenerateForAdministration(RESTAURANT_ID, timeZone))
+                .willReturn(new OwnerSlotRegenerationUseCase.Result(2, 6));
+        List<RestaurantBusinessHourData> hours = List.of(hour(1, "11:30", "14:00"));
+
+        service.updateForAdministration(RESTAURANT_ID, hours, timeZone);
+
+        verify(port).replace(RESTAURANT_ID, hours);
+        verify(regeneration).regenerateForAdministration(RESTAURANT_ID, timeZone);
+        verify(regeneration, never()).regenerate(RESTAURANT_ID);
     }
 
     private RestaurantBusinessHourData hour(int day, String opensAt, String closesAt) {

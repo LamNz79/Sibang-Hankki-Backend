@@ -27,7 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class BookingSlotGenerationService {
 
-    /** V1 uses one timezone; per-restaurant timezones require a future schema change. */
+    /** Default retained for existing owner and internal generation flows. */
     public static final ZoneId RESTAURANT_TIME_ZONE = BookingTime.RESTAURANT_TIME_ZONE;
 
     private final RestaurantCatalogPort restaurantCatalogPort;
@@ -49,18 +49,34 @@ public class BookingSlotGenerationService {
 
     @Transactional
     public List<BookingSlotCandidate> generateSlots(UUID restaurantId, LocalDate fromDate, LocalDate toDate) {
+        return generateSlots(restaurantId, fromDate, toDate, RESTAURANT_TIME_ZONE, true);
+    }
+
+    @Transactional
+    public List<BookingSlotCandidate> generateSlotsForAdministration(
+            UUID restaurantId, LocalDate fromDate, LocalDate toDate, ZoneId timeZone) {
+        return generateSlots(restaurantId, fromDate, toDate, timeZone, false);
+    }
+
+    private List<BookingSlotCandidate> generateSlots(
+            UUID restaurantId, LocalDate fromDate, LocalDate toDate, ZoneId timeZone, boolean requireActive) {
         if (restaurantId == null) {
             throw new InvalidBookingRequestException("restaurantId is required");
         }
-        LocalDate today = LocalDate.now(clock.withZone(BookingTime.RESTAURANT_TIME_ZONE));
+        if (timeZone == null) {
+            throw new InvalidBookingRequestException("timeZone is required");
+        }
+        LocalDate today = LocalDate.now(clock.withZone(timeZone));
         try {
             BookingPolicy.validateGenerationRequestShape(fromDate, toDate, today);
         } catch (BookingRuleViolationException exception) {
             throw new InvalidBookingRequestException(exception.getMessage(), exception);
         }
 
-        restaurantCatalogPort.findActiveRestaurantById(restaurantId)
-                .orElseThrow(RestaurantNotFoundException::new);
+        if (requireActive) {
+            restaurantCatalogPort.findActiveRestaurantById(restaurantId)
+                    .orElseThrow(RestaurantNotFoundException::new);
+        }
         BookingSettings settings = bookingSettingsPort.findByRestaurantId(restaurantId)
                 .orElseThrow(BookingSettingsNotConfiguredException::new);
         BookingPolicy policy = BookingDomainMapper.policy(settings);
@@ -70,8 +86,8 @@ public class BookingSlotGenerationService {
             throw new InvalidBookingRequestException(exception.getMessage(), exception);
         }
 
-        Instant rangeStart = fromDate.atStartOfDay(BookingTime.RESTAURANT_TIME_ZONE).toInstant();
-        Instant rangeEnd = toDate.plusDays(1).atStartOfDay(BookingTime.RESTAURANT_TIME_ZONE).toInstant();
+        Instant rangeStart = fromDate.atStartOfDay(timeZone).toInstant();
+        Instant rangeEnd = toDate.plusDays(1).atStartOfDay(timeZone).toInstant();
         Set<Instant> existingStarts = new HashSet<>(bookingSlotPort
                 .findSlotCapacities(restaurantId, rangeStart, rangeEnd)
                 .stream()
@@ -79,11 +95,12 @@ public class BookingSlotGenerationService {
                 .toList());
 
         List<BookingSlotCandidate> missingSlots = slotGenerator.generate(
-                        fromDate,
-                        toDate,
-                        policy,
-                        BookingDomainMapper.businessPeriods(
-                                restaurantCatalogPort.findBusinessHoursByRestaurantIds(List.of(restaurantId))))
+                fromDate,
+                toDate,
+                policy,
+                BookingDomainMapper.businessPeriods(
+                        restaurantCatalogPort.findBusinessHoursByRestaurantIds(List.of(restaurantId))),
+                timeZone)
                 .stream()
                 .filter(slot -> !existingStarts.contains(slot.startsAt()))
                 .toList();

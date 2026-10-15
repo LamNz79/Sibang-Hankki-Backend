@@ -40,7 +40,7 @@ public class OwnerBusinessHoursController {
         OwnerBusinessHoursUseCase.UpdateResult result = businessHoursUseCase.update(
                 user.restaurantId(), request == null || request.hours() == null
                         ? null
-                        : request.hours().stream().map(hour -> hour.toData(user)).toList());
+                        : request.hours().stream().map(hour -> hour.toData(user.restaurantId())).toList());
         return new BusinessHoursUpdateResponse(
                 result.hours().stream().map(BusinessHourResponse::from).toList(),
                 result.regeneration().deletedSlots(), result.regeneration().generatedSlots());
@@ -56,13 +56,13 @@ public class OwnerBusinessHoursController {
     }
 
     public record BusinessHourRequest(short dayOfWeek, LocalTime opensAt, LocalTime closesAt) {
-        private RestaurantBusinessHourData toData(SessionUser user) {
-            return new RestaurantBusinessHourData(user.restaurantId(), dayOfWeek, opensAt, closesAt);
+        public RestaurantBusinessHourData toData(java.util.UUID restaurantId) {
+            return new RestaurantBusinessHourData(restaurantId, dayOfWeek, opensAt, closesAt);
         }
     }
 
     public record BusinessHourResponse(short dayOfWeek, LocalTime opensAt, LocalTime closesAt) {
-        private static BusinessHourResponse from(RestaurantBusinessHourData hour) {
+        public static BusinessHourResponse from(RestaurantBusinessHourData hour) {
             return new BusinessHourResponse(hour.dayOfWeek(), hour.opensAt(), hour.closesAt());
         }
     }

@@ -5,6 +5,7 @@ import com.sibang.hankki.restaurant.application.port.in.OwnerBusinessHoursUseCas
 import com.sibang.hankki.restaurant.application.port.in.OwnerSlotRegenerationUseCase;
 import com.sibang.hankki.restaurant.application.port.out.OwnerBusinessHoursPort;
 import com.sibang.hankki.restaurant.application.port.out.RestaurantBusinessHourData;
+import java.time.ZoneId;
 import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
@@ -32,10 +33,27 @@ public class OwnerBusinessHoursService implements OwnerBusinessHoursUseCase {
     @Override
     @Transactional
     public UpdateResult update(UUID restaurantId, List<RestaurantBusinessHourData> hours) {
+        return update(restaurantId, hours, null);
+    }
+
+    @Override
+    @Transactional
+    public UpdateResult updateForAdministration(
+            UUID restaurantId, List<RestaurantBusinessHourData> hours, ZoneId timeZone) {
+        if (timeZone == null) {
+            throw new InvalidBookingRequestException("timeZone is required");
+        }
+        return update(restaurantId, hours, timeZone);
+    }
+
+    private UpdateResult update(
+            UUID restaurantId, List<RestaurantBusinessHourData> hours, ZoneId timeZone) {
         UUID scopedRestaurantId = requireRestaurantId(restaurantId);
         List<RestaurantBusinessHourData> normalized = validateAndSort(scopedRestaurantId, hours);
         port.replace(scopedRestaurantId, normalized);
-        return new UpdateResult(normalized, regenerationUseCase.regenerate(scopedRestaurantId));
+        return new UpdateResult(normalized, timeZone == null
+                ? regenerationUseCase.regenerate(scopedRestaurantId)
+                : regenerationUseCase.regenerateForAdministration(scopedRestaurantId, timeZone));
     }
 
     private List<RestaurantBusinessHourData> validateAndSort(

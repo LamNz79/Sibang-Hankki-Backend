@@ -5,6 +5,7 @@ import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -76,6 +77,15 @@ class BookingSlotGeneratorTest {
 
         assertEquals(Instant.parse("2026-09-28T04:30:00Z"), slots.get(0).startsAt());
         assertEquals(Instant.parse("2026-09-28T05:00:00Z"), slots.get(0).endsAt());
+    }
+
+    @Test
+    void convertsLocalTimeUsingSelectedRestaurantTimezone() {
+        List<BookingSlotCandidate> slots = generator.generate(
+                MONDAY, MONDAY, policy(30, 30), List.of(period("11:30", "12:00")),
+                ZoneId.of("Asia/Seoul"));
+
+        assertEquals(Instant.parse("2026-09-28T02:30:00Z"), slots.get(0).startsAt());
     }
 
     private List<BookingSlotCandidate> generate(List<BusinessPeriod> periods, int interval, int duration) {

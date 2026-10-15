@@ -14,6 +14,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -43,5 +44,29 @@ class OwnerSlotRegenerationServiceTest {
 
         assertThat(result).isEqualTo(new OwnerSlotRegenerationUseCase.Result(12, 1));
         verify(generationService).generateSlots(restaurantId, today, today.plusDays(29));
+    }
+
+    @Test
+    void administrationRegenerationUsesSelectedTimezone() {
+        UUID restaurantId = UUID.randomUUID();
+        BookingSettingsPort settingsPort = org.mockito.Mockito.mock(BookingSettingsPort.class);
+        BookingSlotPort slotPort = org.mockito.Mockito.mock(BookingSlotPort.class);
+        BookingSlotGenerationService generationService =
+                org.mockito.Mockito.mock(BookingSlotGenerationService.class);
+        ZoneId timeZone = ZoneId.of("Asia/Bangkok");
+        Clock clock = Clock.fixed(Instant.parse("2026-10-05T17:30:00Z"), ZoneOffset.UTC);
+        LocalDate today = LocalDate.of(2026, 10, 6);
+        given(settingsPort.findByRestaurantId(restaurantId)).willReturn(java.util.Optional.of(new BookingSettings(
+                restaurantId, 48, 30, 90, ConfirmationMode.AUTO, null, 2, 1, 6, 10)));
+        given(generationService.generateSlotsForAdministration(
+                restaurantId, today, today.plusDays(1), timeZone)).willReturn(List.of());
+
+        new OwnerSlotRegenerationService(settingsPort, slotPort, generationService, clock)
+                .regenerateForAdministration(restaurantId, timeZone);
+
+        verify(slotPort).deleteUnreferencedSlots(
+                restaurantId, Instant.parse("2026-10-05T17:00:00Z"), Instant.parse("2026-10-07T17:00:00Z"));
+        verify(generationService).generateSlotsForAdministration(
+                restaurantId, today, today.plusDays(1), timeZone);
     }
 }
