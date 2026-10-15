@@ -15,7 +15,8 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @RestControllerAdvice(assignableTypes = {
-        SystemAdminController.class, SystemAdminUserController.class, RestaurantAssignmentController.class
+        SystemAdminController.class, SystemAdminUserController.class, RestaurantAssignmentController.class,
+        SystemAdminReservationController.class
 })
 public class SystemAdminExceptionHandler {
 

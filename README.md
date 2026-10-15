@@ -34,6 +34,58 @@ X-CSRF-TOKEN: <token>
 
 Sending the current status again is idempotent when that status is accepted by the endpoint. Every other transition is rejected with HTTP 409; invalid or missing status values return HTTP 400. The endpoint is ADMIN-only and PATCH requests require CSRF protection.
 
+## System-admin reservation read API
+
+System administrators can read reservations across restaurants with these ADMIN-only endpoints:
+
+```http
+GET /api/admin/reservations?page=0&size=20&query=Minh&restaurantId=<uuid>&status=CONFIRMED&dateFrom=2026-10-01&dateTo=2026-10-31
+GET /api/admin/reservations/{reservationId}
+```
+
+The list accepts page sizes `10`, `20`, `50`, or `100`. Search covers the reservation reference,
+customer name/phone/email, and restaurant name/slug. Supported status filters are `PENDING`,
+`CONFIRMED`, `CHECKED_IN`, `COMPLETED`, `CANCELLED`, `DECLINED`, and `NO_SHOW`.
+`CHECKED_IN` keeps the owner-list semantics and includes `ARRIVED`, `SEATED`, and `COMPLETED`;
+`COMPLETED` is also available when the report needs only completed visits.
+
+`dateFrom` and `dateTo` are inclusive local dates applied to `startsAt`. Global reports use
+`app.reporting.time-zone`, which defaults to `Asia/Ho_Chi_Minh` and can be configured with
+`APP_REPORTING_TIME_ZONE`. Results are ordered by `startsAt DESC`, then `id DESC`.
+
+Example page response:
+
+```json
+{
+  "items": [
+    {
+      "id": "70000000-0000-0000-0000-000000000001",
+      "reference": "SHK-ABC123",
+      "restaurantId": "00000000-0000-0000-0000-000000000002",
+      "restaurantName": "The Royal Pavilion",
+      "restaurantSlug": "royal-pavilion",
+      "customerName": "Minh Lam",
+      "customerEmail": "minh@example.com",
+      "customerPhone": "0900000000",
+      "startsAt": "2026-10-05T11:30:00Z",
+      "endsAt": "2026-10-05T13:00:00Z",
+      "partySize": 2,
+      "status": "CONFIRMED",
+      "visitStatus": "EXPECTED",
+      "createdAt": "2026-10-01T00:00:00Z",
+      "updatedAt": "2026-10-01T00:00:00Z"
+    }
+  ],
+  "page": 0,
+  "size": 20,
+  "totalElements": 1,
+  "totalPages": 1
+}
+```
+
+Both endpoints are read-only: they do not require CSRF and expose no reservation command. OWNER and
+STAFF APIs remain separately restaurant-scoped and cannot use these global queries.
+
 ## Reservation persistence foundation
 
 Flyway V7 introduces the `reservations` and append-only `reservation_events` tables. It enforces canonical reservation statuses (`PENDING`, `ALTERNATIVE_PROPOSED`, `CONFIRMED`, `DECLINED`, `EXPIRED`, `CANCELLED`) and visit statuses (`EXPECTED`, `ARRIVED`, `SEATED`, `COMPLETED`, `NO_SHOW`), referential integrity, idempotency keys, event command IDs, optimistic-lock versions, and query indexes.
