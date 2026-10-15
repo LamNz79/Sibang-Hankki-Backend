@@ -6,6 +6,7 @@ import com.sibang.hankki.restaurant.adapter.out.persistence.repository.Restauran
 import com.sibang.hankki.restaurant.adapter.out.persistence.repository.RestaurantCatalogRepository;
 import com.sibang.hankki.restaurant.application.exception.BookingSettingsNotConfiguredException;
 import com.sibang.hankki.restaurant.application.exception.RestaurantNotFoundException;
+import com.sibang.hankki.restaurant.application.model.BookingSettingsUpdate;
 import com.sibang.hankki.restaurant.application.model.OwnerSettings;
 import com.sibang.hankki.restaurant.application.model.OwnerSettingsUpdate;
 import com.sibang.hankki.restaurant.application.port.out.OwnerSettingsPort;
@@ -15,6 +16,9 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class OwnerSettingsPersistenceAdapter implements OwnerSettingsPort {
+
+    private static final short DEFAULT_CHECKOUT_HOLD_MINUTES = 10;
+    private static final int DEFAULT_PENDING_EXPIRY_MINUTES = 30;
 
     private final RestaurantCatalogRepository restaurantRepository;
     private final RestaurantBookingSettingsRepository bookingSettingsRepository;
@@ -49,6 +53,47 @@ public class OwnerSettingsPersistenceAdapter implements OwnerSettingsPort {
                 update.confirmationMode(), update.manualConfirmationMinPartySize(), update.bookingWindowDays(),
                 update.minimumPartySize(), update.maximumOnlinePartySize(), update.largePartyThreshold(),
                 update.customerCancellationCutoffMinutes(), update.noShowGraceMinutes());
+        return toOwnerSettings(restaurant, settings);
+    }
+
+    @Override
+    public Optional<OwnerSettings> findByRestaurantIdForAdministration(UUID restaurantId) {
+        return restaurantRepository.findById(restaurantId)
+                .filter(restaurant -> restaurant.getDeletedAt() == null)
+                .map(restaurant -> {
+                    RestaurantBookingSettings settings = bookingSettingsRepository.findById(restaurantId)
+                            .orElseThrow(BookingSettingsNotConfiguredException::new);
+                    return toOwnerSettings(restaurant, settings);
+                });
+    }
+
+    @Override
+    public OwnerSettings updateForAdministration(UUID restaurantId, BookingSettingsUpdate update) {
+        RestaurantEntity restaurant = restaurantRepository.findById(restaurantId)
+                .filter(candidate -> candidate.getDeletedAt() == null)
+                .orElseThrow(RestaurantNotFoundException::new);
+        Optional<RestaurantBookingSettings> existingSettings = bookingSettingsRepository.findById(restaurantId);
+        RestaurantBookingSettings settings;
+        if (existingSettings.isPresent()) {
+            settings = existingSettings.get();
+            settings.updateOwnerSettings(
+                    update.guestCapacity(), update.bookingIntervalMinutes(), update.diningDurationMinutes(),
+                    update.confirmationMode(), update.manualConfirmationMinPartySize(), update.bookingWindowDays(),
+                    update.minimumPartySize(), update.maximumOnlinePartySize(), update.largePartyThreshold(),
+                    update.customerCancellationCutoffMinutes(), update.noShowGraceMinutes());
+        } else {
+            settings = new RestaurantBookingSettings(
+                        restaurantId, update.guestCapacity(), (short) update.bookingIntervalMinutes(),
+                        (short) update.diningDurationMinutes(), DEFAULT_CHECKOUT_HOLD_MINUTES,
+                        DEFAULT_PENDING_EXPIRY_MINUTES, update.confirmationMode(),
+                        update.manualConfirmationMinPartySize() == null
+                                ? null
+                                : update.manualConfirmationMinPartySize().shortValue(),
+                        (short) update.bookingWindowDays(), (short) update.minimumPartySize(),
+                        (short) update.maximumOnlinePartySize(), (short) update.largePartyThreshold(),
+                        update.customerCancellationCutoffMinutes(), update.noShowGraceMinutes());
+            bookingSettingsRepository.save(settings);
+        }
         return toOwnerSettings(restaurant, settings);
     }
 

@@ -6,6 +6,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import com.sibang.hankki.restaurant.application.exception.InvalidBookingRequestException;
+import com.sibang.hankki.restaurant.application.model.BookingSettingsUpdate;
 import com.sibang.hankki.restaurant.application.model.OwnerSettingsUpdate;
 import com.sibang.hankki.restaurant.application.port.out.OwnerSettingsPort;
 import com.sibang.hankki.restaurant.domain.model.ConfirmationMode;
@@ -91,6 +92,28 @@ class OwnerSettingsServiceTest {
         verify(port).update(
                 org.mockito.ArgumentMatchers.eq(RESTAURANT_ID),
                 org.mockito.ArgumentMatchers.argThat(update -> update.noShowGraceMinutes() == null));
+    }
+
+    @Test
+    void administrationUpdateReusesValidationAndPreservesProfileFields() {
+        BookingSettingsUpdate update = new BookingSettingsUpdate(
+                ConfirmationMode.AUTO, null, 24, 60, 120, 45, 1, 8, 10, null, 0);
+
+        service.updateForAdministration(RESTAURANT_ID, update);
+
+        verify(port).updateForAdministration(RESTAURANT_ID, update);
+    }
+
+    @Test
+    void administrationUpdateRejectsInvalidSettingsBeforeWriting() {
+        BookingSettingsUpdate invalid = new BookingSettingsUpdate(
+                ConfirmationMode.HYBRID, null, 20, 30, 90, 30, 1, 6, 10, 120, 15);
+
+        assertThatThrownBy(() -> service.updateForAdministration(RESTAURANT_ID, invalid))
+                .isInstanceOf(InvalidBookingRequestException.class);
+
+        verify(port, never()).updateForAdministration(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
     }
 
     private OwnerSettingsUpdate update(ConfirmationMode mode, Integer manualThreshold) {

@@ -2,6 +2,7 @@ package com.sibang.hankki.restaurant.application;
 
 import com.sibang.hankki.restaurant.application.exception.InvalidBookingRequestException;
 import com.sibang.hankki.restaurant.application.exception.RestaurantNotFoundException;
+import com.sibang.hankki.restaurant.application.model.BookingSettingsUpdate;
 import com.sibang.hankki.restaurant.application.model.OwnerSettings;
 import com.sibang.hankki.restaurant.application.model.OwnerSettingsUpdate;
 import com.sibang.hankki.restaurant.application.port.in.OwnerSettingsUseCase;
@@ -35,6 +36,23 @@ public class OwnerSettingsService implements OwnerSettingsUseCase {
         return port.update(requireRestaurantId(restaurantId), normalize(update));
     }
 
+    @Transactional(readOnly = true)
+    @Override
+    public OwnerSettings getForAdministration(UUID restaurantId) {
+        return port.findByRestaurantIdForAdministration(requireRestaurantId(restaurantId))
+                .orElseThrow(RestaurantNotFoundException::new);
+    }
+
+    @Transactional
+    @Override
+    public OwnerSettings updateForAdministration(UUID restaurantId, BookingSettingsUpdate update) {
+        if (update == null) {
+            throw new InvalidBookingRequestException("request body is required");
+        }
+        validateBookingSettings(update);
+        return port.updateForAdministration(requireRestaurantId(restaurantId), update);
+    }
+
     private void validate(OwnerSettingsUpdate update) {
         if (update == null || isBlank(update.name()) || update.name().trim().length() > 200) {
             throw new InvalidBookingRequestException("name is required and must be at most 200 characters");
@@ -45,6 +63,14 @@ public class OwnerSettingsService implements OwnerSettingsUseCase {
         validateLength(update.phone(), 30, "phone");
         validateLength(update.email(), 320, "email");
         validateLength(update.priceRange(), 40, "priceRange");
+        validateBookingSettings(new BookingSettingsUpdate(
+                update.confirmationMode(), update.manualConfirmationMinPartySize(), update.guestCapacity(),
+                update.bookingIntervalMinutes(), update.diningDurationMinutes(), update.bookingWindowDays(),
+                update.minimumPartySize(), update.maximumOnlinePartySize(), update.largePartyThreshold(),
+                update.customerCancellationCutoffMinutes(), update.noShowGraceMinutes()));
+    }
+
+    private void validateBookingSettings(BookingSettingsUpdate update) {
         if (update.customerCancellationCutoffMinutes() != null
                 && update.customerCancellationCutoffMinutes() < 0) {
             throw new InvalidBookingRequestException("customerCancellationCutoffMinutes must not be negative");

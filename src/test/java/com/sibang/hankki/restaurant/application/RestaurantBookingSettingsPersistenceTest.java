@@ -3,6 +3,7 @@ import com.sibang.hankki.restaurant.adapter.out.persistence.entity.RestaurantBoo
 import com.sibang.hankki.restaurant.adapter.out.persistence.repository.RestaurantBookingSettingsRepository;
 import com.sibang.hankki.restaurant.application.exception.BookingSettingsNotConfiguredException;
 import com.sibang.hankki.restaurant.application.exception.RestaurantNotFoundException;
+import com.sibang.hankki.restaurant.application.model.BookingSettingsUpdate;
 import com.sibang.hankki.restaurant.application.model.OwnerSettingsUpdate;
 import com.sibang.hankki.restaurant.application.port.out.OwnerSettingsPort;
 import com.sibang.hankki.restaurant.domain.model.ConfirmationMode;
@@ -97,6 +98,50 @@ class RestaurantBookingSettingsPersistenceTest {
                 "select pending_expiry_minutes from restaurant_booking_settings where restaurant_id = ?",
                 Integer.class, restaurantId));
         assertEquals(120, updated.getCustomerCancellationCutoffMinutes());
+    }
+
+    @Test
+    void administrationUpdateRoundTripsExplicitNullAndZeroWithoutChangingAnotherRestaurant() {
+        repository.saveAndFlush(settings(ConfirmationMode.AUTO, null));
+        UUID otherRestaurantId = jdbcTemplate.queryForObject(
+                "select id from restaurants where slug = 'royal-pavilion'", UUID.class);
+        Integer otherGrace = jdbcTemplate.queryForObject(
+                "select no_show_grace_minutes from restaurant_booking_settings where restaurant_id = ?",
+                Integer.class, otherRestaurantId);
+
+        ownerSettingsPort.updateForAdministration(restaurantId, new BookingSettingsUpdate(
+                ConfirmationMode.AUTO, null, 24, 30, 90, 30, 1, 8, 10, null, null));
+        repository.flush();
+        RestaurantBookingSettings withNulls = repository.findById(restaurantId).orElseThrow();
+        assertNull(withNulls.getCustomerCancellationCutoffMinutes());
+        assertNull(withNulls.getNoShowGraceMinutes());
+
+        ownerSettingsPort.updateForAdministration(restaurantId, new BookingSettingsUpdate(
+                ConfirmationMode.AUTO, null, 24, 30, 90, 30, 1, 8, 10, 0, 0));
+        repository.flush();
+        RestaurantBookingSettings withZeroes = repository.findById(restaurantId).orElseThrow();
+        assertEquals(0, withZeroes.getCustomerCancellationCutoffMinutes());
+        assertEquals(0, withZeroes.getNoShowGraceMinutes());
+        assertEquals(otherGrace, jdbcTemplate.queryForObject(
+                "select no_show_grace_minutes from restaurant_booking_settings where restaurant_id = ?",
+                Integer.class, otherRestaurantId));
+    }
+
+    @Test
+    void administrationUpdateInitializesMissingBookingSettings() {
+        ownerSettingsPort.updateForAdministration(restaurantId, new BookingSettingsUpdate(
+                ConfirmationMode.HYBRID, 7, 20, 60, 90, 30, 1, 10, 11, 120, 15));
+        repository.flush();
+
+        RestaurantBookingSettings created = repository.findById(restaurantId).orElseThrow();
+        assertEquals(ConfirmationMode.HYBRID, created.getConfirmationMode());
+        assertEquals((short) 7, created.getManualConfirmationMinPartySize());
+        assertEquals(10, jdbcTemplate.queryForObject(
+                "select checkout_hold_minutes from restaurant_booking_settings where restaurant_id = ?",
+                Integer.class, restaurantId));
+        assertEquals(30, jdbcTemplate.queryForObject(
+                "select pending_expiry_minutes from restaurant_booking_settings where restaurant_id = ?",
+                Integer.class, restaurantId));
     }
 
     @Test

@@ -7,6 +7,9 @@ import com.sibang.hankki.admin.application.exception.InvalidAdminQueryException;
 import com.sibang.hankki.admin.application.exception.InvalidAdminStatusTransitionException;
 import com.sibang.hankki.location.application.exception.InvalidProvinceCodeException;
 import com.sibang.hankki.location.application.exception.LocationCatalogUnavailableException;
+import com.sibang.hankki.restaurant.application.exception.BookingSettingsNotConfiguredException;
+import com.sibang.hankki.restaurant.application.exception.InvalidBookingRequestException;
+import com.sibang.hankki.restaurant.application.exception.RestaurantNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Instant;
 import org.springframework.http.HttpStatus;
@@ -16,18 +19,22 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @RestControllerAdvice(assignableTypes = {
         SystemAdminController.class, SystemAdminUserController.class, RestaurantAssignmentController.class,
-        SystemAdminReservationController.class
+        SystemAdminReservationController.class, SystemAdminBookingConfigurationController.class
 })
 public class SystemAdminExceptionHandler {
 
     @ResponseStatus(HttpStatus.BAD_REQUEST)
-    @ExceptionHandler({InvalidAdminQueryException.class, InvalidProvinceCodeException.class})
+    @ExceptionHandler({
+            InvalidAdminQueryException.class,
+            InvalidProvinceCodeException.class,
+            InvalidBookingRequestException.class
+    })
     ErrorResponse badRequest(HttpServletRequest request) {
         return ErrorResponse.of(HttpStatus.BAD_REQUEST, request.getRequestURI());
     }
 
     @ResponseStatus(HttpStatus.NOT_FOUND)
-    @ExceptionHandler(AdminResourceNotFoundException.class)
+    @ExceptionHandler({AdminResourceNotFoundException.class, RestaurantNotFoundException.class})
     ErrorResponse notFound(HttpServletRequest request) {
         return ErrorResponse.of(HttpStatus.NOT_FOUND, request.getRequestURI());
     }
@@ -36,7 +43,8 @@ public class SystemAdminExceptionHandler {
     @ExceptionHandler({
             InvalidAdminStatusTransitionException.class,
             AdminRestaurantConflictException.class,
-            AdminUserConflictException.class
+            AdminUserConflictException.class,
+            BookingSettingsNotConfiguredException.class
     })
     ErrorResponse conflict(HttpServletRequest request) {
         return ErrorResponse.of(HttpStatus.CONFLICT, request.getRequestURI());
