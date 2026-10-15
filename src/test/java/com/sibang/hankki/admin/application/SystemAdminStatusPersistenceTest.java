@@ -63,16 +63,19 @@ class SystemAdminStatusPersistenceTest {
     }
 
     @Test
-    void restaurantStatusIsPersisted() {
+    void draftAndChangesRequestedRestaurantsCanBePersistedAsPending() {
         UUID restaurantId = UUID.randomUUID();
-        insertRestaurant(restaurantId, "status-" + restaurantId, "PENDING", null);
+        insertRestaurant(restaurantId, "status-" + restaurantId, "DRAFT", null);
 
-        var changed = service.updateRestaurantStatus(restaurantId, "ACTIVE");
+        var firstSubmission = service.updateRestaurantStatus(restaurantId, "PENDING");
+        service.updateRestaurantStatus(restaurantId, "CHANGES_REQUESTED");
+        var resubmission = service.updateRestaurantStatus(restaurantId, "PENDING");
 
-        assertThat(changed.approvalStatus()).isEqualTo("ACTIVE");
+        assertThat(firstSubmission.approvalStatus()).isEqualTo("PENDING");
+        assertThat(resubmission.approvalStatus()).isEqualTo("PENDING");
         assertThat(jdbcTemplate.queryForObject(
                 "select approval_status from restaurants where id = ?", String.class, restaurantId))
-                .isEqualTo("ACTIVE");
+                .isEqualTo("PENDING");
     }
 
     @Test

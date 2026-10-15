@@ -11,6 +11,29 @@ Equivalent local command:
 mvn --batch-mode --no-transfer-progress clean verify
 ```
 
+## System-admin restaurant review lifecycle
+
+An ADMIN changes restaurant approval state with:
+
+```http
+PATCH /api/admin/restaurants/{restaurantId}/status
+Content-Type: application/json
+X-CSRF-TOKEN: <token>
+
+{"status":"PENDING"}
+```
+
+`PENDING` means the restaurant has been submitted and is awaiting system-admin review. Supported transitions are:
+
+- `DRAFT -> PENDING`
+- `CHANGES_REQUESTED -> PENDING`
+- `PENDING -> ACTIVE`
+- `PENDING -> CHANGES_REQUESTED`
+- `ACTIVE -> SUSPENDED`
+- `SUSPENDED -> ACTIVE`
+
+Sending the current status again is idempotent when that status is accepted by the endpoint. Every other transition is rejected with HTTP 409; invalid or missing status values return HTTP 400. The endpoint is ADMIN-only and PATCH requests require CSRF protection.
+
 ## Reservation persistence foundation
 
 Flyway V7 introduces the `reservations` and append-only `reservation_events` tables. It enforces canonical reservation statuses (`PENDING`, `ALTERNATIVE_PROPOSED`, `CONFIRMED`, `DECLINED`, `EXPIRED`, `CANCELLED`) and visit statuses (`EXPECTED`, `ARRIVED`, `SEATED`, `COMPLETED`, `NO_SHOW`), referential integrity, idempotency keys, event command IDs, optimistic-lock versions, and query indexes.

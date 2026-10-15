@@ -164,10 +164,10 @@ class SystemAdminControllerTest {
                 .willReturn(new AdminUser(
                         USER_ID, "customer01", "customer@example.com", "Customer", null,
                         "CUSTOMER", "SUSPENDED", null, NOW, NOW, NOW));
-        given(statusUseCase.updateRestaurantStatus(RESTAURANT_ID, "SUSPENDED"))
+        given(statusUseCase.updateRestaurantStatus(RESTAURANT_ID, "PENDING"))
                 .willReturn(new AdminRestaurant(
                         RESTAURANT_ID, "royal-pavilion", "The Royal Pavilion", "ho-chi-minh",
-                        "District 1", "District 1", "SUSPENDED", NOW, NOW));
+                        "District 1", "District 1", "PENDING", NOW, NOW));
 
         mockMvc.perform(patch("/api/admin/users/{id}/status", USER_ID)
                         .with(user("admin").roles("ADMIN"))
@@ -183,10 +183,10 @@ class SystemAdminControllerTest {
                         .with(user("admin").roles("ADMIN"))
                         .with(csrf())
                         .contentType("application/json")
-                        .content("{\"status\":\"SUSPENDED\"}"))
+                        .content("{\"status\":\"PENDING\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(RESTAURANT_ID.toString()))
-                .andExpect(jsonPath("$.approvalStatus").value("SUSPENDED"));
+                .andExpect(jsonPath("$.approvalStatus").value("PENDING"));
     }
 
     @Test
@@ -195,6 +195,11 @@ class SystemAdminControllerTest {
                         .with(user("admin").roles("ADMIN"))
                         .contentType("application/json")
                         .content("{\"status\":\"SUSPENDED\"}"))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(patch("/api/admin/restaurants/{id}/status", RESTAURANT_ID)
+                        .with(user("admin").roles("ADMIN"))
+                        .contentType("application/json")
+                        .content("{\"status\":\"PENDING\"}"))
                 .andExpect(status().isForbidden());
     }
 
@@ -206,6 +211,10 @@ class SystemAdminControllerTest {
                 .willThrow(new InvalidAdminStatusTransitionException("invalid transition"));
         given(statusUseCase.updateRestaurantStatus(RESTAURANT_ID, "ACTIVE"))
                 .willThrow(new AdminResourceNotFoundException("not found"));
+        given(statusUseCase.updateRestaurantStatus(RESTAURANT_ID, null))
+                .willThrow(new InvalidAdminQueryException("invalid"));
+        given(statusUseCase.updateRestaurantStatus(RESTAURANT_ID, "UNKNOWN"))
+                .willThrow(new InvalidAdminQueryException("invalid"));
 
         mockMvc.perform(patch("/api/admin/users/{id}/status", USER_ID)
                         .with(user("admin").roles("ADMIN"))
@@ -230,6 +239,16 @@ class SystemAdminControllerTest {
                         .content("{\"status\":\"ACTIVE\"}"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.status").value(404));
+
+        for (String body : List.of("{}", "{\"status\":\"UNKNOWN\"}")) {
+            mockMvc.perform(patch("/api/admin/restaurants/{id}/status", RESTAURANT_ID)
+                            .with(user("admin").roles("ADMIN"))
+                            .with(csrf())
+                            .contentType("application/json")
+                            .content(body))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.status").value(400));
+        }
     }
 
     @Test
