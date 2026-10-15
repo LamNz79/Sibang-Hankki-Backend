@@ -9,6 +9,7 @@ import com.sibang.hankki.restaurant.application.port.in.OwnerBusinessHoursUseCas
 import com.sibang.hankki.restaurant.application.port.in.OwnerSettingsUseCase;
 import com.sibang.hankki.restaurant.application.port.in.OwnerSlotRegenerationUseCase;
 import com.sibang.hankki.restaurant.application.port.out.RestaurantBusinessHourData;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -53,19 +54,21 @@ public class SystemAdminBookingConfigurationService implements SystemAdminBookin
     @Override
     public OwnerBusinessHoursUseCase.UpdateResult updateBusinessHours(
             UUID restaurantId, List<RestaurantBusinessHourData> hours) {
-        requireRestaurant(restaurantId);
-        return businessHoursUseCase.update(restaurantId, hours);
+        ZoneId timeZone = ZoneId.of(requireRestaurant(restaurantId).timezone());
+        return businessHoursUseCase.updateForAdministration(restaurantId, hours, timeZone);
     }
 
     @Override
     public OwnerSlotRegenerationUseCase.Result regenerateSlots(UUID restaurantId) {
-        requireRestaurant(restaurantId);
-        return regenerationUseCase.regenerate(restaurantId);
+        ZoneId timeZone = ZoneId.of(requireRestaurant(restaurantId).timezone());
+        return regenerationUseCase.regenerateForAdministration(restaurantId, timeZone);
     }
 
-    private void requireRestaurant(UUID restaurantId) {
-        if (restaurantId == null || restaurantPort.findById(restaurantId).isEmpty()) {
+    private SystemAdminRestaurantPort.RestaurantProfileData requireRestaurant(UUID restaurantId) {
+        if (restaurantId == null) {
             throw new AdminResourceNotFoundException("Restaurant not found");
         }
+        return restaurantPort.findById(restaurantId)
+                .orElseThrow(() -> new AdminResourceNotFoundException("Restaurant not found"));
     }
 }

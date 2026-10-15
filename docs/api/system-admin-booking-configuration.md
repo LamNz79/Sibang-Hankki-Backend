@@ -77,7 +77,7 @@ Example response:
 
 Regeneration delegates to the existing slot-regeneration service. It only affects the selected restaurant, keeps
 slots referenced by reservations or proposals, preserves occupied capacity, and uses that restaurant's booking
-settings and the existing slot-generation timezone behavior.
+settings, business hours, and configured timezone.
 
 An unknown or archived restaurant returns `404`. Invalid settings or hours return `400`; missing booking settings
 return `409`.

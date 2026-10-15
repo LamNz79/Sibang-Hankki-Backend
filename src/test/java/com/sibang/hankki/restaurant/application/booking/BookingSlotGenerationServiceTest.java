@@ -13,6 +13,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneOffset;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -118,6 +119,17 @@ class BookingSlotGenerationServiceTest {
         List<BookingSlotCandidate> slots = service.generateSlots(restaurantId, TODAY, TODAY);
 
         assertEquals(Instant.parse("2026-09-28T04:30:00Z"), slots.get(0).startsAt());
+    }
+
+    @Test
+    void administrationGenerationUsesSelectedTimezoneWithoutRequiringActiveStatus() {
+        configure(30, 30, List.of(hours(1, "11:30", "12:00")));
+
+        List<BookingSlotCandidate> slots = service.generateSlotsForAdministration(
+                restaurantId, TODAY, TODAY, ZoneId.of("Asia/Seoul"));
+
+        assertEquals(Instant.parse("2026-09-28T02:30:00Z"), slots.get(0).startsAt());
+        verify(restaurantCatalogPort, never()).findActiveRestaurantById(restaurantId);
     }
 
     @Test

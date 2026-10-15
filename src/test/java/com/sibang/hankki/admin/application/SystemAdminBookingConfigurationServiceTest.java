@@ -15,6 +15,7 @@ import com.sibang.hankki.restaurant.application.port.in.OwnerSlotRegenerationUse
 import com.sibang.hankki.restaurant.application.port.out.RestaurantBusinessHourData;
 import com.sibang.hankki.restaurant.domain.model.ConfirmationMode;
 import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -60,12 +61,16 @@ class SystemAdminBookingConfigurationServiceTest {
         service.regenerateSlots(RESTAURANT_A);
 
         verify(settingsUseCase).updateForAdministration(RESTAURANT_A, update);
-        verify(businessHoursUseCase).update(RESTAURANT_A, hours);
-        verify(regenerationUseCase).regenerate(RESTAURANT_A);
+        verify(businessHoursUseCase).updateForAdministration(
+                RESTAURANT_A, hours, ZoneId.of("Asia/Ho_Chi_Minh"));
+        verify(regenerationUseCase).regenerateForAdministration(
+                RESTAURANT_A, ZoneId.of("Asia/Ho_Chi_Minh"));
         verify(settingsUseCase, never()).updateForAdministration(
                 org.mockito.ArgumentMatchers.eq(RESTAURANT_B), org.mockito.ArgumentMatchers.any());
-        verify(businessHoursUseCase, never()).update(
-                org.mockito.ArgumentMatchers.eq(RESTAURANT_B), org.mockito.ArgumentMatchers.any());
+        verify(businessHoursUseCase, never()).updateForAdministration(
+                org.mockito.ArgumentMatchers.eq(RESTAURANT_B),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any());
     }
 
     @Test
