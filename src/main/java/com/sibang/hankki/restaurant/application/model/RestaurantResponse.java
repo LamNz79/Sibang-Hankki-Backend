@@ -1,7 +1,9 @@
 package com.sibang.hankki.restaurant.application.model;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 public record RestaurantResponse(
         String slug,
@@ -27,8 +29,21 @@ public record RestaurantResponse(
         int galleryCount,
         List<GalleryImage> galleryImages,
         String summary,
-        Map<String, Map<String, List<String>>> slotMatrix) {
+        Map<String, Map<String, List<String>>> slotMatrix,
+        List<MenuCategory> menuCategories) {
 
     public record GalleryImage(String imageUrl, String imageAlt) {
+    }
+
+    public record MenuCategory(UUID id, String name, int displayOrder, List<MenuItem> items) {
+    }
+
+    public record MenuItem(
+            UUID id,
+            String name,
+            String description,
+            BigDecimal price,
+            String currency,
+            String imageUrl) {
     }
 }

@@ -1,8 +1,10 @@
 package com.sibang.hankki.restaurant.application;
 
+import com.sibang.hankki.restaurant.application.model.OwnerMenu;
 import com.sibang.hankki.restaurant.application.model.RestaurantResponse;
 import com.sibang.hankki.restaurant.application.model.RestaurantSummaryResponse;
 import com.sibang.hankki.restaurant.application.port.in.RestaurantCatalogUseCase;
+import com.sibang.hankki.restaurant.application.port.out.OwnerMenuPort;
 import com.sibang.hankki.restaurant.application.port.out.RestaurantBusinessHourData;
 import com.sibang.hankki.restaurant.application.port.out.RestaurantCatalogPort;
 import com.sibang.hankki.restaurant.application.port.out.RestaurantData;
@@ -30,9 +32,11 @@ public class RestaurantCatalogService implements RestaurantCatalogUseCase {
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm");
 
     private final RestaurantCatalogPort catalogPort;
+    private final OwnerMenuPort menuPort;
 
-    public RestaurantCatalogService(RestaurantCatalogPort catalogPort) {
+    public RestaurantCatalogService(RestaurantCatalogPort catalogPort, OwnerMenuPort menuPort) {
         this.catalogPort = catalogPort;
+        this.menuPort = menuPort;
     }
 
     @Override
@@ -48,7 +52,7 @@ public class RestaurantCatalogService implements RestaurantCatalogUseCase {
                 .map(restaurant -> responses(List.of(restaurant), true).get(0));
     }
 
-    private List<RestaurantResponse> responses(List<RestaurantData> restaurants, boolean includeSlotMatrix) {
+    private List<RestaurantResponse> responses(List<RestaurantData> restaurants, boolean includeDetails) {
         if (restaurants.isEmpty()) {
             return List.of();
         }
@@ -64,7 +68,7 @@ public class RestaurantCatalogService implements RestaurantCatalogUseCase {
         return restaurants.stream()
                 .map(restaurant -> response(restaurant, tags.getOrDefault(restaurant.id(), List.of()),
                         hours.getOrDefault(restaurant.id(), List.of()), galleryCounts.getOrDefault(restaurant.id(), 0L),
-                        images.getOrDefault(restaurant.id(), List.of()), includeSlotMatrix))
+                        images.getOrDefault(restaurant.id(), List.of()), includeDetails))
                 .toList();
     }
 
@@ -74,7 +78,7 @@ public class RestaurantCatalogService implements RestaurantCatalogUseCase {
             List<RestaurantBusinessHourData> businessHours,
             long galleryCount,
             List<RestaurantImageData> images,
-            boolean includeSlotMatrix) {
+            boolean includeDetails) {
         RestaurantPrototypePresentation.Presentation presentation = RestaurantPrototypePresentation.forSlug(
                 restaurant.slug());
         RestaurantAvailabilityMockData.Availability availability = RestaurantAvailabilityMockData.forSlug(
@@ -119,7 +123,22 @@ public class RestaurantCatalogService implements RestaurantCatalogUseCase {
                                 image.imageUrl(), image.altText() == null ? restaurant.name() : image.altText()))
                         .toList(),
                 restaurant.description(),
-                includeSlotMatrix ? RestaurantAvailabilityMockData.slotMatrix(restaurant.slug()) : Map.of());
+                includeDetails ? RestaurantAvailabilityMockData.slotMatrix(restaurant.slug()) : Map.of(),
+                includeDetails ? publicMenu(menuPort.findAll(restaurant.id())) : List.of());
+    }
+
+    private List<RestaurantResponse.MenuCategory> publicMenu(OwnerMenu menu) {
+        return menu.categories().stream()
+                .map(category -> new RestaurantResponse.MenuCategory(
+                        category.id(), category.name(), category.displayOrder(), menu.items().stream()
+                                .filter(OwnerMenu.Item::available)
+                                .filter(item -> category.id().equals(item.categoryId()))
+                                .map(item -> new RestaurantResponse.MenuItem(
+                                        item.id(), item.name(), item.description(), item.price(),
+                                        item.currency(), item.imageUrl()))
+                                .toList()))
+                .filter(category -> !category.items().isEmpty())
+                .toList();
     }
 
     private <T> Map<UUID, List<T>> groupByRestaurant(List<T> values, Function<T, UUID> restaurantId) {

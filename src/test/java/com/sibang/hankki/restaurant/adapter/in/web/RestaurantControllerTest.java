@@ -5,9 +5,11 @@ import com.sibang.hankki.restaurant.application.port.in.RestaurantCatalogUseCase
 import com.sibang.hankki.restaurant.application.model.RestaurantResponse;
 import com.sibang.hankki.restaurant.application.model.RestaurantSummaryResponse;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -45,7 +47,8 @@ class RestaurantControllerTest {
                 .andExpect(jsonPath("$.length()").value(6))
                 .andExpect(jsonPath("$[0].slug").value("anan-saigon"))
                 .andExpect(jsonPath("$[0].imageUrl").value("https://example.test/anan.jpg"))
-                .andExpect(jsonPath("$[0].slotMatrix").doesNotExist());
+                .andExpect(jsonPath("$[0].slotMatrix").doesNotExist())
+                .andExpect(jsonPath("$[0].menuCategories").doesNotExist());
     }
 
     @Test
@@ -57,6 +60,13 @@ class RestaurantControllerTest {
                 .andExpect(jsonPath("$.name").value("Anan Saigon"))
                 .andExpect(jsonPath("$.imageUrl").value("https://example.test/anan.jpg"))
                 .andExpect(jsonPath("$.galleryImages[0].imageUrl").value("https://example.test/anan.jpg"))
+                .andExpect(jsonPath("$.menuCategories[0].name").value("Main dishes"))
+                .andExpect(jsonPath("$.menuCategories[0].items[0].name").value("Grilled beef"))
+                .andExpect(jsonPath("$.menuCategories[0].items[0].description").value("With vegetables"))
+                .andExpect(jsonPath("$.menuCategories[0].items[0].price").value(250000))
+                .andExpect(jsonPath("$.menuCategories[0].items[0].currency").value("VND"))
+                .andExpect(jsonPath("$.menuCategories[0].items[0].imageUrl")
+                        .value("https://example.test/beef.jpg"))
                 .andExpect(jsonPath("$.slotMatrix").isMap());
     }
 
@@ -81,6 +91,12 @@ class RestaurantControllerTest {
                 List.of("michelin", "special_deal", "available"), List.of("Michelin", "Special deal", "Date night"),
                 5, List.of(new RestaurantResponse.GalleryImage(
                         "https://example.test/anan.jpg", "Anan Saigon dining room")),
-                "summary", Map.of("2026-09-15", Map.of("2", List.of("18:30"))));
+                "summary", Map.of("2026-09-15", Map.of("2", List.of("18:30"))),
+                List.of(new RestaurantResponse.MenuCategory(
+                        UUID.fromString("20000000-0000-0000-0000-000000000001"),
+                        "Main dishes", 0, List.of(new RestaurantResponse.MenuItem(
+                                UUID.fromString("30000000-0000-0000-0000-000000000001"),
+                                "Grilled beef", "With vegetables", new BigDecimal("250000"),
+                                "VND", "https://example.test/beef.jpg")))));
     }
 }
