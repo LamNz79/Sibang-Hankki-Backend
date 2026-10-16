@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -75,6 +76,18 @@ public class CustomerAccountReservationController {
         var result = proposalUseCase.declineForAccount(id, proposalId, user.id());
         return CustomerAccountReservationResponse.from(
                 useCase.findAccountReservation(result.reservation().id(), user.id()), result.proposal());
+    }
+
+    @PostMapping("/{id}/proposals/{proposalId}/request-another-time")
+    public CustomerAccountReservationResponse requestAnotherTime(
+            @PathVariable UUID id,
+            @PathVariable UUID proposalId,
+            @RequestBody RequestAnotherTimeRequest request,
+            @AuthenticationPrincipal SessionUser user) {
+        var reservation = proposalUseCase.requestAnotherTimeForAccount(
+                id, proposalId, user.id(), request.requestedDate(), request.requestedTime());
+        return CustomerAccountReservationResponse.from(
+                useCase.findAccountReservation(reservation.id(), user.id()));
     }
 
     public record CustomerAccountReservationResponse(

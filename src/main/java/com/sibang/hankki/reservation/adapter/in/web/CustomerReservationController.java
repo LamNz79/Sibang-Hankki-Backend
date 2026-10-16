@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -68,6 +69,16 @@ public class CustomerReservationController {
             @RequestHeader(value = MANAGEMENT_TOKEN_HEADER, required = false) String managementToken) {
         var result = proposalUseCase.declineForGuest(id, proposalId, managementToken);
         return CustomerReservationResponse.from(result.reservation(), result.proposal());
+    }
+
+    @PostMapping("/{id}/proposals/{proposalId}/request-another-time")
+    public CustomerReservationResponse requestAnotherTime(
+            @PathVariable UUID id,
+            @PathVariable UUID proposalId,
+            @RequestHeader(value = MANAGEMENT_TOKEN_HEADER, required = false) String managementToken,
+            @RequestBody RequestAnotherTimeRequest request) {
+        return CustomerReservationResponse.from(proposalUseCase.requestAnotherTimeForGuest(
+                id, proposalId, managementToken, request.requestedDate(), request.requestedTime()));
     }
 
     public record CustomerReservationResponse(
