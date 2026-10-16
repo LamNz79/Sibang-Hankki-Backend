@@ -86,7 +86,7 @@ public class OwnerMenuController {
             String currency,
             String imageUrl,
             boolean available) {
-        private OwnerMenuItemUpdate toUpdate() {
+        public OwnerMenuItemUpdate toUpdate() {
             return new OwnerMenuItemUpdate(
                     categoryId, name, description, price, currency, imageUrl, available);
         }
