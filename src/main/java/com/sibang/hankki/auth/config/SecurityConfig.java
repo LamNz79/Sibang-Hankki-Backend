@@ -29,7 +29,8 @@ public class SecurityConfig {
                         "/api/customer/reservations/*/cancel",
                         "/api/customer/reservations/*/check-in-token",
                         "/api/customer/reservations/*/proposals/*/accept",
-                        "/api/customer/reservations/*/proposals/*/decline"))
+                        "/api/customer/reservations/*/proposals/*/decline",
+                        "/api/customer/reservations/*/proposals/*/request-another-time"))
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(
                                 "/api/auth/csrf", "/api/auth/login", "/api/auth/register", "/api/locations/**")

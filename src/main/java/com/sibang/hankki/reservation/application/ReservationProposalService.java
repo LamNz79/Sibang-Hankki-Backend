@@ -147,6 +147,34 @@ public class ReservationProposalService implements ReservationProposalUseCase {
     }
 
     @Override
+    @Transactional
+    public Reservation requestAnotherTimeForAccount(
+            UUID reservationId,
+            UUID proposalId,
+            UUID customerId,
+            String requestedDate,
+            String requestedTime) {
+        requireActiveCustomer(customerId);
+        Reservation reservation = reservationPort.findByIdAndCustomerIdForUpdate(reservationId, customerId)
+                .orElseThrow(() -> new ReservationNotFoundException(reservationId));
+        return requestAnotherTime(reservation, proposalId, customerId, requestedDate, requestedTime);
+    }
+
+    @Override
+    @Transactional
+    public Reservation requestAnotherTimeForGuest(
+            UUID reservationId,
+            UUID proposalId,
+            String managementToken,
+            String requestedDate,
+            String requestedTime) {
+        Reservation reservation = reservationPort.findByIdAndManagementTokenHashForUpdate(
+                        reservationId, managementTokenHash(reservationId, managementToken))
+                .orElseThrow(() -> new ReservationNotFoundException(reservationId));
+        return requestAnotherTime(reservation, proposalId, null, requestedDate, requestedTime);
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public Optional<ReservationProposal> findLatest(UUID reservationId) {
         return proposalPort.findLatestByReservationId(reservationId);
@@ -191,6 +219,58 @@ public class ReservationProposalService implements ReservationProposalUseCase {
                 proposal, ReservationProposalStatus.DECLINED, actorUserId, now));
         appendEvent(reservation.id(), ReservationEventType.ALTERNATIVE_DECLINED, actorUserId, proposal.id(), now);
         return new ProposalResult(declinedReservation, declinedProposal);
+    }
+
+    private Reservation requestAnotherTime(
+            Reservation reservation,
+            UUID proposalId,
+            UUID actorUserId,
+            String requestedDate,
+            String requestedTime) {
+        ZoneId timeZone = restaurantCatalogPort.findTimezoneById(reservation.restaurantId())
+                .map(ZoneId::of)
+                .orElseThrow(() -> new ReservationNotFoundException(reservation.restaurantId()));
+        Instant requestedStartsAt = parseStartsAt(requestedDate, requestedTime, timeZone, "requested");
+        ReservationProposal proposal = proposalPort.findByIdAndReservationIdForUpdate(proposalId, reservation.id())
+                .orElseThrow(() -> new ReservationNotFoundException(proposalId));
+
+        if (isAnotherTimeReplay(reservation, proposal, requestedStartsAt)) {
+            return reservation;
+        }
+        if (proposal.status() != ReservationProposalStatus.PENDING
+                || reservation.status() != ReservationStatus.ALTERNATIVE_PROPOSED
+                || reservation.version() != proposal.reservationVersion()) {
+            throw new InvalidReservationStateException("Reservation proposal is no longer current");
+        }
+        if (!requestedStartsAt.isAfter(Instant.now(clock))) {
+            throw new InvalidReservationStateException("Requested time must be in the future");
+        }
+
+        BookingSlotData slot = bookingSlotPort
+                .findByRestaurantIdAndStartsAt(reservation.restaurantId(), requestedStartsAt)
+                .orElseThrow(ReservationSlotNotFoundException::new);
+        if (slot.id().equals(proposal.proposedBookingSlotId())
+                || slot.startsAt().equals(proposal.proposedStartsAt())) {
+            throw new InvalidReservationStateException("Requested time must differ from the proposed time");
+        }
+        if (!bookingSlotPort.hasAvailableCapacity(slot.id(), reservation.partySize())) {
+            throw new ReservationCapacityUnavailableException();
+        }
+
+        Instant now = Instant.now(clock);
+        Reservation updated = reservationPort.save(withScheduleAndStatus(
+                reservation, slot.id(), slot.startsAt(), slot.endsAt(), ReservationStatus.PENDING, null));
+        proposalPort.save(responded(proposal, ReservationProposalStatus.DECLINED, actorUserId, now));
+        appendAnotherTimeEvent(reservation, proposal, slot.startsAt(), actorUserId, now);
+        return updated;
+    }
+
+    private boolean isAnotherTimeReplay(
+            Reservation reservation, ReservationProposal proposal, Instant requestedStartsAt) {
+        return reservation.status() == ReservationStatus.PENDING
+                && proposal.status() == ReservationProposalStatus.DECLINED
+                && reservation.version() == proposal.reservationVersion() + 1
+                && reservation.startsAt().equals(requestedStartsAt);
     }
 
     private ReservationProposal lockAndValidate(Reservation reservation, UUID proposalId) {
@@ -241,6 +321,20 @@ public class ReservationProposalService implements ReservationProposalUseCase {
                 null, null, createdAt));
     }
 
+    private void appendAnotherTimeEvent(
+            Reservation reservation,
+            ReservationProposal proposal,
+            Instant requestedStartsAt,
+            UUID actorUserId,
+            Instant createdAt) {
+        String metadata = "{\"previousRequestedStartsAt\":\"" + reservation.startsAt()
+                + "\",\"rejectedProposedStartsAt\":\"" + proposal.proposedStartsAt()
+                + "\",\"newlyRequestedStartsAt\":\"" + requestedStartsAt + "\"}";
+        eventPort.append(new ReservationEvent(
+                UUID.randomUUID(), reservation.id(), ReservationEventType.ANOTHER_TIME_REQUESTED, actorUserId,
+                "proposal-another-time-requested:" + proposal.id(), null, metadata, createdAt));
+    }
+
     private void requireActiveCustomer(UUID customerId) {
         try {
             customerProfileUseCase.get(customerId);
@@ -268,11 +362,15 @@ public class ReservationProposalService implements ReservationProposalUseCase {
     }
 
     private Instant parseProposedStartsAt(String date, String time, ZoneId timeZone) {
+        return parseStartsAt(date, time, timeZone, "proposed");
+    }
+
+    private Instant parseStartsAt(String date, String time, ZoneId timeZone, String fieldPrefix) {
         try {
             return LocalDate.parse(date).atTime(LocalTime.parse(time)).atZone(timeZone).toInstant();
         } catch (DateTimeException | NullPointerException exception) {
             throw new InvalidReservationRequestException(
-                    "proposedDate and proposedTime must use ISO date and time formats");
+                    fieldPrefix + "Date and " + fieldPrefix + "Time must use ISO date and time formats");
         }
     }
 

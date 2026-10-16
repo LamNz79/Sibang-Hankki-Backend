@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -105,6 +106,30 @@ class CustomerReservationControllerTest {
                         .header(CustomerReservationController.MANAGEMENT_TOKEN_HEADER, TOKEN))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.alternativeProposal.status").value("ACCEPTED"));
+    }
+
+    @Test
+    void guestRequestsAnotherTimeWithManagementTokenAndWithoutCsrf() throws Exception {
+        UUID proposalId = UUID.randomUUID();
+        Reservation pending = reservation(ReservationStatus.PENDING, null);
+        given(proposalUseCase.requestAnotherTimeForGuest(
+                RESERVATION_ID, proposalId, TOKEN, "2026-10-20", "18:30"))
+                .willReturn(pending);
+
+        mockMvc.perform(post("/api/customer/reservations/{id}/proposals/{proposalId}/request-another-time",
+                        RESERVATION_ID, proposalId)
+                        .header(CustomerReservationController.MANAGEMENT_TOKEN_HEADER, TOKEN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"requestedDate":"2026-10-20","requestedTime":"18:30"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(RESERVATION_ID.toString()))
+                .andExpect(jsonPath("$.status").value("PENDING"))
+                .andExpect(jsonPath("$.alternativeProposal").doesNotExist());
+
+        verify(proposalUseCase).requestAnotherTimeForGuest(
+                RESERVATION_ID, proposalId, TOKEN, "2026-10-20", "18:30");
     }
 
     private Reservation reservation(ReservationStatus status, VisitStatus visitStatus) {

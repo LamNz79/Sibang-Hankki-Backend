@@ -163,6 +163,47 @@ class CustomerAccountReservationControllerTest {
                 .andExpect(jsonPath("$.alternativeProposal.status").value("ACCEPTED"));
     }
 
+    @Test
+    void accountCustomerRequestsAnotherTimeWithCsrf() throws Exception {
+        UUID proposalId = UUID.randomUUID();
+        CustomerAccountReservation pending = view(ReservationStatus.PENDING, null);
+        given(proposalUseCase.requestAnotherTimeForAccount(
+                RESERVATION_ID, proposalId, CUSTOMER_ID, "2026-10-20", "18:30"))
+                .willReturn(pending.reservation());
+        given(useCase.findAccountReservation(RESERVATION_ID, CUSTOMER_ID)).willReturn(pending);
+        MockHttpSession customer = login("customer");
+        String endpoint = "/api/customer/account/reservations/{id}/proposals/{proposalId}/request-another-time";
+        String body = "{\"requestedDate\":\"2026-10-20\",\"requestedTime\":\"18:30\"}";
+
+        mockMvc.perform(post(endpoint, RESERVATION_ID, proposalId)
+                        .session(customer)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(post(endpoint, RESERVATION_ID, proposalId)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(post(endpoint, RESERVATION_ID, proposalId)
+                        .with(csrf())
+                        .session(customer)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("PENDING"))
+                .andExpect(jsonPath("$.alternativeProposal").doesNotExist());
+
+        mockMvc.perform(post(endpoint, RESERVATION_ID, proposalId)
+                        .with(csrf())
+                        .session(login("owner"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isForbidden());
+    }
+
     private void configureUser(String userid, String role, UUID id) {
         UserEntity user = org.mockito.Mockito.mock(UserEntity.class);
         given(user.getId()).willReturn(id);

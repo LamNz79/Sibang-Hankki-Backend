@@ -33,6 +33,7 @@ class ReservationProposalPersistenceTest {
     private static final Instant NOW = Instant.parse("2026-10-13T02:00:00Z");
     private static final Instant ORIGINAL_START = Instant.parse("2026-10-14T10:00:00Z");
     private static final Instant PROPOSED_START = Instant.parse("2026-10-14T11:00:00Z");
+    private static final Instant REQUESTED_START = Instant.parse("2026-10-15T11:30:00Z");
 
     @Autowired private ReservationProposalService service;
     @Autowired private JdbcTemplate jdbcTemplate;
@@ -43,6 +44,7 @@ class ReservationProposalPersistenceTest {
     private UUID reservationId;
     private UUID originalSlotId;
     private UUID proposedSlotId;
+    private UUID requestedSlotId;
 
     @BeforeEach
     void setUp() {
@@ -51,6 +53,7 @@ class ReservationProposalPersistenceTest {
         reservationId = UUID.randomUUID();
         originalSlotId = UUID.randomUUID();
         proposedSlotId = UUID.randomUUID();
+        requestedSlotId = UUID.randomUUID();
         jdbcTemplate.update("""
                 insert into restaurants (id, slug, name, city_slug, timezone, approval_status)
                 values (?, ?, 'Proposal Test', 'ho-chi-minh-city', 'Asia/Ho_Chi_Minh', 'ACTIVE')
@@ -61,6 +64,7 @@ class ReservationProposalPersistenceTest {
                 """, actorId, "proposal-" + actorId.toString().substring(0, 20), restaurantId);
         insertSlot(originalSlotId, ORIGINAL_START, 4, 0);
         insertSlot(proposedSlotId, PROPOSED_START, 4, 0);
+        insertSlot(requestedSlotId, REQUESTED_START, 4, 0);
         jdbcTemplate.update("""
                 insert into reservations (
                     id, reference, idempotency_key, request_fingerprint, restaurant_id, booking_slot_id,
@@ -132,6 +136,30 @@ class ReservationProposalPersistenceTest {
     }
 
     @Test
+    void guestRequestsAnotherTimeByUpdatingTheSameReservationOnce() {
+        var proposal = createProposal();
+
+        var updated = service.requestAnotherTimeForGuest(
+                reservationId, proposal.proposal().id(), "management-token", "2026-10-15", "18:30");
+
+        assertEquals(reservationId, updated.id());
+        assertEquals("PENDING", updated.status().name());
+        assertEquals(requestedSlotId, updated.bookingSlotId());
+        assertEquals(REQUESTED_START, updated.startsAt());
+        assertEquals(0, capacityReserved(proposedSlotId));
+        assertEquals(0, capacityReserved(requestedSlotId));
+        assertEquals("DECLINED", proposalStatus(proposal.proposal().id()));
+        assertEquals(1, eventCount("ANOTHER_TIME_REQUESTED"));
+        assertEquals(1, jdbcTemplate.queryForObject(
+                "select count(*) from reservations where id = ?", Integer.class, reservationId));
+
+        var replay = service.requestAnotherTimeForGuest(
+                reservationId, proposal.proposal().id(), "management-token", "2026-10-15", "18:30");
+        assertEquals(reservationId, replay.id());
+        assertEquals(1, eventCount("ANOTHER_TIME_REQUESTED"));
+    }
+
+    @Test
     @Transactional
     void slotRegenerationKeepsSlotsReferencedByReservationsAndProposals() {
         createProposal();
@@ -140,7 +168,7 @@ class ReservationProposalPersistenceTest {
                 restaurantId, ORIGINAL_START.minusSeconds(1), PROPOSED_START.plusSeconds(1));
 
         assertEquals(0, deleted);
-        assertEquals(2, jdbcTemplate.queryForObject(
+        assertEquals(3, jdbcTemplate.queryForObject(
                 "select count(*) from booking_slots where restaurant_id = ?", Integer.class, restaurantId));
     }
 
@@ -160,8 +188,12 @@ class ReservationProposalPersistenceTest {
     }
 
     private int capacityReserved() {
+        return capacityReserved(proposedSlotId);
+    }
+
+    private int capacityReserved(UUID slotId) {
         return jdbcTemplate.queryForObject(
-                "select capacity_reserved from booking_slots where id = ?", Integer.class, proposedSlotId);
+                "select capacity_reserved from booking_slots where id = ?", Integer.class, slotId);
     }
 
     private String reservationStatus() {

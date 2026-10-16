@@ -17,6 +17,20 @@ public interface ReservationProposalUseCase {
 
     ProposalResult declineForGuest(UUID reservationId, UUID proposalId, String managementToken);
 
+    Reservation requestAnotherTimeForAccount(
+            UUID reservationId,
+            UUID proposalId,
+            UUID customerId,
+            String requestedDate,
+            String requestedTime);
+
+    Reservation requestAnotherTimeForGuest(
+            UUID reservationId,
+            UUID proposalId,
+            String managementToken,
+            String requestedDate,
+            String requestedTime);
+
     Optional<ReservationProposal> findLatest(UUID reservationId);
 
     record OwnerProposalCommand(
