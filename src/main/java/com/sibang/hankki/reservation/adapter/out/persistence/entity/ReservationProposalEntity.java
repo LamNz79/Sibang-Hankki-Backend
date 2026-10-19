@@ -1,6 +1,7 @@
 package com.sibang.hankki.reservation.adapter.out.persistence.entity;
 
 import com.sibang.hankki.reservation.domain.model.ReservationProposal;
+import com.sibang.hankki.reservation.domain.model.ReservationProposalInitiator;
 import com.sibang.hankki.reservation.domain.model.ReservationProposalStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -34,8 +35,11 @@ public class ReservationProposalEntity {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private ReservationProposalStatus status;
-    @Column(name = "created_by", nullable = false)
+    @Column(name = "created_by")
     private UUID createdBy;
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private ReservationProposalInitiator initiator;
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
     @Column(name = "responded_by")
@@ -60,6 +64,7 @@ public class ReservationProposalEntity {
         message = proposal.message();
         respondBy = proposal.respondBy();
         status = proposal.status();
+        initiator = proposal.initiator();
         createdBy = proposal.createdBy();
         createdAt = proposal.createdAt();
         respondedBy = proposal.respondedBy();
@@ -75,6 +80,7 @@ public class ReservationProposalEntity {
     public String getMessage() { return message; }
     public Instant getRespondBy() { return respondBy; }
     public ReservationProposalStatus getStatus() { return status; }
+    public ReservationProposalInitiator getInitiator() { return initiator; }
     public UUID getCreatedBy() { return createdBy; }
     public Instant getCreatedAt() { return createdAt; }
     public UUID getRespondedBy() { return respondedBy; }

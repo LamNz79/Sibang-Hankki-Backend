@@ -603,6 +603,37 @@ class OwnerReservationControllerTest {
                 .andExpect(jsonPath("$.alternativeProposal.status").value("PENDING"));
     }
 
+    @Test
+    void ownerAcceptsCustomerChangeRequestWithSessionScopeAndCsrf() throws Exception {
+        UUID requestId = UUID.randomUUID();
+        Reservation confirmed = reservation(ReservationStatus.CONFIRMED, VisitStatus.EXPECTED);
+        ReservationProposal request = new ReservationProposal(
+                requestId, RESERVATION_ID, UUID.randomUUID(),
+                Instant.parse("2026-10-20T11:30:00Z"), 2, 3, "Customer request",
+                null, ReservationProposalStatus.ACCEPTED,
+                com.sibang.hankki.reservation.domain.model.ReservationProposalInitiator.CUSTOMER,
+                null, Instant.parse("2026-10-13T02:00:00Z"), OWNER_ID,
+                Instant.parse("2026-10-13T03:00:00Z"));
+        given(proposalUseCase.acceptChangeRequest(
+                RESERVATION_ID, requestId, RESTAURANT_ID, OWNER_ID))
+                .willReturn(new ProposalResult(confirmed, request));
+
+        mockMvc.perform(post("/api/owner/reservations/{id}/change-requests/{requestId}/accept",
+                        RESERVATION_ID, requestId)
+                        .session(login("owner")))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/owner/reservations/{id}/change-requests/{requestId}/accept",
+                        RESERVATION_ID, requestId)
+                        .with(csrf()).session(login("customer")))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/owner/reservations/{id}/change-requests/{requestId}/accept",
+                        RESERVATION_ID, requestId)
+                        .with(csrf()).session(login("owner")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.alternativeProposal.initiator").value("CUSTOMER"))
+                .andExpect(jsonPath("$.alternativeProposal.status").value("ACCEPTED"));
+    }
+
     private MockHttpSession login(String userid) throws Exception {
         MvcResult result = mockMvc.perform(post("/api/auth/login")
                         .with(csrf())

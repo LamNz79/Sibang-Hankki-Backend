@@ -31,6 +31,26 @@ public interface ReservationProposalUseCase {
             String requestedDate,
             String requestedTime);
 
+    ProposalResult requestChangeForAccount(
+            UUID reservationId,
+            UUID customerId,
+            String requestedDate,
+            String requestedTime,
+            String message);
+
+    ProposalResult requestChangeForGuest(
+            UUID reservationId,
+            String managementToken,
+            String requestedDate,
+            String requestedTime,
+            String message);
+
+    ProposalResult acceptChangeRequest(
+            UUID reservationId, UUID requestId, UUID restaurantId, UUID actorUserId);
+
+    ProposalResult declineChangeRequest(
+            UUID reservationId, UUID requestId, UUID restaurantId, UUID actorUserId);
+
     Optional<ReservationProposal> findLatest(UUID reservationId);
 
     record OwnerProposalCommand(

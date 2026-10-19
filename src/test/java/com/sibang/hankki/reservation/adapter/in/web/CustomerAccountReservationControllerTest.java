@@ -204,6 +204,36 @@ class CustomerAccountReservationControllerTest {
                 .andExpect(status().isForbidden());
     }
 
+    @Test
+    void accountChangeRequestRequiresCustomerSessionAndCsrf() throws Exception {
+        CustomerAccountReservation confirmed = view(ReservationStatus.CONFIRMED, VisitStatus.EXPECTED);
+        ReservationProposal proposal = new ReservationProposal(
+                UUID.randomUUID(), RESERVATION_ID, UUID.randomUUID(),
+                Instant.parse("2026-10-20T11:30:00Z"), 2, 0, "Window",
+                null, ReservationProposalStatus.PENDING,
+                com.sibang.hankki.reservation.domain.model.ReservationProposalInitiator.CUSTOMER,
+                CUSTOMER_ID, Instant.parse("2026-10-01T00:00:00Z"), null, null);
+        given(proposalUseCase.requestChangeForAccount(
+                RESERVATION_ID, CUSTOMER_ID, "2026-10-20", "18:30", "Window"))
+                .willReturn(new ProposalResult(confirmed.reservation(), proposal));
+        given(useCase.findAccountReservation(RESERVATION_ID, CUSTOMER_ID)).willReturn(confirmed);
+        String body = "{\"requestedDate\":\"2026-10-20\",\"requestedTime\":\"18:30\",\"message\":\"Window\"}";
+
+        mockMvc.perform(post("/api/customer/account/reservations/{id}/change-requests", RESERVATION_ID)
+                        .session(login("customer"))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/customer/account/reservations/{id}/change-requests", RESERVATION_ID)
+                        .with(csrf()).session(login("owner"))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/customer/account/reservations/{id}/change-requests", RESERVATION_ID)
+                        .with(csrf()).session(login("customer"))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.alternativeProposal.initiator").value("CUSTOMER"));
+    }
+
     private void configureUser(String userid, String role, UUID id) {
         UserEntity user = org.mockito.Mockito.mock(UserEntity.class);
         given(user.getId()).willReturn(id);

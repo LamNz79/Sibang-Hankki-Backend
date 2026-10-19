@@ -5,6 +5,7 @@ import com.sibang.hankki.reservation.adapter.out.persistence.repository.Reservat
 import com.sibang.hankki.reservation.application.port.out.ReservationProposalPersistencePort;
 import com.sibang.hankki.reservation.domain.model.ReservationProposal;
 import com.sibang.hankki.reservation.domain.model.ReservationProposalStatus;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
@@ -45,11 +46,17 @@ public class ReservationProposalPersistenceAdapter implements ReservationProposa
         return repository.findByIdAndReservationIdForUpdate(id, reservationId).map(this::toProposal);
     }
 
+    @Override
+    public void declinePendingByReservationId(UUID reservationId, UUID respondedBy, Instant respondedAt) {
+        repository.declinePendingByReservationId(
+                reservationId, ReservationProposalStatus.DECLINED, respondedBy, respondedAt);
+    }
+
     private ReservationProposal toProposal(ReservationProposalEntity entity) {
         return new ReservationProposal(
                 entity.getId(), entity.getReservationId(), entity.getProposedBookingSlotId(),
                 entity.getProposedStartsAt(), entity.getProposedPartySize(), entity.getReservationVersion(),
-                entity.getMessage(), entity.getRespondBy(), entity.getStatus(), entity.getCreatedBy(),
+                entity.getMessage(), entity.getRespondBy(), entity.getStatus(), entity.getInitiator(), entity.getCreatedBy(),
                 entity.getCreatedAt(), entity.getRespondedBy(), entity.getRespondedAt());
     }
 }

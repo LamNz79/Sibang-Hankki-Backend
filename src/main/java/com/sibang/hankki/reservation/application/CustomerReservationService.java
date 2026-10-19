@@ -7,6 +7,7 @@ import com.sibang.hankki.reservation.application.port.in.CustomerAccountReservat
 import com.sibang.hankki.reservation.application.port.in.CustomerReservationUseCase;
 import com.sibang.hankki.reservation.application.port.out.ReservationEventPersistencePort;
 import com.sibang.hankki.reservation.application.port.out.ReservationPersistencePort;
+import com.sibang.hankki.reservation.application.port.out.ReservationProposalPersistencePort;
 import com.sibang.hankki.reservation.domain.model.Reservation;
 import com.sibang.hankki.reservation.domain.model.ReservationEvent;
 import com.sibang.hankki.reservation.domain.model.ReservationEventType;
@@ -32,6 +33,7 @@ public class CustomerReservationService implements CustomerReservationUseCase, C
 
     private final ReservationPersistencePort reservationPersistencePort;
     private final ReservationEventPersistencePort eventPersistencePort;
+    private final ReservationProposalPersistencePort proposalPersistencePort;
     private final BookingSettingsPort bookingSettingsPort;
     private final BookingSlotPort bookingSlotPort;
     private final RestaurantCatalogPort restaurantCatalogPort;
@@ -41,6 +43,7 @@ public class CustomerReservationService implements CustomerReservationUseCase, C
     public CustomerReservationService(
             ReservationPersistencePort reservationPersistencePort,
             ReservationEventPersistencePort eventPersistencePort,
+            ReservationProposalPersistencePort proposalPersistencePort,
             BookingSettingsPort bookingSettingsPort,
             BookingSlotPort bookingSlotPort,
             RestaurantCatalogPort restaurantCatalogPort,
@@ -48,6 +51,7 @@ public class CustomerReservationService implements CustomerReservationUseCase, C
             Clock clock) {
         this.reservationPersistencePort = reservationPersistencePort;
         this.eventPersistencePort = eventPersistencePort;
+        this.proposalPersistencePort = proposalPersistencePort;
         this.bookingSettingsPort = bookingSettingsPort;
         this.bookingSlotPort = bookingSlotPort;
         this.restaurantCatalogPort = restaurantCatalogPort;
@@ -153,7 +157,9 @@ public class CustomerReservationService implements CustomerReservationUseCase, C
             throw new InvalidReservationStateException("Reserved capacity could not be released");
         }
 
+        Instant now = Instant.now(clock);
         Reservation cancelled = reservationPersistencePort.save(cancelled(reservation));
+        proposalPersistencePort.declinePendingByReservationId(reservation.id(), actorUserId, now);
         eventPersistencePort.append(new ReservationEvent(
                 UUID.randomUUID(),
                 reservation.id(),
@@ -162,7 +168,7 @@ public class CustomerReservationService implements CustomerReservationUseCase, C
                 "customer-cancel:" + reservation.id(),
                 null,
                 null,
-                Instant.now(clock)));
+                now));
         return cancelled;
     }
 

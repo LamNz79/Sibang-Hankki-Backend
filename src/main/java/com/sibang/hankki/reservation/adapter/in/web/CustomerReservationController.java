@@ -81,6 +81,16 @@ public class CustomerReservationController {
                 id, proposalId, managementToken, request.requestedDate(), request.requestedTime()));
     }
 
+    @PostMapping("/{id}/change-requests")
+    public CustomerReservationResponse requestChange(
+            @PathVariable UUID id,
+            @RequestHeader(value = MANAGEMENT_TOKEN_HEADER, required = false) String managementToken,
+            @RequestBody ReservationChangeRequest request) {
+        var result = proposalUseCase.requestChangeForGuest(
+                id, managementToken, request.requestedDate(), request.requestedTime(), request.message());
+        return CustomerReservationResponse.from(result.reservation(), result.proposal());
+    }
+
     public record CustomerReservationResponse(
             UUID id,
             String reference,
