@@ -10,7 +10,9 @@ import com.sibang.hankki.admin.application.exception.AdminResourceNotFoundExcept
 import com.sibang.hankki.admin.application.exception.InvalidAdminQueryException;
 import com.sibang.hankki.admin.application.port.in.SystemAdminReservationReadUseCase;
 import com.sibang.hankki.admin.application.port.in.SystemAdminReservationReadUseCase.AdminReservation;
+import com.sibang.hankki.admin.application.port.in.SystemAdminReservationReadUseCase.AdminReservationDetail;
 import com.sibang.hankki.admin.application.port.in.SystemAdminReservationReadUseCase.AdminReservationPage;
+import com.sibang.hankki.admin.application.port.in.SystemAdminReservationReadUseCase.AlternativeProposal;
 import com.sibang.hankki.auth.config.SecurityConfig;
 import java.time.Instant;
 import java.util.List;
@@ -87,6 +89,24 @@ class SystemAdminReservationControllerTest {
             mockMvc.perform(get(url).with(user("admin").roles("ADMIN")))
                     .andExpect(status().isBadRequest());
         }
+    }
+
+    @Test
+    void adminDetailExposesProposalInitiator() throws Exception {
+        var item = item();
+        var proposal = new AlternativeProposal(
+                UUID.randomUUID(), NOW.plusSeconds(3600), "Later please", null,
+                "PENDING", "CUSTOMER", NOW.minusSeconds(1800));
+        given(readUseCase.findById(RESERVATION_ID)).willReturn(new AdminReservationDetail(
+                item.id(), item.reference(), item.restaurantId(), item.restaurantName(), item.restaurantSlug(),
+                item.customerName(), item.customerEmail(), item.customerPhone(), item.startsAt(), item.endsAt(),
+                item.partySize(), item.status(), item.visitStatus(), "Window seat", null,
+                item.createdAt(), item.updatedAt(), proposal));
+
+        mockMvc.perform(get("/api/admin/reservations/{id}", RESERVATION_ID)
+                        .with(user("admin").roles("ADMIN")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.alternativeProposal.initiator").value("CUSTOMER"));
     }
 
     @Test

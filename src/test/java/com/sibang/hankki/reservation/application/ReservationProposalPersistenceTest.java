@@ -164,6 +164,9 @@ class ReservationProposalPersistenceTest {
         var updated = service.requestChangeForGuest(
                 reservationId, "management-token", "2026-10-15", "18:30", "New request");
 
+        var replay = service.requestChangeForGuest(
+                reservationId, "management-token", "2026-10-15", "18:30", "New request");
+
         assertEquals(reservationId, updated.reservation().id());
         assertEquals("PENDING", updated.reservation().status().name());
         assertEquals(requestedSlotId, updated.reservation().bookingSlotId());
@@ -177,6 +180,12 @@ class ReservationProposalPersistenceTest {
         assertEquals(1, eventCount("RESCHEDULED"));
         assertEquals(1, jdbcTemplate.queryForObject(
                 "select count(*) from reservations where id = ?", Integer.class, reservationId));
+        assertEquals(reservationId, replay.reservation().id());
+        assertEquals(requestedSlotId, replay.reservation().bookingSlotId());
+        assertEquals(REQUESTED_START, replay.reservation().startsAt());
+        assertEquals(1, eventCount("RESCHEDULED"));
+        assertEquals(0, capacityReserved(originalSlotId));
+        assertEquals(0, capacityReserved(requestedSlotId));
     }
 
     @Test

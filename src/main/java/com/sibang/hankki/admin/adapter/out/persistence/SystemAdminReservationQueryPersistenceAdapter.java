@@ -173,6 +173,6 @@ public class SystemAdminReservationQueryPersistenceAdapter implements SystemAdmi
     private AlternativeProposalData toProposalData(ReservationProposalEntity proposal) {
         return new AlternativeProposalData(
                 proposal.getId(), proposal.getProposedStartsAt(), proposal.getMessage(), proposal.getRespondBy(),
-                proposal.getStatus().name(), proposal.getCreatedAt());
+                proposal.getStatus().name(), proposal.getInitiator().name(), proposal.getCreatedAt());
     }
 }

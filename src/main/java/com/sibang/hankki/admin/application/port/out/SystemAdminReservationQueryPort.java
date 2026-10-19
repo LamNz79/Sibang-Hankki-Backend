@@ -73,6 +73,7 @@ public interface SystemAdminReservationQueryPort {
             String message,
             Instant respondBy,
             String status,
+            String initiator,
             Instant createdAt) {
     }
 

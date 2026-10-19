@@ -152,11 +152,25 @@ class SystemAdminReservationReadPersistenceTest {
         String marker = marker();
         UUID restaurant = insertRestaurant(marker, "Detail " + marker);
         UUID reservation = uuid("95", 1);
+        UUID proposedSlot = UUID.randomUUID();
+        Instant proposedStartsAt = Instant.parse("2026-10-06T11:30:00Z");
         insertReservation(restaurant, reservation, marker + "-DETAIL", "Detail Customer", "0900000000",
                 "detail@example.com", Instant.parse("2026-10-05T11:30:00Z"), "PENDING", null);
         jdbcTemplate.update(
                 "update reservations set special_request = 'Window seat', pre_order_note = 'No peanuts' where id = ?",
                 reservation);
+        jdbcTemplate.update("""
+                insert into booking_slots (
+                    id, restaurant_id, starts_at, ends_at, capacity_total, capacity_reserved
+                ) values (?, ?, ?, ?, 4, 0)
+                """, proposedSlot, restaurant, Timestamp.from(proposedStartsAt),
+                Timestamp.from(proposedStartsAt.plusSeconds(5400)));
+        jdbcTemplate.update("""
+                insert into reservation_proposals (
+                    id, reservation_id, proposed_booking_slot_id, proposed_starts_at,
+                    proposed_party_size, reservation_version, message, status, initiator, created_by
+                ) values (?, ?, ?, ?, 2, 0, 'Later please', 'PENDING', 'CUSTOMER', null)
+                """, UUID.randomUUID(), reservation, proposedSlot, Timestamp.from(proposedStartsAt));
 
         var detail = service.findById(reservation);
 
@@ -164,6 +178,7 @@ class SystemAdminReservationReadPersistenceTest {
         assertThat(detail.restaurantName()).isEqualTo("Detail " + marker);
         assertThat(detail.specialRequest()).isEqualTo("Window seat");
         assertThat(detail.preOrderNote()).isEqualTo("No peanuts");
+        assertThat(detail.alternativeProposal().initiator()).isEqualTo("CUSTOMER");
     }
 
     private long pageForStatus(String query, String status) {
