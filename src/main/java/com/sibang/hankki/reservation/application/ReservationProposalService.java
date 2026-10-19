@@ -13,6 +13,7 @@ import com.sibang.hankki.reservation.domain.model.Reservation;
 import com.sibang.hankki.reservation.domain.model.ReservationEvent;
 import com.sibang.hankki.reservation.domain.model.ReservationEventType;
 import com.sibang.hankki.reservation.domain.model.ReservationProposal;
+import com.sibang.hankki.reservation.domain.model.ReservationProposalInitiator;
 import com.sibang.hankki.reservation.domain.model.ReservationProposalStatus;
 import com.sibang.hankki.reservation.domain.model.ReservationStatus;
 import com.sibang.hankki.reservation.domain.model.VisitStatus;
@@ -29,6 +30,7 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeParseException;
 import java.util.Optional;
+import java.util.Objects;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -104,7 +106,7 @@ public class ReservationProposalService implements ReservationProposalUseCase {
         ReservationProposal proposal = proposalPort.save(new ReservationProposal(
                 UUID.randomUUID(), reservation.id(), slot.id(), slot.startsAt(), reservation.partySize(),
                 proposedReservation.version(), message, respondBy, ReservationProposalStatus.PENDING,
-                command.actorUserId(), now, null, null));
+                ReservationProposalInitiator.RESTAURANT, command.actorUserId(), now, null, null));
         appendEvent(reservation.id(), ReservationEventType.ALTERNATIVE_PROPOSED,
                 command.actorUserId(), proposal.id(), now);
         return new ProposalResult(proposedReservation, proposal);
@@ -175,13 +177,108 @@ public class ReservationProposalService implements ReservationProposalUseCase {
     }
 
     @Override
+    @Transactional
+    public ProposalResult requestChangeForAccount(
+            UUID reservationId,
+            UUID customerId,
+            String requestedDate,
+            String requestedTime,
+            String message) {
+        requireActiveCustomer(customerId);
+        Reservation reservation = reservationPort.findByIdAndCustomerIdForUpdate(reservationId, customerId)
+                .orElseThrow(() -> new ReservationNotFoundException(reservationId));
+        return requestChange(reservation, customerId, requestedDate, requestedTime, message);
+    }
+
+    @Override
+    @Transactional
+    public ProposalResult requestChangeForGuest(
+            UUID reservationId,
+            String managementToken,
+            String requestedDate,
+            String requestedTime,
+            String message) {
+        Reservation reservation = reservationPort.findByIdAndManagementTokenHashForUpdate(
+                        reservationId, managementTokenHash(reservationId, managementToken))
+                .orElseThrow(() -> new ReservationNotFoundException(reservationId));
+        return requestChange(reservation, null, requestedDate, requestedTime, message);
+    }
+
+    @Override
+    @Transactional
+    public ProposalResult acceptChangeRequest(
+            UUID reservationId, UUID requestId, UUID restaurantId, UUID actorUserId) {
+        Reservation reservation = reservationPort.findByIdAndRestaurantIdForUpdate(reservationId, restaurantId)
+                .orElseThrow(() -> new ReservationNotFoundException(reservationId));
+        ReservationProposal proposal = proposalPort.findByIdAndReservationIdForUpdate(requestId, reservation.id())
+                .orElseThrow(() -> new ReservationNotFoundException(requestId));
+        if (isAcceptedChangeReplay(reservation, proposal)) {
+            return new ProposalResult(reservation, proposal);
+        }
+        validateCustomerChangeRequest(reservation, proposal);
+        Instant now = Instant.now(clock);
+        if (!proposal.proposedStartsAt().isAfter(now)) {
+            throw new InvalidReservationStateException("Requested time has already passed");
+        }
+        if (reservation.bookingSlotId() == null
+                || reservation.bookingSlotId().equals(proposal.proposedBookingSlotId())) {
+            throw new InvalidReservationStateException("Requested time must differ from the current reservation time");
+        }
+        BookingSlotData newSlot = bookingSlotPort
+                .findByRestaurantIdAndStartsAt(restaurantId, proposal.proposedStartsAt())
+                .filter(slot -> slot.id().equals(proposal.proposedBookingSlotId()))
+                .orElseThrow(() -> new InvalidReservationStateException("Requested booking slot is stale"));
+        lockSlots(restaurantId, reservation.bookingSlotId(), newSlot.id());
+        if (!bookingSlotPort.hasAvailableCapacity(newSlot.id(), reservation.partySize())
+                || !bookingSlotPort.reserveCapacity(newSlot.id(), reservation.partySize())) {
+            throw new ReservationCapacityUnavailableException();
+        }
+        if (!bookingSlotPort.releaseCapacity(reservation.bookingSlotId(), reservation.partySize())) {
+            throw new InvalidReservationStateException("Original reserved capacity could not be released");
+        }
+
+        Reservation updated = reservationPort.save(withScheduleAndStatus(
+                reservation, newSlot.id(), newSlot.startsAt(), newSlot.endsAt(),
+                ReservationStatus.CONFIRMED, VisitStatus.EXPECTED));
+        ReservationProposal accepted = proposalPort.save(responded(
+                proposal, ReservationProposalStatus.ACCEPTED, actorUserId, now));
+        appendRescheduledEvent(reservation, newSlot.startsAt(), actorUserId, proposal.id(), now);
+        return new ProposalResult(updated, accepted);
+    }
+
+    @Override
+    @Transactional
+    public ProposalResult declineChangeRequest(
+            UUID reservationId, UUID requestId, UUID restaurantId, UUID actorUserId) {
+        Reservation reservation = reservationPort.findByIdAndRestaurantIdForUpdate(reservationId, restaurantId)
+                .orElseThrow(() -> new ReservationNotFoundException(reservationId));
+        ReservationProposal proposal = proposalPort.findByIdAndReservationIdForUpdate(requestId, reservation.id())
+                .orElseThrow(() -> new ReservationNotFoundException(requestId));
+        if (proposal.initiator() == ReservationProposalInitiator.CUSTOMER
+                && proposal.status() == ReservationProposalStatus.DECLINED
+                && reservation.status() == ReservationStatus.CONFIRMED
+                && reservation.visitStatus() == VisitStatus.EXPECTED
+                && reservation.version() == proposal.reservationVersion()) {
+            return new ProposalResult(reservation, proposal);
+        }
+        validateCustomerChangeRequest(reservation, proposal);
+        Instant now = Instant.now(clock);
+        ReservationProposal declined = proposalPort.save(responded(
+                proposal, ReservationProposalStatus.DECLINED, actorUserId, now));
+        appendEvent(reservation.id(), ReservationEventType.RESCHEDULE_DECLINED,
+                actorUserId, proposal.id(), now);
+        return new ProposalResult(reservation, declined);
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public Optional<ReservationProposal> findLatest(UUID reservationId) {
         return proposalPort.findLatestByReservationId(reservationId);
     }
 
     private ProposalResult accept(Reservation reservation, UUID proposalId, UUID actorUserId) {
-        ReservationProposal proposal = lockAndValidate(reservation, proposalId);
+        ReservationProposal proposal = lockAndValidate(
+                reservation, proposalId, ReservationProposalInitiator.RESTAURANT);
         Instant now = Instant.now(clock);
         if (!now.isBefore(proposal.proposedStartsAt())) {
             throw new InvalidReservationStateException("Proposed time has already passed");
@@ -210,7 +307,8 @@ public class ReservationProposalService implements ReservationProposalUseCase {
     }
 
     private ProposalResult decline(Reservation reservation, UUID proposalId, UUID actorUserId) {
-        ReservationProposal proposal = lockAndValidate(reservation, proposalId);
+        ReservationProposal proposal = lockAndValidate(
+                reservation, proposalId, ReservationProposalInitiator.RESTAURANT);
         Instant now = Instant.now(clock);
         Reservation declinedReservation = reservationPort.save(withScheduleAndStatus(
                 reservation, reservation.bookingSlotId(), reservation.startsAt(), reservation.endsAt(),
@@ -238,6 +336,7 @@ public class ReservationProposalService implements ReservationProposalUseCase {
             return reservation;
         }
         if (proposal.status() != ReservationProposalStatus.PENDING
+                || proposal.initiator() != ReservationProposalInitiator.RESTAURANT
                 || reservation.status() != ReservationStatus.ALTERNATIVE_PROPOSED
                 || reservation.version() != proposal.reservationVersion()) {
             throw new InvalidReservationStateException("Reservation proposal is no longer current");
@@ -265,6 +364,66 @@ public class ReservationProposalService implements ReservationProposalUseCase {
         return updated;
     }
 
+    private ProposalResult requestChange(
+            Reservation reservation,
+            UUID actorUserId,
+            String requestedDate,
+            String requestedTime,
+            String requestedMessage) {
+        String message = normalizeMessage(requestedMessage);
+        ZoneId timeZone = restaurantCatalogPort.findTimezoneById(reservation.restaurantId())
+                .map(ZoneId::of)
+                .orElseThrow(() -> new ReservationNotFoundException(reservation.restaurantId()));
+        Instant requestedStartsAt = parseStartsAt(requestedDate, requestedTime, timeZone, "requested");
+        if (!requestedStartsAt.isAfter(Instant.now(clock))) {
+            throw new InvalidReservationStateException("Requested time must be in the future");
+        }
+        if (reservation.status() != ReservationStatus.PENDING
+                && (reservation.status() != ReservationStatus.CONFIRMED
+                        || reservation.visitStatus() != VisitStatus.EXPECTED)) {
+            throw new InvalidReservationStateException(
+                    "Only PENDING or CONFIRMED and EXPECTED reservations can be rescheduled");
+        }
+
+        BookingSlotData slot = bookingSlotPort
+                .findByRestaurantIdAndStartsAt(reservation.restaurantId(), requestedStartsAt)
+                .orElseThrow(ReservationSlotNotFoundException::new);
+        if (slot.id().equals(reservation.bookingSlotId()) || slot.startsAt().equals(reservation.startsAt())) {
+            throw new InvalidReservationStateException("Requested time must differ from the current reservation time");
+        }
+        Optional<ReservationProposal> pending = proposalPort.findPendingByReservationId(reservation.id());
+        if (pending.isPresent()) {
+            ReservationProposal existing = pending.get();
+            if (reservation.status() == ReservationStatus.CONFIRMED
+                    && existing.initiator() == ReservationProposalInitiator.CUSTOMER
+                    && existing.reservationVersion() == reservation.version()
+                    && existing.proposedBookingSlotId().equals(slot.id())
+                    && Objects.equals(existing.message(), message)) {
+                return new ProposalResult(reservation, existing);
+            }
+            throw new InvalidReservationStateException("Reservation already has a pending proposal");
+        }
+        if (!bookingSlotPort.hasAvailableCapacity(slot.id(), reservation.partySize())) {
+            throw new ReservationCapacityUnavailableException();
+        }
+
+        Instant now = Instant.now(clock);
+        if (reservation.status() == ReservationStatus.PENDING) {
+            Reservation updated = reservationPort.save(withScheduleAndStatus(
+                    reservation, slot.id(), slot.startsAt(), slot.endsAt(), ReservationStatus.PENDING, null));
+            appendRescheduledEvent(reservation, slot.startsAt(), actorUserId, null, now);
+            return new ProposalResult(updated, null);
+        }
+
+        ReservationProposal proposal = proposalPort.save(new ReservationProposal(
+                UUID.randomUUID(), reservation.id(), slot.id(), slot.startsAt(), reservation.partySize(),
+                reservation.version(), message, null, ReservationProposalStatus.PENDING,
+                ReservationProposalInitiator.CUSTOMER, actorUserId, now, null, null));
+        appendEvent(reservation.id(), ReservationEventType.ANOTHER_TIME_REQUESTED,
+                actorUserId, proposal.id(), now);
+        return new ProposalResult(reservation, proposal);
+    }
+
     private boolean isAnotherTimeReplay(
             Reservation reservation, ReservationProposal proposal, Instant requestedStartsAt) {
         return reservation.status() == ReservationStatus.PENDING
@@ -273,15 +432,50 @@ public class ReservationProposalService implements ReservationProposalUseCase {
                 && reservation.startsAt().equals(requestedStartsAt);
     }
 
-    private ReservationProposal lockAndValidate(Reservation reservation, UUID proposalId) {
+    private ReservationProposal lockAndValidate(
+            Reservation reservation,
+            UUID proposalId,
+            ReservationProposalInitiator initiator) {
         ReservationProposal proposal = proposalPort.findByIdAndReservationIdForUpdate(proposalId, reservation.id())
                 .orElseThrow(() -> new ReservationNotFoundException(proposalId));
         if (proposal.status() != ReservationProposalStatus.PENDING
+                || proposal.initiator() != initiator
                 || reservation.status() != ReservationStatus.ALTERNATIVE_PROPOSED
                 || reservation.version() != proposal.reservationVersion()) {
             throw new InvalidReservationStateException("Reservation proposal is no longer current");
         }
         return proposal;
+    }
+
+    private void validateCustomerChangeRequest(
+            Reservation reservation, ReservationProposal proposal) {
+        if (proposal.initiator() != ReservationProposalInitiator.CUSTOMER
+                || proposal.status() != ReservationProposalStatus.PENDING
+                || reservation.status() != ReservationStatus.CONFIRMED
+                || reservation.visitStatus() != VisitStatus.EXPECTED
+                || reservation.version() != proposal.reservationVersion()) {
+            throw new InvalidReservationStateException("Reservation change request is no longer current");
+        }
+    }
+
+    private boolean isAcceptedChangeReplay(
+            Reservation reservation, ReservationProposal proposal) {
+        return proposal.initiator() == ReservationProposalInitiator.CUSTOMER
+                && proposal.status() == ReservationProposalStatus.ACCEPTED
+                && reservation.status() == ReservationStatus.CONFIRMED
+                && reservation.visitStatus() == VisitStatus.EXPECTED
+                && reservation.version() == proposal.reservationVersion() + 1
+                && proposal.proposedBookingSlotId().equals(reservation.bookingSlotId())
+                && reservation.startsAt().equals(proposal.proposedStartsAt());
+    }
+
+    private void lockSlots(UUID restaurantId, UUID firstSlotId, UUID secondSlotId) {
+        UUID lower = firstSlotId.compareTo(secondSlotId) < 0 ? firstSlotId : secondSlotId;
+        UUID higher = lower.equals(firstSlotId) ? secondSlotId : firstSlotId;
+        if (!bookingSlotPort.lockByIdAndRestaurantId(lower, restaurantId)
+                || !bookingSlotPort.lockByIdAndRestaurantId(higher, restaurantId)) {
+            throw new InvalidReservationStateException("Reservation has a stale booking slot");
+        }
     }
 
     private Reservation withScheduleAndStatus(
@@ -309,7 +503,8 @@ public class ReservationProposalService implements ReservationProposalUseCase {
         return new ReservationProposal(
                 proposal.id(), proposal.reservationId(), proposal.proposedBookingSlotId(),
                 proposal.proposedStartsAt(), proposal.proposedPartySize(), proposal.reservationVersion(),
-                proposal.message(), proposal.respondBy(), status, proposal.createdBy(), proposal.createdAt(),
+                proposal.message(), proposal.respondBy(), status, proposal.initiator(),
+                proposal.createdBy(), proposal.createdAt(),
                 respondedBy, respondedAt);
     }
 
@@ -333,6 +528,22 @@ public class ReservationProposalService implements ReservationProposalUseCase {
         eventPort.append(new ReservationEvent(
                 UUID.randomUUID(), reservation.id(), ReservationEventType.ANOTHER_TIME_REQUESTED, actorUserId,
                 "proposal-another-time-requested:" + proposal.id(), null, metadata, createdAt));
+    }
+
+    private void appendRescheduledEvent(
+            Reservation reservation,
+            Instant requestedStartsAt,
+            UUID actorUserId,
+            UUID proposalId,
+            Instant createdAt) {
+        String metadata = "{\"previousStartsAt\":\"" + reservation.startsAt()
+                + "\",\"newStartsAt\":\"" + requestedStartsAt + "\"}";
+        String commandId = proposalId == null
+                ? "customer-rescheduled:" + reservation.id() + ":" + reservation.version()
+                : "proposal-rescheduled:" + proposalId;
+        eventPort.append(new ReservationEvent(
+                UUID.randomUUID(), reservation.id(), ReservationEventType.RESCHEDULED, actorUserId,
+                commandId, null, metadata, createdAt));
     }
 
     private void requireActiveCustomer(UUID customerId) {

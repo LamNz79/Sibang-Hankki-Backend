@@ -17,6 +17,7 @@ import com.sibang.hankki.reservation.application.exception.ReservationNotFoundEx
 import com.sibang.hankki.reservation.application.port.in.OwnerReservationCommandUseCase.OwnerWalkInCommand;
 import com.sibang.hankki.reservation.application.port.out.ReservationEventPersistencePort;
 import com.sibang.hankki.reservation.application.port.out.ReservationPersistencePort;
+import com.sibang.hankki.reservation.application.port.out.ReservationProposalPersistencePort;
 import com.sibang.hankki.reservation.domain.model.Reservation;
 import com.sibang.hankki.reservation.domain.model.ReservationEvent;
 import com.sibang.hankki.reservation.domain.model.ReservationEventType;
@@ -55,6 +56,8 @@ class OwnerReservationCommandServiceTest {
     @Mock
     private ReservationEventPersistencePort eventPort;
     @Mock
+    private ReservationProposalPersistencePort proposalPort;
+    @Mock
     private BookingSlotPort slotPort;
     @Mock
     private BookingSettingsPort settingsPort;
@@ -66,6 +69,7 @@ class OwnerReservationCommandServiceTest {
         service = new OwnerReservationCommandService(
                 reservationPort,
                 eventPort,
+                proposalPort,
                 slotPort,
                 settingsPort,
                 new ObjectMapper(),
@@ -270,6 +274,7 @@ class OwnerReservationCommandServiceTest {
 
         assertThat(cancelled.status()).isEqualTo(ReservationStatus.CANCELLED);
         assertThat(cancelled.visitStatus()).isNull();
+        verify(proposalPort).declinePendingByReservationId(RESERVATION_ID, ACTOR_ID, NOW);
         verify(slotPort).releaseCapacity(SLOT_ID, 2);
         ArgumentCaptor<ReservationEvent> event = ArgumentCaptor.forClass(ReservationEvent.class);
         verify(eventPort).append(event.capture());

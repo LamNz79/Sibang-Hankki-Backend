@@ -10,11 +10,12 @@ public record AlternativeProposalResponse(
         String message,
         Instant respondBy,
         String status,
+        String initiator,
         Instant createdAt) {
 
     static AlternativeProposalResponse from(ReservationProposal proposal) {
         return proposal == null ? null : new AlternativeProposalResponse(
                 proposal.id(), proposal.proposedStartsAt(), proposal.message(), proposal.respondBy(),
-                proposal.status().name(), proposal.createdAt());
+                proposal.status().name(), proposal.initiator().name(), proposal.createdAt());
     }
 }

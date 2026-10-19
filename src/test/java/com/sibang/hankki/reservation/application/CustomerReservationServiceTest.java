@@ -11,6 +11,7 @@ import com.sibang.hankki.reservation.application.exception.InvalidReservationSta
 import com.sibang.hankki.reservation.application.exception.ReservationNotFoundException;
 import com.sibang.hankki.reservation.application.port.out.ReservationEventPersistencePort;
 import com.sibang.hankki.reservation.application.port.out.ReservationPersistencePort;
+import com.sibang.hankki.reservation.application.port.out.ReservationProposalPersistencePort;
 import com.sibang.hankki.reservation.domain.model.Reservation;
 import com.sibang.hankki.reservation.domain.model.ReservationEvent;
 import com.sibang.hankki.reservation.domain.model.ReservationEventType;
@@ -56,6 +57,8 @@ class CustomerReservationServiceTest {
     @Mock
     private ReservationEventPersistencePort eventPort;
     @Mock
+    private ReservationProposalPersistencePort proposalPort;
+    @Mock
     private BookingSettingsPort settingsPort;
     @Mock
     private BookingSlotPort slotPort;
@@ -69,7 +72,7 @@ class CustomerReservationServiceTest {
     @BeforeEach
     void setUp() {
         service = new CustomerReservationService(
-                reservationPort, eventPort, settingsPort, slotPort, restaurantPort, customerProfileUseCase,
+                reservationPort, eventPort, proposalPort, settingsPort, slotPort, restaurantPort, customerProfileUseCase,
                 Clock.fixed(NOW, ZoneOffset.UTC));
     }
 
@@ -101,6 +104,7 @@ class CustomerReservationServiceTest {
 
         assertThat(cancelled.status()).isEqualTo(ReservationStatus.CANCELLED);
         assertThat(cancelled.visitStatus()).isNull();
+        verify(proposalPort).declinePendingByReservationId(RESERVATION_ID, null, NOW);
         verify(slotPort).releaseCapacity(SLOT_ID, 2);
         ArgumentCaptor<ReservationEvent> event = ArgumentCaptor.forClass(ReservationEvent.class);
         verify(eventPort).append(event.capture());
@@ -185,6 +189,7 @@ class CustomerReservationServiceTest {
         var result = service.cancelAccountReservation(RESERVATION_ID, CUSTOMER_ID);
 
         assertThat(result.reservation().status()).isEqualTo(ReservationStatus.CANCELLED);
+        verify(proposalPort).declinePendingByReservationId(RESERVATION_ID, CUSTOMER_ID, NOW);
         verify(slotPort).releaseCapacity(SLOT_ID, 2);
         ArgumentCaptor<ReservationEvent> event = ArgumentCaptor.forClass(ReservationEvent.class);
         verify(eventPort).append(event.capture());

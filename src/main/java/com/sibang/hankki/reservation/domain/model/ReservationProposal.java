@@ -14,6 +14,7 @@ public record ReservationProposal(
         String message,
         Instant respondBy,
         ReservationProposalStatus status,
+        ReservationProposalInitiator initiator,
         UUID createdBy,
         Instant createdAt,
         UUID respondedBy,
@@ -25,13 +26,35 @@ public record ReservationProposal(
         Objects.requireNonNull(proposedBookingSlotId, "proposedBookingSlotId is required");
         Objects.requireNonNull(proposedStartsAt, "proposedStartsAt is required");
         Objects.requireNonNull(status, "status is required");
-        Objects.requireNonNull(createdBy, "createdBy is required");
+        Objects.requireNonNull(initiator, "initiator is required");
         Objects.requireNonNull(createdAt, "createdAt is required");
+        if (initiator == ReservationProposalInitiator.RESTAURANT && createdBy == null) {
+            throw new IllegalArgumentException("restaurant proposals require createdBy");
+        }
         if (proposedPartySize <= 0) {
             throw new IllegalArgumentException("proposedPartySize must be positive");
         }
         if (reservationVersion < 0) {
             throw new IllegalArgumentException("reservationVersion must not be negative");
         }
+    }
+
+    public ReservationProposal(
+            UUID id,
+            UUID reservationId,
+            UUID proposedBookingSlotId,
+            Instant proposedStartsAt,
+            int proposedPartySize,
+            int reservationVersion,
+            String message,
+            Instant respondBy,
+            ReservationProposalStatus status,
+            UUID createdBy,
+            Instant createdAt,
+            UUID respondedBy,
+            Instant respondedAt) {
+        this(id, reservationId, proposedBookingSlotId, proposedStartsAt, proposedPartySize,
+                reservationVersion, message, respondBy, status, ReservationProposalInitiator.RESTAURANT,
+                createdBy, createdAt, respondedBy, respondedAt);
     }
 }

@@ -91,6 +91,26 @@ public class OwnerReservationController {
         return OwnerReservationResponse.from(result.reservation(), result.proposal());
     }
 
+    @PostMapping("/{id}/change-requests/{requestId}/accept")
+    public OwnerReservationResponse acceptChangeRequest(
+            @PathVariable UUID id,
+            @PathVariable UUID requestId,
+            @AuthenticationPrincipal SessionUser user) {
+        var result = proposalUseCase.acceptChangeRequest(
+                id, requestId, user.restaurantId(), user.id());
+        return OwnerReservationResponse.from(result.reservation(), result.proposal());
+    }
+
+    @PostMapping("/{id}/change-requests/{requestId}/decline")
+    public OwnerReservationResponse declineChangeRequest(
+            @PathVariable UUID id,
+            @PathVariable UUID requestId,
+            @AuthenticationPrincipal SessionUser user) {
+        var result = proposalUseCase.declineChangeRequest(
+                id, requestId, user.restaurantId(), user.id());
+        return OwnerReservationResponse.from(result.reservation(), result.proposal());
+    }
+
     @PostMapping("/{id}/confirm")
     public OwnerReservationResponse confirm(
             @PathVariable UUID id, @AuthenticationPrincipal SessionUser user) {

@@ -19,6 +19,7 @@ import com.sibang.hankki.reservation.application.port.out.ReservationPersistence
 import com.sibang.hankki.reservation.application.port.out.ReservationProposalPersistencePort;
 import com.sibang.hankki.reservation.domain.model.Reservation;
 import com.sibang.hankki.reservation.domain.model.ReservationProposal;
+import com.sibang.hankki.reservation.domain.model.ReservationProposalInitiator;
 import com.sibang.hankki.reservation.domain.model.ReservationProposalStatus;
 import com.sibang.hankki.reservation.domain.model.ReservationStatus;
 import com.sibang.hankki.reservation.domain.model.ReservationEvent;
@@ -410,12 +411,153 @@ class ReservationProposalServiceTest {
                 .thenReturn(Optional.empty());
         assertThrows(ReservationNotFoundException.class, () -> service.requestAnotherTimeForAccount(
                 RESERVATION_ID, UUID.randomUUID(), customerId, "2026-10-15", "18:30"));
+        assertThrows(ReservationNotFoundException.class, () -> service.requestChangeForAccount(
+                RESERVATION_ID, customerId, "2026-10-15", "18:30", null));
 
         when(reservationPort.findByIdAndManagementTokenHashForUpdate(any(), any()))
                 .thenReturn(Optional.empty());
         assertThrows(ReservationNotFoundException.class, () -> service.requestAnotherTimeForGuest(
                 RESERVATION_ID, UUID.randomUUID(), "wrong-token", "2026-10-15", "18:30"));
+        assertThrows(ReservationNotFoundException.class, () -> service.requestChangeForGuest(
+                RESERVATION_ID, "wrong-token", "2026-10-15", "18:30", null));
         verify(bookingSlotPort, never()).hasAvailableCapacity(any(), any(Integer.class));
+    }
+
+    @Test
+    void pendingGuestReschedulesDirectlyWithoutHoldingCapacity() {
+        Reservation pending = reservation(ReservationStatus.PENDING, 3);
+        Instant requestedStart = Instant.parse("2026-10-15T11:30:00Z");
+        UUID requestedSlotId = UUID.randomUUID();
+        when(reservationPort.findByIdAndManagementTokenHashForUpdate(any(), any()))
+                .thenReturn(Optional.of(pending));
+        when(restaurantCatalogPort.findTimezoneById(RESTAURANT_ID))
+                .thenReturn(Optional.of("Asia/Ho_Chi_Minh"));
+        when(bookingSlotPort.findByRestaurantIdAndStartsAt(RESTAURANT_ID, requestedStart))
+                .thenReturn(Optional.of(new BookingSlotData(
+                        requestedSlotId, RESTAURANT_ID, requestedStart, requestedStart.plusSeconds(5400))));
+        when(proposalPort.findPendingByReservationId(RESERVATION_ID)).thenReturn(Optional.empty());
+        when(bookingSlotPort.hasAvailableCapacity(requestedSlotId, 2)).thenReturn(true);
+        when(reservationPort.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var result = service.requestChangeForGuest(
+                RESERVATION_ID, "management-token", "2026-10-15", "18:30", " Window table ");
+
+        assertEquals(RESERVATION_ID, result.reservation().id());
+        assertEquals(ReservationStatus.PENDING, result.reservation().status());
+        assertEquals(requestedSlotId, result.reservation().bookingSlotId());
+        assertEquals(requestedStart, result.reservation().startsAt());
+        assertNull(result.proposal());
+        verify(bookingSlotPort, never()).reserveCapacity(any(), any(Integer.class));
+        verify(bookingSlotPort, never()).releaseCapacity(any(), any(Integer.class));
+        ArgumentCaptor<ReservationEvent> event = ArgumentCaptor.forClass(ReservationEvent.class);
+        verify(eventPort).append(event.capture());
+        assertEquals(ReservationEventType.RESCHEDULED, event.getValue().eventType());
+    }
+
+    @Test
+    void confirmedAccountCreatesCustomerRequestWithoutChangingReservationOrCapacity() {
+        UUID customerId = UUID.randomUUID();
+        Reservation confirmed = confirmedReservation(4);
+        Instant requestedStart = Instant.parse("2026-10-15T11:30:00Z");
+        UUID requestedSlotId = UUID.randomUUID();
+        when(customerProfileUseCase.get(customerId)).thenReturn(new CustomerProfile(
+                customerId, "customer", "Customer", "customer@example.com", null));
+        when(reservationPort.findByIdAndCustomerIdForUpdate(RESERVATION_ID, customerId))
+                .thenReturn(Optional.of(confirmed));
+        when(restaurantCatalogPort.findTimezoneById(RESTAURANT_ID))
+                .thenReturn(Optional.of("Asia/Ho_Chi_Minh"));
+        when(bookingSlotPort.findByRestaurantIdAndStartsAt(RESTAURANT_ID, requestedStart))
+                .thenReturn(Optional.of(new BookingSlotData(
+                        requestedSlotId, RESTAURANT_ID, requestedStart, requestedStart.plusSeconds(5400))));
+        when(proposalPort.findPendingByReservationId(RESERVATION_ID)).thenReturn(Optional.empty());
+        when(bookingSlotPort.hasAvailableCapacity(requestedSlotId, 2)).thenReturn(true);
+        when(proposalPort.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var result = service.requestChangeForAccount(
+                RESERVATION_ID, customerId, "2026-10-15", "18:30", " Later ");
+
+        assertEquals(confirmed, result.reservation());
+        assertEquals(ReservationProposalInitiator.CUSTOMER, result.proposal().initiator());
+        assertEquals(customerId, result.proposal().createdBy());
+        assertEquals(4, result.proposal().reservationVersion());
+        verify(reservationPort, never()).save(any());
+        verify(bookingSlotPort, never()).reserveCapacity(any(), any(Integer.class));
+        verify(bookingSlotPort, never()).releaseCapacity(any(), any(Integer.class));
+    }
+
+    @Test
+    void ownerAcceptsCustomerRequestAndSwapsCapacityExactlyOnce() {
+        Reservation confirmed = confirmedReservation(4);
+        ReservationProposal request = customerProposal(confirmed, ReservationProposalStatus.PENDING);
+        BookingSlotData newSlot = new BookingSlotData(
+                request.proposedBookingSlotId(), RESTAURANT_ID, request.proposedStartsAt(),
+                request.proposedStartsAt().plusSeconds(5400));
+        when(reservationPort.findByIdAndRestaurantIdForUpdate(RESERVATION_ID, RESTAURANT_ID))
+                .thenReturn(Optional.of(confirmed));
+        when(proposalPort.findByIdAndReservationIdForUpdate(request.id(), RESERVATION_ID))
+                .thenReturn(Optional.of(request));
+        when(bookingSlotPort.findByRestaurantIdAndStartsAt(RESTAURANT_ID, request.proposedStartsAt()))
+                .thenReturn(Optional.of(newSlot));
+        when(bookingSlotPort.lockByIdAndRestaurantId(any(), any())).thenReturn(true);
+        when(bookingSlotPort.hasAvailableCapacity(newSlot.id(), 2)).thenReturn(true);
+        when(bookingSlotPort.reserveCapacity(newSlot.id(), 2)).thenReturn(true);
+        when(bookingSlotPort.releaseCapacity(confirmed.bookingSlotId(), 2)).thenReturn(true);
+        when(reservationPort.save(any())).thenAnswer(invocation -> withVersion(invocation.getArgument(0), 5));
+        when(proposalPort.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var result = service.acceptChangeRequest(
+                RESERVATION_ID, request.id(), RESTAURANT_ID, ACTOR_ID);
+
+        assertEquals(ReservationStatus.CONFIRMED, result.reservation().status());
+        assertEquals(com.sibang.hankki.reservation.domain.model.VisitStatus.EXPECTED,
+                result.reservation().visitStatus());
+        assertEquals(newSlot.id(), result.reservation().bookingSlotId());
+        assertEquals(ReservationProposalStatus.ACCEPTED, result.proposal().status());
+        verify(bookingSlotPort).reserveCapacity(newSlot.id(), 2);
+        verify(bookingSlotPort).releaseCapacity(confirmed.bookingSlotId(), 2);
+    }
+
+    @Test
+    void ownerDeclinesCustomerRequestWithoutChangingOriginalBooking() {
+        Reservation confirmed = confirmedReservation(4);
+        ReservationProposal request = customerProposal(confirmed, ReservationProposalStatus.PENDING);
+        when(reservationPort.findByIdAndRestaurantIdForUpdate(RESERVATION_ID, RESTAURANT_ID))
+                .thenReturn(Optional.of(confirmed));
+        when(proposalPort.findByIdAndReservationIdForUpdate(request.id(), RESERVATION_ID))
+                .thenReturn(Optional.of(request));
+        when(proposalPort.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var result = service.declineChangeRequest(
+                RESERVATION_ID, request.id(), RESTAURANT_ID, ACTOR_ID);
+
+        assertEquals(confirmed, result.reservation());
+        assertEquals(ReservationProposalStatus.DECLINED, result.proposal().status());
+        verify(reservationPort, never()).save(any());
+        verify(bookingSlotPort, never()).reserveCapacity(any(), any(Integer.class));
+        verify(bookingSlotPort, never()).releaseCapacity(any(), any(Integer.class));
+        ArgumentCaptor<ReservationEvent> event = ArgumentCaptor.forClass(ReservationEvent.class);
+        verify(eventPort).append(event.capture());
+        assertEquals(ReservationEventType.RESCHEDULE_DECLINED, event.getValue().eventType());
+    }
+
+    @Test
+    void ownerCannotAcceptStaleOrCrossRestaurantCustomerRequest() {
+        UUID requestId = UUID.randomUUID();
+        UUID otherRestaurantId = UUID.randomUUID();
+        when(reservationPort.findByIdAndRestaurantIdForUpdate(RESERVATION_ID, otherRestaurantId))
+                .thenReturn(Optional.empty());
+        assertThrows(ReservationNotFoundException.class, () -> service.acceptChangeRequest(
+                RESERVATION_ID, requestId, otherRestaurantId, ACTOR_ID));
+
+        Reservation confirmed = confirmedReservation(5);
+        ReservationProposal stale = customerProposal(confirmedReservation(4), ReservationProposalStatus.PENDING);
+        when(reservationPort.findByIdAndRestaurantIdForUpdate(RESERVATION_ID, RESTAURANT_ID))
+                .thenReturn(Optional.of(confirmed));
+        when(proposalPort.findByIdAndReservationIdForUpdate(stale.id(), RESERVATION_ID))
+                .thenReturn(Optional.of(stale));
+        assertThrows(InvalidReservationStateException.class, () -> service.acceptChangeRequest(
+                RESERVATION_ID, stale.id(), RESTAURANT_ID, ACTOR_ID));
+        verify(bookingSlotPort, never()).reserveCapacity(any(), any(Integer.class));
     }
 
     private Reservation reservation(ReservationStatus status, int version) {
@@ -425,6 +567,26 @@ class ReservationProposalServiceTest {
                 Instant.parse("2026-10-14T10:00:00Z"), Instant.parse("2026-10-14T11:30:00Z"),
                 2, status, false, null, null, null, ReservationToken.hash("management-token"),
                 null, null, null, version, NOW.minusSeconds(3600), NOW.minusSeconds(3600));
+    }
+
+    private Reservation confirmedReservation(int version) {
+        return new Reservation(
+                RESERVATION_ID, "SHK-TEST", "idem", "a".repeat(64), RESTAURANT_ID,
+                UUID.randomUUID(), null, "Customer", null, "0900000000",
+                Instant.parse("2026-10-14T10:00:00Z"), Instant.parse("2026-10-14T11:30:00Z"),
+                2, ReservationStatus.CONFIRMED, false,
+                com.sibang.hankki.reservation.domain.model.VisitStatus.EXPECTED,
+                null, null, ReservationToken.hash("management-token"), null, null, null, version,
+                NOW.minusSeconds(3600), NOW.minusSeconds(3600));
+    }
+
+    private ReservationProposal customerProposal(
+            Reservation reservation, ReservationProposalStatus status) {
+        return new ReservationProposal(
+                UUID.randomUUID(), reservation.id(), UUID.randomUUID(),
+                Instant.parse("2026-10-15T11:30:00Z"), reservation.partySize(), reservation.version(),
+                "Customer request", null, status, ReservationProposalInitiator.CUSTOMER,
+                reservation.customerId(), NOW, null, null);
     }
 
     private ReservationProposal proposal(int reservationVersion) {

@@ -90,6 +90,17 @@ public class CustomerAccountReservationController {
                 useCase.findAccountReservation(reservation.id(), user.id()));
     }
 
+    @PostMapping("/{id}/change-requests")
+    public CustomerAccountReservationResponse requestChange(
+            @PathVariable UUID id,
+            @RequestBody ReservationChangeRequest request,
+            @AuthenticationPrincipal SessionUser user) {
+        var result = proposalUseCase.requestChangeForAccount(
+                id, user.id(), request.requestedDate(), request.requestedTime(), request.message());
+        return CustomerAccountReservationResponse.from(
+                useCase.findAccountReservation(result.reservation().id(), user.id()), result.proposal());
+    }
+
     public record CustomerAccountReservationResponse(
             UUID id,
             String reference,

@@ -13,6 +13,7 @@ import com.sibang.hankki.reservation.application.port.in.OwnerReservationCommand
 import com.sibang.hankki.reservation.application.port.in.OwnerReservationCommandUseCase.OwnerWalkInResult;
 import com.sibang.hankki.reservation.application.port.out.ReservationEventPersistencePort;
 import com.sibang.hankki.reservation.application.port.out.ReservationPersistencePort;
+import com.sibang.hankki.reservation.application.port.out.ReservationProposalPersistencePort;
 import com.sibang.hankki.reservation.domain.model.Reservation;
 import com.sibang.hankki.reservation.domain.model.ReservationEvent;
 import com.sibang.hankki.reservation.domain.model.ReservationEventType;
@@ -33,6 +34,7 @@ public class OwnerReservationCommandService implements OwnerReservationCommandUs
 
     private final ReservationPersistencePort reservationPersistencePort;
     private final ReservationEventPersistencePort eventPersistencePort;
+    private final ReservationProposalPersistencePort proposalPersistencePort;
     private final BookingSlotPort bookingSlotPort;
     private final BookingSettingsPort bookingSettingsPort;
     private final ObjectMapper objectMapper;
@@ -41,12 +43,14 @@ public class OwnerReservationCommandService implements OwnerReservationCommandUs
     public OwnerReservationCommandService(
             ReservationPersistencePort reservationPersistencePort,
             ReservationEventPersistencePort eventPersistencePort,
+            ReservationProposalPersistencePort proposalPersistencePort,
             BookingSlotPort bookingSlotPort,
             BookingSettingsPort bookingSettingsPort,
             ObjectMapper objectMapper,
             Clock clock) {
         this.reservationPersistencePort = reservationPersistencePort;
         this.eventPersistencePort = eventPersistencePort;
+        this.proposalPersistencePort = proposalPersistencePort;
         this.bookingSlotPort = bookingSlotPort;
         this.bookingSettingsPort = bookingSettingsPort;
         this.objectMapper = objectMapper;
@@ -178,7 +182,9 @@ public class OwnerReservationCommandService implements OwnerReservationCommandUs
             throw new InvalidReservationStateException("Reserved capacity could not be released");
         }
 
+        Instant now = Instant.now(clock);
         Reservation cancelled = reservationPersistencePort.save(cancelled(reservation));
+        proposalPersistencePort.declinePendingByReservationId(reservation.id(), actorUserId, now);
         appendEvent(cancelled, ReservationEventType.CANCELLED_BY_RESTAURANT,
                 actorUserId, reasonMetadata(cancellationReason));
         return cancelled;

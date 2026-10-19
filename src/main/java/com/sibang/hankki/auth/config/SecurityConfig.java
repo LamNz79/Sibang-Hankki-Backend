@@ -28,6 +28,7 @@ public class SecurityConfig {
                         "/api/reservations",
                         "/api/customer/reservations/*/cancel",
                         "/api/customer/reservations/*/check-in-token",
+                        "/api/customer/reservations/*/change-requests",
                         "/api/customer/reservations/*/proposals/*/accept",
                         "/api/customer/reservations/*/proposals/*/decline",
                         "/api/customer/reservations/*/proposals/*/request-another-time"))

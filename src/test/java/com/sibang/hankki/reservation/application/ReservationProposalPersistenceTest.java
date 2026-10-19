@@ -160,6 +160,98 @@ class ReservationProposalPersistenceTest {
     }
 
     @Test
+    void pendingChangeRequestUpdatesTheSameReservationWithoutProposalOrCapacity() {
+        var updated = service.requestChangeForGuest(
+                reservationId, "management-token", "2026-10-15", "18:30", "New request");
+
+        assertEquals(reservationId, updated.reservation().id());
+        assertEquals("PENDING", updated.reservation().status().name());
+        assertEquals(requestedSlotId, updated.reservation().bookingSlotId());
+        assertEquals(REQUESTED_START, updated.reservation().startsAt());
+        assertEquals(null, updated.proposal());
+        assertEquals(0, capacityReserved(originalSlotId));
+        assertEquals(0, capacityReserved(requestedSlotId));
+        assertEquals(0, jdbcTemplate.queryForObject(
+                "select count(*) from reservation_proposals where reservation_id = ?",
+                Integer.class, reservationId));
+        assertEquals(1, eventCount("RESCHEDULED"));
+        assertEquals(1, jdbcTemplate.queryForObject(
+                "select count(*) from reservations where id = ?", Integer.class, reservationId));
+    }
+
+    @Test
+    void guestChangeRequestKeepsConfirmedBookingUntilOwnerAcceptsAndThenSwapsCapacity() {
+        confirmOriginalReservation(2);
+
+        var requested = service.requestChangeForGuest(
+                reservationId, "management-token", "2026-10-15", "18:30", "Later please");
+
+        assertEquals(reservationId, requested.reservation().id());
+        assertEquals(ORIGINAL_START, requested.reservation().startsAt());
+        assertEquals("CONFIRMED", reservationStatus());
+        assertEquals(2, capacityReserved(originalSlotId));
+        assertEquals(0, capacityReserved(requestedSlotId));
+        assertEquals("CUSTOMER", jdbcTemplate.queryForObject(
+                "select initiator from reservation_proposals where id = ?",
+                String.class, requested.proposal().id()));
+        assertEquals(0, jdbcTemplate.queryForObject(
+                "select count(*) from reservation_proposals where id = ? and created_by is not null",
+                Integer.class, requested.proposal().id()));
+
+        var accepted = service.acceptChangeRequest(
+                reservationId, requested.proposal().id(), restaurantId, actorId);
+
+        assertEquals(reservationId, accepted.reservation().id());
+        assertEquals(requestedSlotId, accepted.reservation().bookingSlotId());
+        assertEquals(REQUESTED_START, accepted.reservation().startsAt());
+        assertEquals("CONFIRMED", accepted.reservation().status().name());
+        assertEquals("EXPECTED", accepted.reservation().visitStatus().name());
+        assertEquals(0, capacityReserved(originalSlotId));
+        assertEquals(2, capacityReserved(requestedSlotId));
+        assertEquals("ACCEPTED", proposalStatus(requested.proposal().id()));
+        assertEquals(1, eventCount("RESCHEDULED"));
+
+        service.acceptChangeRequest(reservationId, requested.proposal().id(), restaurantId, actorId);
+        assertEquals(0, capacityReserved(originalSlotId));
+        assertEquals(2, capacityReserved(requestedSlotId));
+        assertEquals(1, eventCount("RESCHEDULED"));
+    }
+
+    @Test
+    void ownerDeclineKeepsConfirmedBookingAndCapacityUnchanged() {
+        confirmOriginalReservation(2);
+        var requested = service.requestChangeForGuest(
+                reservationId, "management-token", "2026-10-15", "18:30", null);
+
+        var declined = service.declineChangeRequest(
+                reservationId, requested.proposal().id(), restaurantId, actorId);
+
+        assertEquals(originalSlotId, declined.reservation().bookingSlotId());
+        assertEquals(ORIGINAL_START, declined.reservation().startsAt());
+        assertEquals(2, capacityReserved(originalSlotId));
+        assertEquals(0, capacityReserved(requestedSlotId));
+        assertEquals("DECLINED", proposalStatus(requested.proposal().id()));
+        assertEquals(1, eventCount("RESCHEDULE_DECLINED"));
+    }
+
+    @Test
+    void failedOldCapacityReleaseRollsBackNewCapacityAndRequestState() {
+        confirmOriginalReservation(0);
+        var requested = service.requestChangeForGuest(
+                reservationId, "management-token", "2026-10-15", "18:30", null);
+
+        assertThrows(InvalidReservationStateException.class, () -> service.acceptChangeRequest(
+                reservationId, requested.proposal().id(), restaurantId, actorId));
+
+        assertEquals(originalSlotId, jdbcTemplate.queryForObject(
+                "select booking_slot_id from reservations where id = ?", UUID.class, reservationId));
+        assertEquals(0, capacityReserved(originalSlotId));
+        assertEquals(0, capacityReserved(requestedSlotId));
+        assertEquals("PENDING", proposalStatus(requested.proposal().id()));
+        assertEquals(0, eventCount("RESCHEDULED"));
+    }
+
+    @Test
     @Transactional
     void slotRegenerationKeepsSlotsReferencedByReservationsAndProposals() {
         createProposal();
@@ -185,6 +277,16 @@ class ReservationProposalPersistenceTest {
                 values (?, ?, ?, ?, ?, ?)
                 """, id, restaurantId, Timestamp.from(startsAt), Timestamp.from(startsAt.plusSeconds(5400)),
                 total, reserved);
+    }
+
+    private void confirmOriginalReservation(int reservedCapacity) {
+        jdbcTemplate.update("""
+                update reservations set status = 'CONFIRMED', visit_status = 'EXPECTED'
+                where id = ?
+                """, reservationId);
+        jdbcTemplate.update(
+                "update booking_slots set capacity_reserved = ? where id = ?",
+                reservedCapacity, originalSlotId);
     }
 
     private int capacityReserved() {

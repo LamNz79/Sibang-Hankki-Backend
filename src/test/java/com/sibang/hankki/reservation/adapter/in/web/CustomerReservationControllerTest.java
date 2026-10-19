@@ -132,6 +132,32 @@ class CustomerReservationControllerTest {
                 RESERVATION_ID, proposalId, TOKEN, "2026-10-20", "18:30");
     }
 
+    @Test
+    void guestRequestsChangeWithManagementTokenAndWithoutCsrf() throws Exception {
+        Reservation confirmed = reservation(ReservationStatus.CONFIRMED, VisitStatus.EXPECTED);
+        ReservationProposal proposal = new ReservationProposal(
+                UUID.randomUUID(), RESERVATION_ID, UUID.randomUUID(),
+                Instant.parse("2026-10-20T11:30:00Z"), 2, 0, "Window",
+                null, ReservationProposalStatus.PENDING,
+                com.sibang.hankki.reservation.domain.model.ReservationProposalInitiator.CUSTOMER,
+                null, Instant.parse("2026-10-01T00:00:00Z"), null, null);
+        given(proposalUseCase.requestChangeForGuest(
+                RESERVATION_ID, TOKEN, "2026-10-20", "18:30", "Window"))
+                .willReturn(new ProposalResult(confirmed, proposal));
+
+        mockMvc.perform(post("/api/customer/reservations/{id}/change-requests", RESERVATION_ID)
+                        .header(CustomerReservationController.MANAGEMENT_TOKEN_HEADER, TOKEN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"requestedDate":"2026-10-20","requestedTime":"18:30","message":"Window"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.alternativeProposal.initiator").value("CUSTOMER"));
+
+        verify(proposalUseCase).requestChangeForGuest(
+                RESERVATION_ID, TOKEN, "2026-10-20", "18:30", "Window");
+    }
+
     private Reservation reservation(ReservationStatus status, VisitStatus visitStatus) {
         return new Reservation(
                 RESERVATION_ID, "SHK-GUEST-1", "guest-key", "a".repeat(64), UUID.randomUUID(), UUID.randomUUID(),

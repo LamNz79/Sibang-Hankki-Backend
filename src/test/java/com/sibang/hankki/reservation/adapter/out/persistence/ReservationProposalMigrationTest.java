@@ -34,6 +34,15 @@ class ReservationProposalMigrationTest {
         assertTrue(checks.contains("proposed_party_size > 0"));
         assertTrue(checks.contains("PENDING") && checks.contains("ACCEPTED")
                 && checks.contains("DECLINED") && checks.contains("EXPIRED"));
+        assertTrue(checks.contains("RESTAURANT") && checks.contains("CUSTOMER"));
+
+        String createdByNullable = jdbcTemplate.queryForObject("""
+                select is_nullable from information_schema.columns
+                where table_schema = current_schema()
+                  and table_name = 'reservation_proposals'
+                  and column_name = 'created_by'
+                """, String.class);
+        assertEquals("YES", createdByNullable);
 
         String indexDefinition = jdbcTemplate.queryForObject("""
                 select indexdef from pg_indexes
