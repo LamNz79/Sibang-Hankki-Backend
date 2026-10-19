@@ -88,7 +88,8 @@ public class SystemAdminReservationReadService implements SystemAdminReservation
         AlternativeProposal proposal = data.alternativeProposal() == null ? null : new AlternativeProposal(
                 data.alternativeProposal().id(), data.alternativeProposal().startsAt(),
                 data.alternativeProposal().message(), data.alternativeProposal().respondBy(),
-                data.alternativeProposal().status(), data.alternativeProposal().createdAt());
+                data.alternativeProposal().status(), data.alternativeProposal().initiator(),
+                data.alternativeProposal().createdAt());
         return new AdminReservationDetail(
                 data.id(), data.reference(), data.restaurantId(), data.restaurantName(), data.restaurantSlug(),
                 data.customerName(), data.customerEmail(), data.customerPhone(), data.startsAt(), data.endsAt(),

@@ -86,6 +86,9 @@ Example page response:
 Both endpoints are read-only: they do not require CSRF and expose no reservation command. OWNER and
 STAFF APIs remain separately restaurant-scoped and cannot use these global queries.
 
+The detail response includes the latest `alternativeProposal` when present. Its `initiator` is
+`RESTAURANT` for an owner-created alternative or `CUSTOMER` for a customer reschedule request.
+
 ## Reservation persistence foundation
 
 Flyway V7 introduces the `reservations` and append-only `reservation_events` tables. It enforces canonical reservation statuses (`PENDING`, `ALTERNATIVE_PROPOSED`, `CONFIRMED`, `DECLINED`, `EXPIRED`, `CANCELLED`) and visit statuses (`EXPECTED`, `ARRIVED`, `SEATED`, `COMPLETED`, `NO_SHOW`), referential integrity, idempotency keys, event command IDs, optimistic-lock versions, and query indexes.

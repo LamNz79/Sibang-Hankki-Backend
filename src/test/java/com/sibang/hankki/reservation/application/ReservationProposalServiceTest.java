@@ -455,6 +455,32 @@ class ReservationProposalServiceTest {
     }
 
     @Test
+    void repeatedPendingChangeReturnsCurrentReservationWithoutWritingAgain() {
+        Instant requestedStart = Instant.parse("2026-10-15T11:30:00Z");
+        UUID requestedSlotId = UUID.randomUUID();
+        Reservation alreadyRescheduled = withSchedule(
+                reservation(ReservationStatus.PENDING, 4), requestedSlotId, requestedStart);
+        when(reservationPort.findByIdAndManagementTokenHashForUpdate(any(), any()))
+                .thenReturn(Optional.of(alreadyRescheduled));
+        when(restaurantCatalogPort.findTimezoneById(RESTAURANT_ID))
+                .thenReturn(Optional.of("Asia/Ho_Chi_Minh"));
+        when(bookingSlotPort.findByRestaurantIdAndStartsAt(RESTAURANT_ID, requestedStart))
+                .thenReturn(Optional.of(new BookingSlotData(
+                        requestedSlotId, RESTAURANT_ID, requestedStart, requestedStart.plusSeconds(5400))));
+
+        var result = service.requestChangeForGuest(
+                RESERVATION_ID, "management-token", "2026-10-15", "18:30", "Same request");
+
+        assertEquals(alreadyRescheduled, result.reservation());
+        assertNull(result.proposal());
+        verify(reservationPort, never()).save(any());
+        verify(eventPort, never()).append(any());
+        verify(bookingSlotPort, never()).hasAvailableCapacity(any(), any(Integer.class));
+        verify(bookingSlotPort, never()).reserveCapacity(any(), any(Integer.class));
+        verify(bookingSlotPort, never()).releaseCapacity(any(), any(Integer.class));
+    }
+
+    @Test
     void confirmedAccountCreatesCustomerRequestWithoutChangingReservationOrCapacity() {
         UUID customerId = UUID.randomUUID();
         Reservation confirmed = confirmedReservation(4);

@@ -388,7 +388,12 @@ public class ReservationProposalService implements ReservationProposalUseCase {
         BookingSlotData slot = bookingSlotPort
                 .findByRestaurantIdAndStartsAt(reservation.restaurantId(), requestedStartsAt)
                 .orElseThrow(ReservationSlotNotFoundException::new);
-        if (slot.id().equals(reservation.bookingSlotId()) || slot.startsAt().equals(reservation.startsAt())) {
+        boolean sameCurrentSlot = slot.id().equals(reservation.bookingSlotId())
+                || slot.startsAt().equals(reservation.startsAt());
+        if (reservation.status() == ReservationStatus.PENDING && sameCurrentSlot) {
+            return new ProposalResult(reservation, null);
+        }
+        if (sameCurrentSlot) {
             throw new InvalidReservationStateException("Requested time must differ from the current reservation time");
         }
         Optional<ReservationProposal> pending = proposalPort.findPendingByReservationId(reservation.id());

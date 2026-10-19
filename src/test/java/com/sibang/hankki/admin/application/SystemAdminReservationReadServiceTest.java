@@ -103,7 +103,8 @@ class SystemAdminReservationReadServiceTest {
     void detailIncludesExistingAlternativeProposal() {
         var proposal = new AlternativeProposalData(
                 UUID.randomUUID(), Instant.parse("2026-10-02T11:30:00Z"), "Can you come later?",
-                Instant.parse("2026-10-01T00:00:00Z"), "PENDING", Instant.parse("2026-09-30T00:00:00Z"));
+                Instant.parse("2026-10-01T00:00:00Z"), "PENDING", "CUSTOMER",
+                Instant.parse("2026-09-30T00:00:00Z"));
         var item = reservation();
         given(queryPort.findById(RESERVATION_ID)).willReturn(Optional.of(new AdminReservationDetailData(
                 item.id(), item.reference(), item.restaurantId(), item.restaurantName(), item.restaurantSlug(),
@@ -116,6 +117,7 @@ class SystemAdminReservationReadServiceTest {
         assertThat(detail.specialRequest()).isEqualTo("Window seat");
         assertThat(detail.preOrderNote()).isEqualTo("No peanuts");
         assertThat(detail.alternativeProposal().message()).isEqualTo("Can you come later?");
+        assertThat(detail.alternativeProposal().initiator()).isEqualTo("CUSTOMER");
     }
 
     private AdminReservationData reservation() {
