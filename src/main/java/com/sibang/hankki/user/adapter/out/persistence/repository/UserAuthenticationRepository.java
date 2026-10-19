@@ -13,5 +13,7 @@ public interface UserAuthenticationRepository extends JpaRepository<UserEntity, 
 
     Optional<UserEntity> findByIdAndRoleAndStatusAndDeletedAtIsNull(UUID id, String role, String status);
 
+    Optional<UserEntity> findByIdAndStatusAndDeletedAtIsNull(UUID id, String status);
+
     Optional<UserEntity> findByUseridAndStatusAndDeletedAtIsNull(String userid, String status);
 }

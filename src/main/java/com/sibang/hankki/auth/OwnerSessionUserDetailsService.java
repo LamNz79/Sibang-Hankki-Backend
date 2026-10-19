@@ -31,7 +31,8 @@ public class OwnerSessionUserDetailsService implements UserDetailsService {
         return repository.findByUseridAndStatusAndDeletedAtIsNull(sessionUser.userid(), ACTIVE)
                 .map(user -> user.getId().equals(sessionUser.id())
                         && user.getRole().equals(sessionUser.role())
-                        && Objects.equals(user.getRestaurantId(), sessionUser.restaurantId()))
+                        && Objects.equals(user.getRestaurantId(), sessionUser.restaurantId())
+                        && Objects.equals(user.getPasswordHash(), sessionUser.passwordHash()))
                 .orElse(false);
     }
 }

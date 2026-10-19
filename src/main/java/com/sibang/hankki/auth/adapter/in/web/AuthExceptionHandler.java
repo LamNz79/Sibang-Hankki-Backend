@@ -2,6 +2,8 @@ package com.sibang.hankki.auth.adapter.in.web;
 
 import com.sibang.hankki.user.application.exception.DuplicateUseridException;
 import com.sibang.hankki.user.application.exception.InvalidCustomerRegistrationException;
+import com.sibang.hankki.user.application.exception.IncorrectCurrentPasswordException;
+import com.sibang.hankki.user.application.exception.InvalidPasswordRequestException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Instant;
 import org.springframework.http.HttpStatus;
@@ -13,9 +15,15 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 class AuthExceptionHandler {
 
     @ResponseStatus(HttpStatus.BAD_REQUEST)
-    @ExceptionHandler(InvalidCustomerRegistrationException.class)
+    @ExceptionHandler({InvalidCustomerRegistrationException.class, InvalidPasswordRequestException.class})
     ErrorResponse badRequest(HttpServletRequest request) {
         return ErrorResponse.of(HttpStatus.BAD_REQUEST, request.getRequestURI());
+    }
+
+    @ResponseStatus(HttpStatus.FORBIDDEN)
+    @ExceptionHandler(IncorrectCurrentPasswordException.class)
+    ErrorResponse forbidden(HttpServletRequest request) {
+        return ErrorResponse.of(HttpStatus.FORBIDDEN, request.getRequestURI());
     }
 
     @ResponseStatus(HttpStatus.CONFLICT)

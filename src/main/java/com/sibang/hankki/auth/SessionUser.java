@@ -7,12 +7,14 @@ import org.springframework.security.core.userdetails.User;
 public final class SessionUser extends User {
 
     private final UUID id;
+    private final String passwordHash;
     private final String role;
     private final UUID restaurantId;
 
     SessionUser(UUID id, String userid, String passwordHash, String role, UUID restaurantId) {
         super(userid, passwordHash, AuthorityUtils.createAuthorityList("ROLE_" + role));
         this.id = id;
+        this.passwordHash = passwordHash;
         this.role = role;
         this.restaurantId = restaurantId;
     }
@@ -23,6 +25,10 @@ public final class SessionUser extends User {
 
     public String userid() {
         return getUsername();
+    }
+
+    String passwordHash() {
+        return passwordHash;
     }
 
     public String role() {

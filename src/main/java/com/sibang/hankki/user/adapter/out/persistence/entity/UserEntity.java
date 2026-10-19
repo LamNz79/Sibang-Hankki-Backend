@@ -88,6 +88,10 @@ public class UserEntity {
         return passwordHash;
     }
 
+    public void updatePasswordHash(String passwordHash) {
+        this.passwordHash = passwordHash;
+    }
+
     public String getEmail() {
         return email;
     }

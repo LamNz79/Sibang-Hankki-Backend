@@ -11,6 +11,8 @@ public interface SystemAdminUserUseCase {
 
     AdminUser update(UUID userId, UpdateUserCommand command);
 
+    void resetPassword(UUID userId, String newPassword);
+
     record CreateUserCommand(String userid, String email, String password, String name, String phone) {
     }
 
