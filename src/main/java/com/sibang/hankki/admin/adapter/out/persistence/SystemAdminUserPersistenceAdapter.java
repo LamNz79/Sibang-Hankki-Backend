@@ -57,6 +57,13 @@ public class SystemAdminUserPersistenceAdapter implements SystemAdminUserPort {
         return toData(userRepository.saveAndFlush(user));
     }
 
+    @Override
+    public void updatePasswordHash(UUID userId, String passwordHash) {
+        UserEntity user = userRepository.getReferenceById(userId);
+        user.updatePasswordHash(passwordHash);
+        userRepository.saveAndFlush(user);
+    }
+
     private AdminUserData toData(UserEntity user) {
         String restaurantName = user.getRestaurantId() == null ? null
                 : restaurantRepository.findById(user.getRestaurantId()).map(RestaurantEntity::getName).orElse(null);

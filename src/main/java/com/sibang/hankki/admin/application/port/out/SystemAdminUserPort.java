@@ -15,4 +15,6 @@ public interface SystemAdminUserPort {
     AdminUserData create(String userid, String email, String passwordHash, String name, String phone);
 
     AdminUserData updateProfile(UUID userId, String email, String name, String phone);
+
+    void updatePasswordHash(UUID userId, String passwordHash);
 }

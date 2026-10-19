@@ -4,9 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.doThrow;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -16,6 +18,9 @@ import com.sibang.hankki.user.adapter.out.persistence.entity.UserEntity;
 import com.sibang.hankki.user.adapter.out.persistence.repository.UserAuthenticationRepository;
 import com.sibang.hankki.user.application.exception.DuplicateUseridException;
 import com.sibang.hankki.user.application.exception.InvalidCustomerRegistrationException;
+import com.sibang.hankki.user.application.exception.IncorrectCurrentPasswordException;
+import com.sibang.hankki.user.application.exception.InvalidPasswordRequestException;
+import com.sibang.hankki.user.application.port.in.ChangePasswordUseCase;
 import com.sibang.hankki.user.application.port.in.RegisterCustomerUseCase;
 import com.sibang.hankki.user.application.port.in.RegisterCustomerUseCase.RegisterCustomerCommand;
 import com.sibang.hankki.user.application.port.in.RegisterCustomerUseCase.RegisteredCustomer;
@@ -57,6 +62,9 @@ class OwnerSessionSecurityTest {
 
     @MockitoBean
     private RegisterCustomerUseCase registerCustomerUseCase;
+
+    @MockitoBean
+    private ChangePasswordUseCase changePasswordUseCase;
 
     @BeforeEach
     void configureUsers() {
@@ -131,6 +139,73 @@ class OwnerSessionSecurityTest {
                 .andExpect(status().isUnauthorized());
 
         assertThat(session.isInvalid()).isTrue();
+    }
+
+    @Test
+    void passwordHashChangeInvalidatesExistingSession() throws Exception {
+        MockHttpSession session = login("owner");
+        UserEntity changed = user(OWNER_ID, "owner", "OWNER", RESTAURANT_ID);
+        given(changed.getPasswordHash()).willReturn(passwordEncoder.encode("changed-password"));
+        given(repository.findByUseridAndStatusAndDeletedAtIsNull("owner", "ACTIVE"))
+                .willReturn(Optional.of(changed));
+
+        mockMvc.perform(get("/api/owner/probe").session(session))
+                .andExpect(status().isUnauthorized());
+
+        assertThat(session.isInvalid()).isTrue();
+    }
+
+    @Test
+    void passwordChangeRequiresAuthenticationAndCsrf() throws Exception {
+        mockMvc.perform(patch("/api/auth/password")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(passwordChangeJson()))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(patch("/api/auth/password")
+                        .session(login("owner"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(passwordChangeJson()))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void successfulPasswordChangeInvalidatesCallerSessionAndReturnsNoCredentials() throws Exception {
+        MockHttpSession session = login("owner");
+
+        mockMvc.perform(patch("/api/auth/password")
+                        .session(session)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(passwordChangeJson()))
+                .andExpect(status().isNoContent())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().string(""));
+
+        assertThat(session.isInvalid()).isTrue();
+        verify(changePasswordUseCase).change(
+                org.mockito.ArgumentMatchers.eq(OWNER_ID), org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void passwordChangeErrorsUseSafeResponses() throws Exception {
+        MockHttpSession session = login("owner");
+        doThrow(new IncorrectCurrentPasswordException()).when(changePasswordUseCase)
+                .change(org.mockito.ArgumentMatchers.eq(OWNER_ID), org.mockito.ArgumentMatchers.any());
+
+        mockMvc.perform(patch("/api/auth/password")
+                        .session(session).with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON).content(passwordChangeJson()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.password").doesNotExist())
+                .andExpect(jsonPath("$.passwordHash").doesNotExist());
+
+        doThrow(new InvalidPasswordRequestException("invalid")).when(changePasswordUseCase)
+                .change(org.mockito.ArgumentMatchers.eq(OWNER_ID), org.mockito.ArgumentMatchers.any());
+        mockMvc.perform(patch("/api/auth/password")
+                        .session(session).with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON).content(passwordChangeJson()))
+                .andExpect(status().isBadRequest());
     }
 
     @Test
@@ -252,6 +327,12 @@ class OwnerSessionSecurityTest {
                   "name": "Customer Name",
                   "password": "Customer@2026"
                 }
+                """;
+    }
+
+    private String passwordChangeJson() {
+        return """
+                {"currentPassword":"test-password","newPassword":"NewPassword@2026!"}
                 """;
     }
 

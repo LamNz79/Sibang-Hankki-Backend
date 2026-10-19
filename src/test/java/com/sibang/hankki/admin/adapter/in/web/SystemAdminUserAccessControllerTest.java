@@ -7,6 +7,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -93,6 +94,36 @@ class SystemAdminUserAccessControllerTest {
         mockMvc.perform(delete("/api/admin/restaurant-assignments/{id}", USER_ID)
                         .with(user("admin").roles("ADMIN")))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void adminPasswordResetIsRoleAndCsrfProtected() throws Exception {
+        String body = "{\"newPassword\":\"TemporaryPassword@2026!\"}";
+        mockMvc.perform(patch("/api/admin/users/{id}/password", USER_ID)
+                        .with(csrf()).contentType("application/json").content(body))
+                .andExpect(status().isUnauthorized());
+        for (String role : List.of("CUSTOMER", "OWNER", "STAFF")) {
+            mockMvc.perform(patch("/api/admin/users/{id}/password", USER_ID)
+                            .with(user(role.toLowerCase()).roles(role)).with(csrf())
+                            .contentType("application/json").content(body))
+                    .andExpect(status().isForbidden());
+        }
+        mockMvc.perform(patch("/api/admin/users/{id}/password", USER_ID)
+                        .with(user("admin").roles("ADMIN"))
+                        .contentType("application/json").content(body))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void adminResetsPasswordWithoutReturningCredentials() throws Exception {
+        mockMvc.perform(patch("/api/admin/users/{id}/password", USER_ID)
+                        .with(user("admin").roles("ADMIN")).with(csrf())
+                        .contentType("application/json")
+                        .content("{\"newPassword\":\"TemporaryPassword@2026!\"}"))
+                .andExpect(status().isNoContent())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().string(""));
+
+        org.mockito.Mockito.verify(userUseCase).resetPassword(USER_ID, "TemporaryPassword@2026!");
     }
 
     @Test

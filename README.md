@@ -89,6 +89,24 @@ STAFF APIs remain separately restaurant-scoped and cannot use these global queri
 The detail response includes the latest `alternativeProposal` when present. Its `initiator` is
 `RESTAURANT` for an owner-created alternative or `CUSTOMER` for a customer reschedule request.
 
+## Password management
+
+Every authenticated role can change its own password. The request remains CSRF-protected and the
+successful caller session is invalidated immediately:
+
+```http
+PATCH /api/auth/password
+Content-Type: application/json
+X-CSRF-TOKEN: <token>
+
+{"currentPassword":"OldPassword@2026!","newPassword":"NewPassword@2026!"}
+```
+
+System administrators can reset a non-ADMIN user's password with `PATCH
+/api/admin/users/{userId}/password` and body `{"newPassword":"TemporaryPassword@2026!"}`. Existing
+sessions become unauthorized on their next request. Both endpoints return `204 No Content` and never
+return or log plaintext passwords or password hashes. ADMIN accounts must use the self-service endpoint.
+
 ## Reservation persistence foundation
 
 Flyway V7 introduces the `reservations` and append-only `reservation_events` tables. It enforces canonical reservation statuses (`PENDING`, `ALTERNATIVE_PROPOSED`, `CONFIRMED`, `DECLINED`, `EXPIRED`, `CANCELLED`) and visit statuses (`EXPECTED`, `ARRIVED`, `SEATED`, `COMPLETED`, `NO_SHOW`), referential integrity, idempotency keys, event command IDs, optimistic-lock versions, and query indexes.

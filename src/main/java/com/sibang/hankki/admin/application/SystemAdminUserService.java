@@ -71,6 +71,20 @@ public class SystemAdminUserService implements SystemAdminUserUseCase {
                 userId, email(command.email()), required(command.name(), "name", 120), optional(command.phone(), 30)));
     }
 
+    @Override
+    @Transactional
+    public void resetPassword(UUID userId, String newPassword) {
+        if (newPassword == null || newPassword.isBlank() || newPassword.length() < 8 || newPassword.length() > 72) {
+            throw invalid("newPassword must be between 8 and 72 characters");
+        }
+        AdminUserData user = userPort.findByIdForUpdate(userId)
+                .orElseThrow(() -> new AdminResourceNotFoundException("User not found"));
+        if ("ADMIN".equals(user.role())) {
+            throw new AdminUserConflictException("ADMIN password cannot be reset here");
+        }
+        userPort.updatePasswordHash(userId, passwordEncoder.encode(newPassword));
+    }
+
     private String email(String value) {
         String normalized = optional(value, 320);
         if (normalized != null && !EMAIL.matcher(normalized).matches()) {
