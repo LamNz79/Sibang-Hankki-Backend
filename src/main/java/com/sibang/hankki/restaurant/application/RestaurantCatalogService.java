@@ -1,5 +1,6 @@
 package com.sibang.hankki.restaurant.application;
 
+import com.sibang.hankki.restaurant.application.exception.InvalidBookingRequestException;
 import com.sibang.hankki.restaurant.application.model.OwnerMenu;
 import com.sibang.hankki.restaurant.application.model.RestaurantResponse;
 import com.sibang.hankki.restaurant.application.model.RestaurantSummaryResponse;
@@ -40,8 +41,14 @@ public class RestaurantCatalogService implements RestaurantCatalogUseCase {
     }
 
     @Override
-    public List<RestaurantSummaryResponse> restaurants() {
-        return responses(catalogPort.findAllActiveRestaurants(), false).stream()
+    public List<RestaurantSummaryResponse> restaurants(Integer provinceCode, Integer wardCode) {
+        if (provinceCode != null && provinceCode <= 0) {
+            throw new InvalidBookingRequestException("provinceCode must be positive");
+        }
+        if (wardCode != null && wardCode <= 0) {
+            throw new InvalidBookingRequestException("wardCode must be positive");
+        }
+        return responses(catalogPort.findAllActiveRestaurants(provinceCode, wardCode), false).stream()
                 .map(RestaurantSummaryResponse::from)
                 .toList();
     }

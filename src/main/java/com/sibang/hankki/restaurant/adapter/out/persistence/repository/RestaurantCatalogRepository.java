@@ -20,11 +20,20 @@ public class RestaurantCatalogRepository {
     }
 
     public List<RestaurantEntity> findAllActive() {
+        return findAllActive(null, null);
+    }
+
+    public List<RestaurantEntity> findAllActive(Integer provinceCode, Integer wardCode) {
         return entityManager.createQuery("""
                 select restaurant from RestaurantEntity restaurant
                 where restaurant.deletedAt is null and restaurant.approvalStatus = 'ACTIVE'
+                    and (:provinceCode is null or restaurant.provinceCode = :provinceCode)
+                    and (:wardCode is null or restaurant.wardCode = :wardCode)
                 order by restaurant.id
-                """, RestaurantEntity.class).getResultList();
+                """, RestaurantEntity.class)
+                .setParameter("provinceCode", provinceCode)
+                .setParameter("wardCode", wardCode)
+                .getResultList();
     }
 
     public Optional<RestaurantEntity> findActiveBySlug(String slug) {

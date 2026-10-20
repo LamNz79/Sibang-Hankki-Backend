@@ -11,6 +11,23 @@ Equivalent local command:
 mvn --batch-mode --no-transfer-progress clean verify
 ```
 
+## Public restaurant location filters
+
+The public restaurant list remains backward compatible and accepts optional Vietnamese administrative
+location codes:
+
+```http
+GET /api/restaurants
+GET /api/restaurants?provinceCode=79
+GET /api/restaurants?provinceCode=79&wardCode=27169
+GET /api/restaurants?wardCode=27169
+```
+
+Both codes must be positive integers. Filters are applied in PostgreSQL and only `ACTIVE`, non-archived
+restaurants are returned. An unmatched filter returns `200 OK` with `[]`; the response remains the existing
+lightweight `RestaurantSummaryResponse` array. Flyway V15 backfills the V3 prototype restaurants from their
+existing `city_slug`; it leaves ward codes unset rather than guessing them from legacy district text.
+
 ## System-admin restaurant review lifecycle
 
 An ADMIN changes restaurant approval state with:

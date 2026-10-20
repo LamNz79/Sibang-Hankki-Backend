@@ -8,6 +8,8 @@ import java.util.UUID;
 public interface RestaurantCatalogPort {
     List<RestaurantData> findAllActiveRestaurants();
 
+    List<RestaurantData> findAllActiveRestaurants(Integer provinceCode, Integer wardCode);
+
     Optional<RestaurantData> findActiveRestaurantBySlug(String slug);
 
     Optional<RestaurantData> findActiveRestaurantById(UUID restaurantId);
