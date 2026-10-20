@@ -4,8 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.sibang.hankki.restaurant.application.model.OwnerMenu;
+import com.sibang.hankki.restaurant.application.exception.InvalidBookingRequestException;
 import com.sibang.hankki.restaurant.application.port.out.OwnerMenuPort;
 import com.sibang.hankki.restaurant.application.port.out.RestaurantCatalogPort;
 import com.sibang.hankki.restaurant.application.port.out.RestaurantData;
@@ -25,10 +27,23 @@ class RestaurantCatalogServiceTest {
     @Test
     void listRemainsLightweightAndDoesNotLoadMenu() {
         RestaurantData restaurant = restaurant();
-        given(catalogPort.findAllActiveRestaurants()).willReturn(List.of(restaurant));
+        given(catalogPort.findAllActiveRestaurants(null, null)).willReturn(List.of(restaurant));
 
-        assertThat(service.restaurants()).hasSize(1);
+        assertThat(service.restaurants(null, null)).hasSize(1);
         verify(menuPort, never()).findAll(restaurant.id());
+    }
+
+    @Test
+    void forwardsLocationFiltersAndRejectsNonPositiveCodes() {
+        given(catalogPort.findAllActiveRestaurants(79, 27169)).willReturn(List.of(restaurant()));
+
+        assertThat(service.restaurants(79, 27169)).hasSize(1);
+        verify(catalogPort).findAllActiveRestaurants(79, 27169);
+
+        assertThatThrownBy(() -> service.restaurants(0, null))
+                .isInstanceOf(InvalidBookingRequestException.class);
+        assertThatThrownBy(() -> service.restaurants(null, -1))
+                .isInstanceOf(InvalidBookingRequestException.class);
     }
 
     @Test

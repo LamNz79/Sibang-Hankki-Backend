@@ -28,8 +28,10 @@ class RestaurantController {
     }
 
     @GetMapping
-    List<RestaurantSummaryResponse> restaurants() {
-        return catalogUseCase.restaurants();
+    List<RestaurantSummaryResponse> restaurants(
+            @RequestParam(required = false) Integer provinceCode,
+            @RequestParam(required = false) Integer wardCode) {
+        return catalogUseCase.restaurants(provinceCode, wardCode);
     }
 
     @GetMapping("/{slug}")

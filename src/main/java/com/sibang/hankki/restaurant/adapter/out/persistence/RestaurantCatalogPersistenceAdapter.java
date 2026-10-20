@@ -34,6 +34,11 @@ public class RestaurantCatalogPersistenceAdapter implements RestaurantCatalogPor
     }
 
     @Override
+    public List<RestaurantData> findAllActiveRestaurants(Integer provinceCode, Integer wardCode) {
+        return repository.findAllActive(provinceCode, wardCode).stream().map(this::toRestaurantData).toList();
+    }
+
+    @Override
     public Optional<RestaurantData> findActiveRestaurantBySlug(String slug) {
         return repository.findActiveBySlug(slug).map(this::toRestaurantData);
     }

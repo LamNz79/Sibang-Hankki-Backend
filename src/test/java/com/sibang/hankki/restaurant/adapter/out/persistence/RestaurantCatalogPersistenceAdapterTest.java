@@ -135,21 +135,58 @@ class RestaurantCatalogPersistenceAdapterTest {
         }
     }
 
+    @Test
+    void filtersActiveRestaurantsByAdministrativeLocationInTheDatabase() {
+        int provinceCode = 987654321;
+        int wardCode = 987654322;
+        TestRestaurant matching = insertRestaurant("ACTIVE", false, provinceCode, wardCode);
+        TestRestaurant sameProvince = insertRestaurant("ACTIVE", false, provinceCode, wardCode + 1);
+        TestRestaurant sameWard = insertRestaurant("ACTIVE", false, provinceCode + 1, wardCode);
+        TestRestaurant inactive = insertRestaurant("SUSPENDED", false, provinceCode, wardCode);
+        TestRestaurant deleted = insertRestaurant("ACTIVE", true, provinceCode, wardCode);
+
+        assertEquals(
+                java.util.Set.of(matching.id(), sameProvince.id()),
+                ids(catalogAdapter.findAllActiveRestaurants(provinceCode, null)));
+        assertEquals(
+                java.util.Set.of(matching.id(), sameWard.id()),
+                ids(catalogAdapter.findAllActiveRestaurants(null, wardCode)));
+        assertEquals(
+                java.util.Set.of(matching.id()),
+                ids(catalogAdapter.findAllActiveRestaurants(provinceCode, wardCode)));
+        assertTrue(catalogAdapter.findAllActiveRestaurants(999, 999).isEmpty());
+        assertFalse(ids(catalogAdapter.findAllActiveRestaurants(provinceCode, wardCode)).contains(inactive.id()));
+        assertFalse(ids(catalogAdapter.findAllActiveRestaurants(provinceCode, wardCode)).contains(deleted.id()));
+    }
+
     private TestRestaurant insertRestaurant(String approvalStatus, boolean deleted) {
+        return insertRestaurant(approvalStatus, deleted, null, null);
+    }
+
+    private TestRestaurant insertRestaurant(
+            String approvalStatus, boolean deleted, Integer provinceCode, Integer wardCode) {
         UUID id = UUID.randomUUID();
         String slug = "catalog-adapter-test-" + id;
         if (deleted) {
             jdbcTemplate.update("""
-                    insert into restaurants (id, slug, name, city_slug, approval_status, deleted_at)
-                    values (?, ?, ?, ?, ?, current_timestamp)
-                    """, id, slug, "Catalog Adapter Test", "ho-chi-minh-city", approvalStatus);
+                    insert into restaurants (
+                        id, slug, name, city_slug, approval_status, province_code, ward_code, deleted_at)
+                    values (?, ?, ?, ?, ?, ?, ?, current_timestamp)
+                    """, id, slug, "Catalog Adapter Test", "ho-chi-minh-city", approvalStatus,
+                    provinceCode, wardCode);
         } else {
             jdbcTemplate.update("""
-                    insert into restaurants (id, slug, name, city_slug, approval_status)
-                    values (?, ?, ?, ?, ?)
-                    """, id, slug, "Catalog Adapter Test", "ho-chi-minh-city", approvalStatus);
+                    insert into restaurants (
+                        id, slug, name, city_slug, approval_status, province_code, ward_code)
+                    values (?, ?, ?, ?, ?, ?, ?)
+                    """, id, slug, "Catalog Adapter Test", "ho-chi-minh-city", approvalStatus,
+                    provinceCode, wardCode);
         }
         return new TestRestaurant(id, slug);
+    }
+
+    private java.util.Set<UUID> ids(List<RestaurantData> restaurants) {
+        return restaurants.stream().map(RestaurantData::id).collect(java.util.stream.Collectors.toSet());
     }
 
     private record TestRestaurant(UUID id, String slug) {

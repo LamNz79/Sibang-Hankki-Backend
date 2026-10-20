@@ -2,6 +2,7 @@ package com.sibang.hankki.restaurant.adapter.in.web;
 import com.sibang.hankki.auth.config.SecurityConfig;
 import com.sibang.hankki.restaurant.application.port.in.RestaurantAvailabilityUseCase;
 import com.sibang.hankki.restaurant.application.port.in.RestaurantCatalogUseCase;
+import com.sibang.hankki.restaurant.application.exception.InvalidBookingRequestException;
 import com.sibang.hankki.restaurant.application.model.RestaurantResponse;
 import com.sibang.hankki.restaurant.application.model.RestaurantSummaryResponse;
 
@@ -18,6 +19,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -39,7 +41,7 @@ class RestaurantControllerTest {
 
     @Test
     void listsRestaurantsWithoutSlots() throws Exception {
-        given(catalogService.restaurants()).willReturn(java.util.Collections.nCopies(6, summary()));
+        given(catalogService.restaurants(null, null)).willReturn(java.util.Collections.nCopies(6, summary()));
 
         mockMvc.perform(get("/api/restaurants"))
                 .andExpect(status().isOk())
@@ -49,6 +51,44 @@ class RestaurantControllerTest {
                 .andExpect(jsonPath("$[0].imageUrl").value("https://example.test/anan.jpg"))
                 .andExpect(jsonPath("$[0].slotMatrix").doesNotExist())
                 .andExpect(jsonPath("$[0].menuCategories").doesNotExist());
+
+        verify(catalogService).restaurants(null, null);
+    }
+
+    @Test
+    void forwardsProvinceFilter() throws Exception {
+        given(catalogService.restaurants(79, null)).willReturn(List.of(summary()));
+
+        mockMvc.perform(get("/api/restaurants").param("provinceCode", "79"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1));
+
+        verify(catalogService).restaurants(79, null);
+    }
+
+    @Test
+    void forwardsProvinceAndWardFilters() throws Exception {
+        given(catalogService.restaurants(79, 27169)).willReturn(List.of(summary()));
+
+        mockMvc.perform(get("/api/restaurants")
+                        .param("provinceCode", "79")
+                        .param("wardCode", "27169"))
+                .andExpect(status().isOk());
+
+        verify(catalogService).restaurants(79, 27169);
+    }
+
+    @Test
+    void rejectsNonPositiveLocationCodes() throws Exception {
+        given(catalogService.restaurants(0, null))
+                .willThrow(new InvalidBookingRequestException("provinceCode must be positive"));
+        given(catalogService.restaurants(null, -1))
+                .willThrow(new InvalidBookingRequestException("wardCode must be positive"));
+
+        mockMvc.perform(get("/api/restaurants").param("provinceCode", "0"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get("/api/restaurants").param("wardCode", "-1"))
+                .andExpect(status().isBadRequest());
     }
 
     @Test
