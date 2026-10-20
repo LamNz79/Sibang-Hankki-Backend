@@ -39,6 +39,14 @@ public class RestaurantCatalogPersistenceAdapter implements RestaurantCatalogPor
     }
 
     @Override
+    public List<RestaurantData> findActiveRestaurantsByIds(Collection<UUID> restaurantIds) {
+        if (restaurantIds.isEmpty()) {
+            return List.of();
+        }
+        return repository.findActiveByIds(restaurantIds).stream().map(this::toRestaurantData).toList();
+    }
+
+    @Override
     public Optional<RestaurantData> findActiveRestaurantBySlug(String slug) {
         return repository.findActiveBySlug(slug).map(this::toRestaurantData);
     }

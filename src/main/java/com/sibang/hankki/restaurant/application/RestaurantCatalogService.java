@@ -54,6 +54,20 @@ public class RestaurantCatalogService implements RestaurantCatalogUseCase {
     }
 
     @Override
+    public List<RestaurantSummaryResponse> restaurantSummaries(List<UUID> restaurantIds) {
+        if (restaurantIds.isEmpty()) {
+            return List.of();
+        }
+        Map<UUID, RestaurantData> activeRestaurants = catalogPort.findActiveRestaurantsByIds(restaurantIds).stream()
+                .collect(java.util.stream.Collectors.toMap(RestaurantData::id, Function.identity()));
+        List<RestaurantData> orderedRestaurants = restaurantIds.stream()
+                .map(activeRestaurants::get)
+                .filter(java.util.Objects::nonNull)
+                .toList();
+        return responses(orderedRestaurants, false).stream().map(RestaurantSummaryResponse::from).toList();
+    }
+
+    @Override
     public Optional<RestaurantResponse> restaurant(String slug) {
         return catalogPort.findActiveRestaurantBySlug(slug)
                 .map(restaurant -> responses(List.of(restaurant), true).get(0));
