@@ -49,6 +49,17 @@ public class RestaurantCatalogRepository {
                 .findFirst();
     }
 
+    public List<RestaurantEntity> findActiveByIds(Collection<UUID> ids) {
+        return entityManager.createQuery("""
+                select restaurant from RestaurantEntity restaurant
+                where restaurant.id in :ids
+                    and restaurant.deletedAt is null
+                    and restaurant.approvalStatus = 'ACTIVE'
+                """, RestaurantEntity.class)
+                .setParameter("ids", ids)
+                .getResultList();
+    }
+
     public Optional<RestaurantEntity> findActiveById(UUID id) {
         return entityManager.createQuery("""
                 select restaurant from RestaurantEntity restaurant

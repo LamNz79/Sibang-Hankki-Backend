@@ -10,6 +10,8 @@ public interface RestaurantCatalogPort {
 
     List<RestaurantData> findAllActiveRestaurants(Integer provinceCode, Integer wardCode);
 
+    List<RestaurantData> findActiveRestaurantsByIds(Collection<UUID> restaurantIds);
+
     Optional<RestaurantData> findActiveRestaurantBySlug(String slug);
 
     Optional<RestaurantData> findActiveRestaurantById(UUID restaurantId);
