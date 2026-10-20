@@ -159,6 +159,25 @@ class RestaurantCatalogPersistenceAdapterTest {
         assertFalse(ids(catalogAdapter.findAllActiveRestaurants(provinceCode, wardCode)).contains(deleted.id()));
     }
 
+    @Test
+    void findsV3PrototypeRestaurantsByBackfilledProvince() {
+        assertEquals(
+                java.util.Set.of("anan-saigon", "royal-pavilion", "refinery", "mori-teppan"),
+                slugs(catalogAdapter.findAllActiveRestaurants(79, null)));
+        assertEquals(
+                java.util.Set.of("hanoi-hearth"),
+                slugs(catalogAdapter.findAllActiveRestaurants(1, null)));
+        assertEquals(
+                java.util.Set.of("han-river-dining"),
+                slugs(catalogAdapter.findAllActiveRestaurants(48, null)));
+        assertEquals(0, jdbcTemplate.queryForObject("""
+                select count(*) from restaurants
+                where slug in ('anan-saigon', 'royal-pavilion', 'refinery', 'mori-teppan',
+                    'hanoi-hearth', 'han-river-dining')
+                    and ward_code is not null
+                """, Integer.class));
+    }
+
     private TestRestaurant insertRestaurant(String approvalStatus, boolean deleted) {
         return insertRestaurant(approvalStatus, deleted, null, null);
     }
@@ -187,6 +206,10 @@ class RestaurantCatalogPersistenceAdapterTest {
 
     private java.util.Set<UUID> ids(List<RestaurantData> restaurants) {
         return restaurants.stream().map(RestaurantData::id).collect(java.util.stream.Collectors.toSet());
+    }
+
+    private java.util.Set<String> slugs(List<RestaurantData> restaurants) {
+        return restaurants.stream().map(RestaurantData::slug).collect(java.util.stream.Collectors.toSet());
     }
 
     private record TestRestaurant(UUID id, String slug) {
