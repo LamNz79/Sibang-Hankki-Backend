@@ -7,6 +7,10 @@ import com.sibang.hankki.restaurant.application.exception.BookingSettingsNotConf
 import com.sibang.hankki.restaurant.application.exception.RestaurantNotFoundException;
 import com.sibang.hankki.restaurant.domain.booking.BookingSlotCandidate;
 import com.sibang.hankki.restaurant.domain.model.ConfirmationMode;
+import com.sibang.hankki.reservation.application.CreateReservationService;
+import com.sibang.hankki.reservation.application.OwnerReservationReadService;
+import com.sibang.hankki.reservation.application.exception.ReservationSlotNotFoundException;
+import com.sibang.hankki.reservation.application.port.in.CreateReservationCommand;
 
 import jakarta.persistence.EntityManager;
 import java.time.Clock;
@@ -56,6 +60,12 @@ class BookingSlotGenerationPersistenceTest {
 
     @Autowired
     private EntityManager entityManager;
+
+    @Autowired
+    private CreateReservationService createReservationService;
+
+    @Autowired
+    private OwnerReservationReadService ownerReservationReadService;
 
     private UUID restaurantId;
     private LocalDate generationDate;
@@ -132,6 +142,95 @@ class BookingSlotGenerationPersistenceTest {
     void reportsUnknownRestaurant() {
         assertThrows(RestaurantNotFoundException.class,
                 () -> generationService.generateSlots(UUID.randomUUID(), generationDate, generationDate));
+    }
+
+    @Test
+    void regenerationRemovesObsoleteAvailabilityButPreservesReferencedHistory() {
+        settingsRepository.saveAndFlush(settings(20));
+        replaceBusinessHours("07:30", "11:00");
+        BookingSlotGenerationService.GenerationResult initial = generationService.regenerateSlots(
+                restaurantId, generationDate, generationDate);
+        assertEquals(3, initial.generatedSlots().size());
+
+        BookingSlot obsoleteReferenced = slotsInRange().get(0);
+        UUID reservationId = insertPendingReservation(obsoleteReferenced);
+
+        replaceBusinessHours("11:30", "22:00");
+        BookingSlotGenerationService.GenerationResult regenerated = generationService.regenerateSlots(
+                restaurantId, generationDate, generationDate);
+        entityManager.flush();
+        entityManager.clear();
+
+        BookingSlot retained = slotRepository.findById(obsoleteReferenced.getId()).orElseThrow();
+        assertEquals(false, retained.isBookable());
+        assertEquals(1, jdbcTemplate.queryForObject("""
+                select count(*) from booking_slots
+                where restaurant_id = ? and starts_at < ?
+                """, Integer.class, restaurantId,
+                timestamp(generationDate.atTime(11, 30)
+                        .atZone(BookingSlotGenerationService.RESTAURANT_TIME_ZONE).toInstant())));
+        assertEquals(10, regenerated.generatedSlots().size());
+        assertEquals(List.of("11:30", "12:30", "13:30", "14:30", "15:30",
+                        "16:30", "17:30", "18:30", "19:30", "20:30"),
+                slotsInRange().stream()
+                        .filter(BookingSlot::isBookable)
+                        .map(slot -> slot.getStartsAt()
+                                .atZone(BookingSlotGenerationService.RESTAURANT_TIME_ZONE)
+                                .toLocalTime().toString())
+                        .toList());
+        assertEquals(reservationId, ownerReservationReadService.findById(reservationId, restaurantId).id());
+        assertThrows(ReservationSlotNotFoundException.class, () -> createReservationService.create(
+                new CreateReservationCommand(
+                        "obsolete-slot-" + reservationId,
+                        "anan-saigon",
+                        generationDate.toString(),
+                        "07:30",
+                        2,
+                        "Minh Lam",
+                        "0900000000",
+                        null,
+                        null,
+                        null)));
+
+        assertEquals(0, generationService.regenerateSlots(
+                restaurantId, generationDate, generationDate).generatedSlots().size());
+        assertEquals(11, slotsInRange().size());
+    }
+
+    private void replaceBusinessHours(String opensAt, String closesAt) {
+        jdbcTemplate.update(
+                "delete from restaurant_business_hours where restaurant_id = ? and day_of_week = ?",
+                restaurantId, generationDate.getDayOfWeek().getValue());
+        jdbcTemplate.update("""
+                insert into restaurant_business_hours
+                    (id, restaurant_id, day_of_week, opens_at, closes_at)
+                values (?, ?, ?, cast(? as time), cast(? as time))
+                """, UUID.randomUUID(), restaurantId, generationDate.getDayOfWeek().getValue(), opensAt, closesAt);
+        entityManager.flush();
+        entityManager.clear();
+    }
+
+    private UUID insertPendingReservation(BookingSlot slot) {
+        UUID reservationId = UUID.randomUUID();
+        jdbcTemplate.update("""
+                insert into reservations (
+                    id, reference, idempotency_key, request_fingerprint, restaurant_id, booking_slot_id,
+                    customer_name, customer_phone, starts_at, ends_at, party_size, status,
+                    capacity_override, version
+                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', false, 0)
+                """,
+                reservationId,
+                "SHK-STALE-" + reservationId.toString().substring(0, 8),
+                "stale-" + reservationId,
+                "0".repeat(64),
+                restaurantId,
+                slot.getId(),
+                "Historical Guest",
+                "0900000000",
+                timestamp(slot.getStartsAt()),
+                timestamp(slot.getEndsAt()),
+                2);
+        return reservationId;
     }
 
     private List<BookingSlot> slotsInRange() {

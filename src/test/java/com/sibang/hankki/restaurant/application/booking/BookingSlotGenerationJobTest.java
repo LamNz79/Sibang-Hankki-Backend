@@ -50,11 +50,11 @@ class BookingSlotGenerationJobTest {
         RestaurantData restaurant = restaurant("anan-saigon");
         given(restaurantCatalogPort.findAllActiveRestaurants()).willReturn(List.of(restaurant));
         given(bookingSettingsPort.findByRestaurantId(restaurant.id())).willReturn(Optional.of(settings(restaurant.id(), 30)));
-        given(generationService.generateSlots(eq(restaurant.id()), eq(TODAY), eq(TODAY.plusDays(29))))
-                .willReturn(List.of(slot(), slot()));
+        given(generationService.regenerateSlots(eq(restaurant.id()), eq(TODAY), eq(TODAY.plusDays(29))))
+                .willReturn(new BookingSlotGenerationService.GenerationResult(0, List.of(slot(), slot())));
 
         assertEquals(2, job.run());
-        verify(generationService).generateSlots(restaurant.id(), TODAY, TODAY.plusDays(29));
+        verify(generationService).regenerateSlots(restaurant.id(), TODAY, TODAY.plusDays(29));
     }
 
     @Test
@@ -64,7 +64,7 @@ class BookingSlotGenerationJobTest {
         given(bookingSettingsPort.findByRestaurantId(restaurant.id())).willReturn(Optional.empty());
 
         assertEquals(0, job.run());
-        verify(generationService, never()).generateSlots(any(), any(), any());
+        verify(generationService, never()).regenerateSlots(any(), any(), any());
     }
 
     @Test
@@ -73,7 +73,7 @@ class BookingSlotGenerationJobTest {
 
         assertEquals(0, job.run());
         verify(bookingSettingsPort, never()).findByRestaurantId(any());
-        verify(generationService, never()).generateSlots(any(), any(), any());
+        verify(generationService, never()).regenerateSlots(any(), any(), any());
     }
 
     @Test
@@ -83,11 +83,13 @@ class BookingSlotGenerationJobTest {
         given(restaurantCatalogPort.findAllActiveRestaurants()).willReturn(List.of(failing, succeeding));
         given(bookingSettingsPort.findByRestaurantId(failing.id())).willReturn(Optional.of(settings(failing.id(), 1)));
         given(bookingSettingsPort.findByRestaurantId(succeeding.id())).willReturn(Optional.of(settings(succeeding.id(), 1)));
-        given(generationService.generateSlots(failing.id(), TODAY, TODAY)).willThrow(new IllegalStateException("failure"));
-        given(generationService.generateSlots(succeeding.id(), TODAY, TODAY)).willReturn(List.of(slot()));
+        given(generationService.regenerateSlots(failing.id(), TODAY, TODAY))
+                .willThrow(new IllegalStateException("failure"));
+        given(generationService.regenerateSlots(succeeding.id(), TODAY, TODAY))
+                .willReturn(new BookingSlotGenerationService.GenerationResult(0, List.of(slot())));
 
         assertEquals(1, job.run());
-        verify(generationService).generateSlots(succeeding.id(), TODAY, TODAY);
+        verify(generationService).regenerateSlots(succeeding.id(), TODAY, TODAY);
     }
 
     private RestaurantData restaurant(String slug) {

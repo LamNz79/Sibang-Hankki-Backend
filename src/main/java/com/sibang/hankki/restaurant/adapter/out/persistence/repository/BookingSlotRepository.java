@@ -19,15 +19,21 @@ public interface BookingSlotRepository extends JpaRepository<BookingSlot, UUID> 
             Instant startsAt,
             Instant endsAt);
 
-    Optional<BookingSlot> findByRestaurantIdAndStartsAt(UUID restaurantId, Instant startsAt);
+    List<BookingSlot> findByRestaurantIdAndStartsAtGreaterThanEqualAndStartsAtLessThanAndBookableTrueOrderByStartsAt(
+            UUID restaurantId,
+            Instant startsAt,
+            Instant endsAt);
+
+    Optional<BookingSlot> findByRestaurantIdAndStartsAtAndBookableTrue(UUID restaurantId, Instant startsAt);
 
     @Query("select count(slot) > 0 from BookingSlot slot "
             + "where slot.id = :slotId "
+            + "and slot.bookable = true "
             + "and slot.capacityTotal > 0 "
             + "and slot.capacityTotal - slot.capacityReserved >= :partySize")
     boolean hasAvailableCapacity(@Param("slotId") UUID slotId, @Param("partySize") int partySize);
 
-    Optional<BookingSlot> findFirstByRestaurantIdAndStartsAtLessThanEqualAndEndsAtGreaterThanOrderByStartsAtDesc(
+    Optional<BookingSlot> findFirstByRestaurantIdAndStartsAtLessThanEqualAndEndsAtGreaterThanAndBookableTrueOrderByStartsAtDesc(
             UUID restaurantId, Instant startsAt, Instant endsAt);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
@@ -41,6 +47,7 @@ public interface BookingSlotRepository extends JpaRepository<BookingSlot, UUID> 
             set slot.capacityReserved = slot.capacityReserved + :partySize,
                 slot.updatedAt = CURRENT_TIMESTAMP
             where slot.id = :slotId
+              and slot.bookable = true
               and slot.capacityTotal - slot.capacityReserved >= :partySize
             """)
     int reserveCapacity(@Param("slotId") UUID slotId, @Param("partySize") int partySize);
@@ -56,11 +63,17 @@ public interface BookingSlotRepository extends JpaRepository<BookingSlot, UUID> 
     int releaseCapacity(@Param("slotId") UUID slotId, @Param("partySize") int partySize);
 
     @Modifying
+    @Query("update BookingSlot slot set slot.bookable = :bookable, slot.updatedAt = CURRENT_TIMESTAMP "
+            + "where slot.id in :slotIds")
+    int setBookable(@Param("slotIds") List<UUID> slotIds, @Param("bookable") boolean bookable);
+
+    @Modifying
     @Query(value = """
             delete from booking_slots slot
             where slot.restaurant_id = :restaurantId
               and slot.starts_at >= :startsAt
               and slot.starts_at < :endsAt
+              and slot.bookable = false
               and not exists (
                   select 1 from reservations reservation
                   where reservation.booking_slot_id = slot.id

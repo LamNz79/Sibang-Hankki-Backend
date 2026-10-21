@@ -50,8 +50,9 @@ public class BookingSlotGenerationJob implements BookingSlotGenerationUseCase {
                             restaurant.id(), restaurant.slug());
                     continue;
                 }
-                int created = generationService.generateSlots(
-                        restaurant.id(), today, today.plusDays(settings.bookingWindowDays() - 1L)).size();
+                int created = generationService.regenerateSlots(
+                        restaurant.id(), today, today.plusDays(settings.bookingWindowDays() - 1L))
+                        .generatedSlots().size();
                 generatedSlots += created;
                 log.info("event=booking_slot_generation_restaurant_completed restaurantId={} slug={} generatedSlots={}",
                         restaurant.id(), restaurant.slug(), created);

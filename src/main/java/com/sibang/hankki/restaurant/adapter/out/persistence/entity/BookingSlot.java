@@ -35,6 +35,9 @@ public class BookingSlot {
     @Column(nullable = false)
     private int capacityReserved;
 
+    @Column(nullable = false)
+    private boolean bookable = true;
+
     @CreationTimestamp
     @Column(nullable = false)
     private Instant createdAt;
@@ -81,5 +84,9 @@ public class BookingSlot {
 
     public int getCapacityReserved() {
         return capacityReserved;
+    }
+
+    public boolean isBookable() {
+        return bookable;
     }
 }

@@ -3,6 +3,7 @@ package com.sibang.hankki.restaurant.application.booking;
 import com.sibang.hankki.restaurant.application.port.out.BookingSettings;
 import com.sibang.hankki.restaurant.application.port.out.BookingSettingsPort;
 import com.sibang.hankki.restaurant.application.port.out.BookingSlotPort;
+import com.sibang.hankki.restaurant.application.port.out.BookingSlotState;
 import com.sibang.hankki.restaurant.application.port.out.RestaurantBusinessHourData;
 import com.sibang.hankki.restaurant.application.port.out.RestaurantCatalogPort;
 import com.sibang.hankki.restaurant.application.port.out.RestaurantData;
@@ -29,6 +30,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.inOrder;
 
 class BookingSlotGenerationServiceTest {
 
@@ -130,6 +132,30 @@ class BookingSlotGenerationServiceTest {
 
         assertEquals(Instant.parse("2026-09-28T02:30:00Z"), slots.get(0).startsAt());
         verify(restaurantCatalogPort, never()).findActiveRestaurantById(restaurantId);
+    }
+
+    @Test
+    void deactivatesAndDeletesObsoleteSlotsWhileKeepingValidSlots() {
+        configure(60, 90, List.of(hours(1, "11:30", "13:00")));
+        UUID obsoleteId = UUID.randomUUID();
+        UUID validId = UUID.randomUUID();
+        Instant obsoleteStart = Instant.parse("2026-09-28T00:30:00Z");
+        Instant validStart = Instant.parse("2026-09-28T04:30:00Z");
+        given(bookingSlotPort.findSlotsForSynchronization(
+                org.mockito.ArgumentMatchers.eq(restaurantId), any(), any())).willReturn(List.of(
+                        new BookingSlotState(obsoleteId, obsoleteStart, obsoleteStart.plusSeconds(5400), true),
+                        new BookingSlotState(validId, validStart, validStart.plusSeconds(5400), true)));
+        given(bookingSlotPort.deleteUnreferencedSlots(
+                org.mockito.ArgumentMatchers.eq(restaurantId), any(), any())).willReturn(1);
+
+        List<BookingSlotCandidate> generated = service.generateSlots(restaurantId, TODAY, TODAY);
+
+        assertEquals(List.of(), generated);
+        var ordered = inOrder(bookingSlotPort);
+        ordered.verify(bookingSlotPort).setBookable(List.of(obsoleteId), false);
+        ordered.verify(bookingSlotPort).deleteUnreferencedSlots(
+                org.mockito.ArgumentMatchers.eq(restaurantId), any(), any());
+        verify(bookingSlotPort, never()).saveGeneratedSlots(any(), anyList(), anyInt());
     }
 
     @Test
