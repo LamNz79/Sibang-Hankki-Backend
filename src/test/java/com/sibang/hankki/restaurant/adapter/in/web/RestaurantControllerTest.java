@@ -50,7 +50,8 @@ class RestaurantControllerTest {
                 .andExpect(jsonPath("$[0].slug").value("anan-saigon"))
                 .andExpect(jsonPath("$[0].imageUrl").value("https://example.test/anan.jpg"))
                 .andExpect(jsonPath("$[0].slotMatrix").doesNotExist())
-                .andExpect(jsonPath("$[0].menuCategories").doesNotExist());
+                .andExpect(jsonPath("$[0].menuCategories").doesNotExist())
+                .andExpect(jsonPath("$[0].bookingPolicy").doesNotExist());
 
         verify(catalogService).restaurants(null, null);
     }
@@ -111,7 +112,11 @@ class RestaurantControllerTest {
                 .andExpect(jsonPath("$.rating").value(0))
                 .andExpect(jsonPath("$.ratingCount").value(0))
                 .andExpect(jsonPath("$.availableText").doesNotExist())
-                .andExpect(jsonPath("$.availableFrom").doesNotExist());
+                .andExpect(jsonPath("$.availableFrom").doesNotExist())
+                .andExpect(jsonPath("$.bookingPolicy.bookingWindowDays").value(30))
+                .andExpect(jsonPath("$.bookingPolicy.minimumPartySize").value(2))
+                .andExpect(jsonPath("$.bookingPolicy.maximumOnlinePartySize").value(10))
+                .andExpect(jsonPath("$.bookingPolicy.largePartyThreshold").value(11));
     }
 
     @Test
@@ -141,6 +146,7 @@ class RestaurantControllerTest {
                         "Main dishes", 0, List.of(new RestaurantResponse.MenuItem(
                                 UUID.fromString("30000000-0000-0000-0000-000000000001"),
                                 "Grilled beef", "With vegetables", new BigDecimal("250000"),
-                                "VND", "https://example.test/beef.jpg")))));
+                                "VND", "https://example.test/beef.jpg")))),
+                new RestaurantResponse.BookingPolicy(30, 2, 10, 11));
     }
 }

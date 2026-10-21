@@ -30,7 +30,8 @@ public record RestaurantResponse(
         List<GalleryImage> galleryImages,
         String summary,
         Map<String, Map<String, List<String>>> slotMatrix,
-        List<MenuCategory> menuCategories) {
+        List<MenuCategory> menuCategories,
+        BookingPolicy bookingPolicy) {
 
     public record GalleryImage(String imageUrl, String imageAlt) {
     }
@@ -45,5 +46,12 @@ public record RestaurantResponse(
             BigDecimal price,
             String currency,
             String imageUrl) {
+    }
+
+    public record BookingPolicy(
+            int bookingWindowDays,
+            int minimumPartySize,
+            int maximumOnlinePartySize,
+            int largePartyThreshold) {
     }
 }
