@@ -141,6 +141,7 @@ public class BookingSlotGenerationService {
                 .filter(slot -> !slot.bookable())
                 .map(BookingSlotState::id)
                 .toList(), true);
+        bookingSlotPort.updateCapacityTotal(retainedIds.stream().toList(), policy.guestCapacity());
         int deleted = bookingSlotPort.deleteUnreferencedSlots(restaurantId, rangeStart, cleanupEnd);
 
         List<BookingSlotCandidate> missingSlots = desiredSlots.stream()

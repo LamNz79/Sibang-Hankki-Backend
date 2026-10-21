@@ -24,11 +24,10 @@ public class BookingSlotPersistenceAdapter implements BookingSlotPort {
 
     @Override
     public List<BookingSlotCapacity> findSlotCapacities(UUID restaurantId, Instant startsAt, Instant endsAt) {
-        return repository.findByRestaurantIdAndStartsAtGreaterThanEqualAndStartsAtLessThanAndBookableTrueOrderByStartsAt(
-                        restaurantId, startsAt, endsAt)
+        return repository.findBookableSlotCapacities(restaurantId, startsAt, endsAt)
                 .stream()
                 .map(slot -> new BookingSlotCapacity(
-                        slot.getStartsAt(), slot.getCapacityTotal(), slot.getCapacityReserved()))
+                        slot.getStartsAt(), slot.getCapacityTotal(), Math.toIntExact(slot.getCapacityReserved())))
                 .toList();
     }
 
@@ -89,6 +88,13 @@ public class BookingSlotPersistenceAdapter implements BookingSlotPort {
     public void setBookable(List<UUID> slotIds, boolean bookable) {
         if (!slotIds.isEmpty()) {
             repository.setBookable(slotIds, bookable);
+        }
+    }
+
+    @Override
+    public void updateCapacityTotal(List<UUID> slotIds, int capacityTotal) {
+        if (!slotIds.isEmpty()) {
+            repository.updateCapacityTotal(slotIds, capacityTotal);
         }
     }
 

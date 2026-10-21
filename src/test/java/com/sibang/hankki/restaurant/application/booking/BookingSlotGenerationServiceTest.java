@@ -153,6 +153,7 @@ class BookingSlotGenerationServiceTest {
         assertEquals(List.of(), generated);
         var ordered = inOrder(bookingSlotPort);
         ordered.verify(bookingSlotPort).setBookable(List.of(obsoleteId), false);
+        ordered.verify(bookingSlotPort).updateCapacityTotal(List.of(validId), 20);
         ordered.verify(bookingSlotPort).deleteUnreferencedSlots(
                 org.mockito.ArgumentMatchers.eq(restaurantId), any(), any());
         verify(bookingSlotPort, never()).saveGeneratedSlots(any(), anyList(), anyInt());

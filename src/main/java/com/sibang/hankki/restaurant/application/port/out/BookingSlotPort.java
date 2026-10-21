@@ -28,5 +28,7 @@ public interface BookingSlotPort {
 
     void setBookable(List<UUID> slotIds, boolean bookable);
 
+    void updateCapacityTotal(List<UUID> slotIds, int capacityTotal);
+
     int deleteUnreferencedSlots(UUID restaurantId, Instant startsAt, Instant endsAt);
 }
