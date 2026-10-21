@@ -11,6 +11,28 @@ Equivalent local command:
 mvn --batch-mode --no-transfer-progress clean verify
 ```
 
+## Deployment configuration
+
+Booking-slot generation remains disabled by default in generic and local environments. Every deployed
+environment must enable it explicitly so the rolling booking window is generated at application startup
+and refreshed daily at 00:05 in `Asia/Ho_Chi_Minh`. Generation is idempotent and preserves slots referenced
+by existing reservations and proposals.
+
+An optional CUSTOMER bootstrap is available for repeatable staging/E2E testing. It creates the account only
+when the userid is absent; an existing account is never modified. Keep the password in the deployment secret
+manager rather than source control or deployment manifests.
+
+```bash
+BOOKING_SLOT_GENERATION_ENABLED=true
+BOOKING_SLOT_GENERATION_CRON="0 5 0 * * *"
+
+APP_BOOTSTRAP_CUSTOMER_ENABLED=true
+APP_BOOTSTRAP_CUSTOMER_USERID=customer
+APP_BOOTSTRAP_CUSTOMER_PASSWORD=<secret>
+APP_BOOTSTRAP_CUSTOMER_NAME="MVP Test Customer"
+APP_BOOTSTRAP_CUSTOMER_EMAIL=customer@example.com
+```
+
 ## Public restaurant location filters
 
 The public restaurant list remains backward compatible and accepts optional Vietnamese administrative
