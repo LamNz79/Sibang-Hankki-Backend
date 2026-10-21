@@ -2,8 +2,10 @@ package com.sibang.hankki.restaurant.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import jakarta.persistence.EntityManagerFactory;
 import java.util.List;
 import java.util.UUID;
+import org.hibernate.SessionFactory;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -11,7 +13,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
-@SpringBootTest
+@SpringBootTest(properties = "spring.jpa.properties.hibernate.generate_statistics=true")
 @Transactional
 @EnabledIfEnvironmentVariable(named = "DB_URL", matches = ".+")
 class PublicRestaurantMenuPersistenceTest {
@@ -21,6 +23,57 @@ class PublicRestaurantMenuPersistenceTest {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private EntityManagerFactory entityManagerFactory;
+
+    @Test
+    void newActiveRestaurantUsesOnlyPersistedCatalogData() {
+        TestRestaurant restaurant = insertRestaurant("ACTIVE", false);
+        insertTag(restaurant.id(), "special_deal", true);
+        insertTag(restaurant.id(), "date_night", false);
+        insertHours(restaurant.id());
+        insertImage(restaurant.id(), "https://example.com/primary.jpg", "Primary room", 0);
+        insertImage(restaurant.id(), "https://example.com/gallery.jpg", "Gallery room", 1);
+        UUID category = insertCategory(restaurant.id(), "Main dishes", 0, false);
+        insertItem(restaurant.id(), category, "Persisted dish", true, false);
+
+        var summary = service.restaurants(null, null).stream()
+                .filter(item -> item.slug().equals(restaurant.slug()))
+                .findFirst()
+                .orElseThrow();
+        var detail = service.restaurant(restaurant.slug()).orElseThrow();
+
+        assertThat(summary.rating()).isZero();
+        assertThat(summary.heroAccent()).isEqualTo("#f3f4f6");
+        assertThat(summary.imageUrl()).isEqualTo("https://example.com/primary.jpg");
+        assertThat(summary.availableText()).isNull();
+        assertThat(summary.availableFrom()).isNull();
+        assertThat(summary.benefits()).containsExactly("special_deal");
+        assertThat(detail.rating()).isZero();
+        assertThat(detail.ratingCount()).isZero();
+        assertThat(detail.availableText()).isNull();
+        assertThat(detail.availableFrom()).isNull();
+        assertThat(detail.slotMatrix()).isEmpty();
+        assertThat(detail.tags()).containsExactlyInAnyOrder("Special deal", "Date night");
+        assertThat(detail.openHours()).isEqualTo("11:30 - 22:00");
+        assertThat(detail.galleryCount()).isEqualTo(2);
+        assertThat(detail.galleryImages()).extracting(image -> image.imageUrl())
+                .containsExactly("https://example.com/primary.jpg", "https://example.com/gallery.jpg");
+        assertThat(detail.menuCategories()).singleElement()
+                .satisfies(menuCategory -> assertThat(menuCategory.items()).singleElement()
+                        .satisfies(item -> assertThat(item.name()).isEqualTo("Persisted dish")));
+    }
+
+    @Test
+    void restaurantListLoadsRelatedDataWithFixedQueryCount() {
+        var statistics = entityManagerFactory.unwrap(SessionFactory.class).getStatistics();
+        statistics.clear();
+
+        service.restaurants(null, null);
+
+        assertThat(statistics.getPrepareStatementCount()).isEqualTo(5);
+    }
 
     @Test
     void detailReadsOnlyAvailableNonDeletedMenuForSelectedRestaurant() {
@@ -109,6 +162,27 @@ class PublicRestaurantMenuPersistenceTest {
                     case when ? then current_timestamp else null end)
                 """, id, restaurantId, categoryId, name, name + " description", available, deleted);
         return id;
+    }
+
+    private void insertTag(UUID restaurantId, String tag, boolean showInBenefits) {
+        jdbcTemplate.update("""
+                insert into restaurant_tags (id, restaurant_id, tag, show_in_benefits)
+                values (?, ?, ?, ?)
+                """, UUID.randomUUID(), restaurantId, tag, showInBenefits);
+    }
+
+    private void insertHours(UUID restaurantId) {
+        jdbcTemplate.update("""
+                insert into restaurant_business_hours (id, restaurant_id, day_of_week, opens_at, closes_at)
+                values (?, ?, 1, time '11:30', time '22:00')
+                """, UUID.randomUUID(), restaurantId);
+    }
+
+    private void insertImage(UUID restaurantId, String imageUrl, String altText, int sortOrder) {
+        jdbcTemplate.update("""
+                insert into restaurant_images (id, restaurant_id, image_url, alt_text, sort_order)
+                values (?, ?, ?, ?, ?)
+                """, UUID.randomUUID(), restaurantId, imageUrl, altText, sortOrder);
     }
 
     private record TestRestaurant(UUID id, String slug) {

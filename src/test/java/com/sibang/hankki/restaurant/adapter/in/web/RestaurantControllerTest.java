@@ -92,7 +92,7 @@ class RestaurantControllerTest {
     }
 
     @Test
-    void returnsRestaurantDetailsIncludingSlots() throws Exception {
+    void returnsRestaurantDetailsWithEmptyLegacySlotMatrix() throws Exception {
         given(catalogService.restaurant("anan-saigon")).willReturn(Optional.of(restaurant()));
 
         mockMvc.perform(get("/api/restaurants/anan-saigon"))
@@ -107,7 +107,11 @@ class RestaurantControllerTest {
                 .andExpect(jsonPath("$.menuCategories[0].items[0].currency").value("VND"))
                 .andExpect(jsonPath("$.menuCategories[0].items[0].imageUrl")
                         .value("https://example.test/beef.jpg"))
-                .andExpect(jsonPath("$.slotMatrix").isMap());
+                .andExpect(jsonPath("$.slotMatrix").isEmpty())
+                .andExpect(jsonPath("$.rating").value(0))
+                .andExpect(jsonPath("$.ratingCount").value(0))
+                .andExpect(jsonPath("$.availableText").doesNotExist())
+                .andExpect(jsonPath("$.availableFrom").doesNotExist());
     }
 
     @Test
@@ -125,13 +129,13 @@ class RestaurantControllerTest {
     private RestaurantResponse restaurant() {
         return new RestaurantResponse(
                 "anan-saigon", "Anan Saigon", "ho-chi-minh-city", "District 1", "District 1",
-                "Vietnamese contemporary", "vietnamese", 4.7, 139, "150K - 350K", "#f6ede4",
+                "Vietnamese contemporary", "vietnamese", 0, 0, "150K - 350K", "#f3f4f6",
                 "https://example.test/anan.jpg", "Anan Saigon dining room",
-                "11:30 - 22:00", "District 1", "Available today from 18:30", "18:30", "under300",
-                List.of("michelin", "special_deal", "available"), List.of("Michelin", "Special deal", "Date night"),
+                "11:30 - 22:00", "District 1", null, null, "under300",
+                List.of("michelin", "special_deal"), List.of("Michelin", "Special deal", "Date night"),
                 5, List.of(new RestaurantResponse.GalleryImage(
                         "https://example.test/anan.jpg", "Anan Saigon dining room")),
-                "summary", Map.of("2026-09-15", Map.of("2", List.of("18:30"))),
+                "summary", Map.of(),
                 List.of(new RestaurantResponse.MenuCategory(
                         UUID.fromString("20000000-0000-0000-0000-000000000001"),
                         "Main dishes", 0, List.of(new RestaurantResponse.MenuItem(

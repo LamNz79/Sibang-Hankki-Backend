@@ -28,6 +28,10 @@ restaurants are returned. An unmatched filter returns `200 OK` with `[]`; the re
 lightweight `RestaurantSummaryResponse` array. Flyway V15 backfills the V3 prototype restaurants from their
 existing `city_slug`; it leaves ward codes unset rather than guessing them from legacy district text.
 
+Public catalog presentation comes only from persisted restaurant profiles, tags, business hours, images,
+and menu data. Until reviews are implemented, `rating` and `ratingCount` are `0`; legacy availability fields
+are `null`, `slotMatrix` is empty, and clients should use the date/party-size availability endpoint for live slots.
+
 ## System-admin restaurant review lifecycle
 
 An ADMIN changes restaurant approval state with:
