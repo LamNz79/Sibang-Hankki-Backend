@@ -2,6 +2,7 @@ package com.sibang.hankki.user.bootstrap;
 
 import com.sibang.hankki.user.adapter.out.persistence.entity.UserEntity;
 import com.sibang.hankki.user.adapter.out.persistence.repository.UserAuthenticationRepository;
+import java.util.regex.Pattern;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -12,6 +13,10 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 @ConfigurationProperties(prefix = "app.bootstrap-customer")
 public class BootstrapCustomerRunner implements ApplicationRunner {
+
+    private static final String CUSTOMER = "CUSTOMER";
+    private static final String ACTIVE = "ACTIVE";
+    private static final Pattern EMAIL = Pattern.compile("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$");
 
     private final UserAuthenticationRepository userRepository;
     private final PasswordEncoder passwordEncoder;
@@ -44,11 +49,6 @@ public class BootstrapCustomerRunner implements ApplicationRunner {
         if (configuredPassword.length() < 8 || configuredPassword.length() > 72) {
             throw new IllegalStateException("APP_BOOTSTRAP_CUSTOMER_PASSWORD must be between 8 and 72 characters");
         }
-
-        if (userRepository.findByUserid(configuredUserid).isPresent()) {
-            return;
-        }
-
         String configuredName = optional(name);
         String configuredEmail = optional(email);
         if (configuredName == null) {
@@ -57,8 +57,22 @@ public class BootstrapCustomerRunner implements ApplicationRunner {
         if (configuredName.length() > 120) {
             throw new IllegalStateException("APP_BOOTSTRAP_CUSTOMER_NAME must not exceed 120 characters");
         }
-        if (configuredEmail != null && configuredEmail.length() > 320) {
-            throw new IllegalStateException("APP_BOOTSTRAP_CUSTOMER_EMAIL must not exceed 320 characters");
+        if (configuredEmail != null
+                && (configuredEmail.length() > 320 || !EMAIL.matcher(configuredEmail).matches())) {
+            throw new IllegalStateException("APP_BOOTSTRAP_CUSTOMER_EMAIL must be a valid email at most 320 characters");
+        }
+
+        UserEntity existing = userRepository.findByUserid(configuredUserid).orElse(null);
+        if (existing != null) {
+            if (CUSTOMER.equals(existing.getRole())
+                    && ACTIVE.equals(existing.getStatus())
+                    && existing.getRestaurantId() == null
+                    && passwordEncoder.matches(configuredPassword, existing.getPasswordHash())) {
+                return;
+            }
+            throw new IllegalStateException(
+                    "APP_BOOTSTRAP_CUSTOMER_USERID already exists but is not the configured active CUSTOMER; "
+                            + "use a different userid");
         }
 
         userRepository.save(new UserEntity(
