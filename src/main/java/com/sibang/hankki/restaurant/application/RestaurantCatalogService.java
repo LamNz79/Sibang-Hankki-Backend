@@ -12,8 +12,6 @@ import com.sibang.hankki.restaurant.application.port.out.RestaurantData;
 import com.sibang.hankki.restaurant.application.port.out.RestaurantGalleryCount;
 import com.sibang.hankki.restaurant.application.port.out.RestaurantImageData;
 import com.sibang.hankki.restaurant.application.port.out.RestaurantTagData;
-import com.sibang.hankki.restaurant.application.prototype.RestaurantAvailabilityMockData;
-import com.sibang.hankki.restaurant.application.prototype.RestaurantPrototypePresentation;
 import java.time.format.DateTimeFormatter;
 import java.util.Collection;
 import java.util.HashMap;
@@ -29,6 +27,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class RestaurantCatalogService implements RestaurantCatalogUseCase {
 
+    private static final String NEUTRAL_HERO_ACCENT = "#f3f4f6";
     private static final Pattern FIRST_NUMBER = Pattern.compile("\\d+");
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm");
 
@@ -100,21 +99,11 @@ public class RestaurantCatalogService implements RestaurantCatalogUseCase {
             long galleryCount,
             List<RestaurantImageData> images,
             boolean includeDetails) {
-        RestaurantPrototypePresentation.Presentation presentation = RestaurantPrototypePresentation.forSlug(
-                restaurant.slug());
-        RestaurantAvailabilityMockData.Availability availability = RestaurantAvailabilityMockData.forSlug(
-                restaurant.slug());
         List<String> benefits = restaurantTags.stream()
                 .filter(RestaurantTagData::showInBenefits)
                 .map(RestaurantTagData::tag)
                 .toList();
-        if (availability != null && availability.showInBenefits()) {
-            benefits = availability.availableFirst() ? prepend(benefits, "available") : append(benefits, "available");
-        }
         List<String> tags = restaurantTags.stream().map(RestaurantTagData::tag).map(this::tagLabel).toList();
-        if (availability != null && availability.showInTags()) {
-            tags = prepend(tags, "Available");
-        }
         RestaurantImageData primaryImage = images.isEmpty() ? null : images.get(0);
 
         return new RestaurantResponse(
@@ -125,16 +114,16 @@ public class RestaurantCatalogService implements RestaurantCatalogUseCase {
                 restaurant.district(),
                 restaurant.cuisineLabel(),
                 restaurant.cuisineType(),
-                presentation.rating(),
-                presentation.ratingCount(),
+                0,
+                0,
                 restaurant.priceRange(),
-                presentation.heroAccent(),
+                NEUTRAL_HERO_ACCENT,
                 primaryImage == null ? null : primaryImage.imageUrl(),
                 primaryImage == null ? restaurant.name() : primaryImage.altText(),
                 openHours(businessHours),
                 restaurant.address(),
-                availability == null ? "Availability unavailable" : "Available today from " + availability.availableFrom(),
-                availability == null ? null : availability.availableFrom(),
+                null,
+                null,
                 priceKey(restaurant.priceRange()),
                 benefits,
                 tags,
@@ -144,7 +133,7 @@ public class RestaurantCatalogService implements RestaurantCatalogUseCase {
                                 image.imageUrl(), image.altText() == null ? restaurant.name() : image.altText()))
                         .toList(),
                 restaurant.description(),
-                includeDetails ? RestaurantAvailabilityMockData.slotMatrix(restaurant.slug()) : Map.of(),
+                Map.of(),
                 includeDetails ? publicMenu(menuPort.findAll(restaurant.id())) : List.of());
     }
 
@@ -201,11 +190,4 @@ public class RestaurantCatalogService implements RestaurantCatalogUseCase {
         };
     }
 
-    private List<String> append(List<String> values, String value) {
-        return java.util.stream.Stream.concat(values.stream(), java.util.stream.Stream.of(value)).toList();
-    }
-
-    private List<String> prepend(List<String> values, String value) {
-        return java.util.stream.Stream.concat(java.util.stream.Stream.of(value), values.stream()).toList();
-    }
 }

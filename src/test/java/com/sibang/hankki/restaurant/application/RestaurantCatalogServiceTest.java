@@ -29,7 +29,13 @@ class RestaurantCatalogServiceTest {
         RestaurantData restaurant = restaurant();
         given(catalogPort.findAllActiveRestaurants(null, null)).willReturn(List.of(restaurant));
 
-        assertThat(service.restaurants(null, null)).hasSize(1);
+        var response = service.restaurants(null, null).get(0);
+
+        assertThat(response.rating()).isZero();
+        assertThat(response.heroAccent()).isEqualTo("#f3f4f6");
+        assertThat(response.availableText()).isNull();
+        assertThat(response.availableFrom()).isNull();
+        assertThat(response.benefits()).isEmpty();
         verify(menuPort, never()).findAll(restaurant.id());
     }
 
@@ -65,6 +71,11 @@ class RestaurantCatalogServiceTest {
 
         var response = service.restaurant(restaurant.slug()).orElseThrow();
 
+        assertThat(response.rating()).isZero();
+        assertThat(response.ratingCount()).isZero();
+        assertThat(response.availableText()).isNull();
+        assertThat(response.availableFrom()).isNull();
+        assertThat(response.slotMatrix()).isEmpty();
         assertThat(response.menuCategories()).hasSize(1);
         assertThat(response.menuCategories().get(0).name()).isEqualTo("Main dishes");
         assertThat(response.menuCategories().get(0).items())

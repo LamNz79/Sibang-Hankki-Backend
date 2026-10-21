@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.sibang.hankki.restaurant.application.exception.RestaurantNotFoundException;
+import com.sibang.hankki.restaurant.application.RestaurantCatalogService;
 import com.sibang.hankki.user.adapter.out.persistence.entity.UserEntity;
 import com.sibang.hankki.user.adapter.out.persistence.repository.UserAuthenticationRepository;
 import jakarta.persistence.EntityManager;
@@ -23,6 +24,8 @@ class CustomerFavoritePersistenceTest {
     @Autowired
     private CustomerFavoriteService service;
     @Autowired
+    private RestaurantCatalogService catalogService;
+    @Autowired
     private UserAuthenticationRepository userRepository;
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -37,9 +40,15 @@ class CustomerFavoritePersistenceTest {
         service.save(customer.getId(), "anan-saigon");
         service.save(customer.getId(), "anan-saigon");
 
-        assertThat(service.favorites(customer.getId()))
-                .extracting(summary -> summary.slug())
-                .containsExactly("anan-saigon");
+        var favorite = service.favorites(customer.getId()).get(0);
+        var publicSummary = catalogService.restaurants(null, null).stream()
+                .filter(summary -> summary.slug().equals("anan-saigon"))
+                .findFirst()
+                .orElseThrow();
+        assertThat(favorite).isEqualTo(publicSummary);
+        assertThat(favorite.rating()).isZero();
+        assertThat(favorite.availableText()).isNull();
+        assertThat(favorite.availableFrom()).isNull();
         assertThat(favoriteCount(customer.getId())).isEqualTo(1);
 
         service.delete(customer.getId(), "anan-saigon");
