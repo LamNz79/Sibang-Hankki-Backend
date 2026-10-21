@@ -31,6 +31,8 @@ existing `city_slug`; it leaves ward codes unset rather than guessing them from 
 Public catalog presentation comes only from persisted restaurant profiles, tags, business hours, images,
 and menu data. Until reviews are implemented, `rating` and `ratingCount` are `0`; legacy availability fields
 are `null`, `slotMatrix` is empty, and clients should use the date/party-size availability endpoint for live slots.
+Restaurant detail also exposes the persisted public booking limits as nullable `bookingPolicy`; list and favorite
+summaries remain unchanged and do not load booking settings.
 
 ## System-admin restaurant review lifecycle
 

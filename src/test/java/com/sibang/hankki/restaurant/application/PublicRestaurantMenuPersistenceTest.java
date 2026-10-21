@@ -55,6 +55,7 @@ class PublicRestaurantMenuPersistenceTest {
         assertThat(detail.availableText()).isNull();
         assertThat(detail.availableFrom()).isNull();
         assertThat(detail.slotMatrix()).isEmpty();
+        assertThat(detail.bookingPolicy()).isNull();
         assertThat(detail.tags()).containsExactlyInAnyOrder("Special deal", "Date night");
         assertThat(detail.openHours()).isEqualTo("11:30 - 22:00");
         assertThat(detail.galleryCount()).isEqualTo(2);
@@ -63,6 +64,24 @@ class PublicRestaurantMenuPersistenceTest {
         assertThat(detail.menuCategories()).singleElement()
                 .satisfies(menuCategory -> assertThat(menuCategory.items()).singleElement()
                         .satisfies(item -> assertThat(item.name()).isEqualTo("Persisted dish")));
+    }
+
+    @Test
+    void detailReturnsPersistedPublicBookingPolicy() {
+        UUID restaurantId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        jdbcTemplate.update("""
+                update restaurant_booking_settings
+                set booking_window_days = 45,
+                    minimum_party_size = 2,
+                    maximum_online_party_size = 8,
+                    large_party_threshold = 9
+                where restaurant_id = ?
+                """, restaurantId);
+
+        var policy = service.restaurant("anan-saigon").orElseThrow().bookingPolicy();
+
+        assertThat(policy).isEqualTo(new com.sibang.hankki.restaurant.application.model.RestaurantResponse.BookingPolicy(
+                45, 2, 8, 9));
     }
 
     @Test

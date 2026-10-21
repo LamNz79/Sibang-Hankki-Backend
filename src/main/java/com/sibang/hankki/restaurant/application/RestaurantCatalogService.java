@@ -5,6 +5,8 @@ import com.sibang.hankki.restaurant.application.model.OwnerMenu;
 import com.sibang.hankki.restaurant.application.model.RestaurantResponse;
 import com.sibang.hankki.restaurant.application.model.RestaurantSummaryResponse;
 import com.sibang.hankki.restaurant.application.port.in.RestaurantCatalogUseCase;
+import com.sibang.hankki.restaurant.application.port.out.BookingSettings;
+import com.sibang.hankki.restaurant.application.port.out.BookingSettingsPort;
 import com.sibang.hankki.restaurant.application.port.out.OwnerMenuPort;
 import com.sibang.hankki.restaurant.application.port.out.RestaurantBusinessHourData;
 import com.sibang.hankki.restaurant.application.port.out.RestaurantCatalogPort;
@@ -33,10 +35,15 @@ public class RestaurantCatalogService implements RestaurantCatalogUseCase {
 
     private final RestaurantCatalogPort catalogPort;
     private final OwnerMenuPort menuPort;
+    private final BookingSettingsPort bookingSettingsPort;
 
-    public RestaurantCatalogService(RestaurantCatalogPort catalogPort, OwnerMenuPort menuPort) {
+    public RestaurantCatalogService(
+            RestaurantCatalogPort catalogPort,
+            OwnerMenuPort menuPort,
+            BookingSettingsPort bookingSettingsPort) {
         this.catalogPort = catalogPort;
         this.menuPort = menuPort;
+        this.bookingSettingsPort = bookingSettingsPort;
     }
 
     @Override
@@ -134,7 +141,20 @@ public class RestaurantCatalogService implements RestaurantCatalogUseCase {
                         .toList(),
                 restaurant.description(),
                 Map.of(),
-                includeDetails ? publicMenu(menuPort.findAll(restaurant.id())) : List.of());
+                includeDetails ? publicMenu(menuPort.findAll(restaurant.id())) : List.of(),
+                includeDetails
+                        ? bookingSettingsPort.findByRestaurantId(restaurant.id())
+                                .map(this::publicBookingPolicy)
+                                .orElse(null)
+                        : null);
+    }
+
+    private RestaurantResponse.BookingPolicy publicBookingPolicy(BookingSettings settings) {
+        return new RestaurantResponse.BookingPolicy(
+                settings.bookingWindowDays(),
+                settings.minimumPartySize(),
+                settings.maximumOnlinePartySize(),
+                settings.largePartyThreshold());
     }
 
     private List<RestaurantResponse.MenuCategory> publicMenu(OwnerMenu menu) {
