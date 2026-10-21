@@ -68,7 +68,7 @@ class BookingSlotPersistenceTest {
         repository.saveAndFlush(slot(testStart.plusSeconds(1600), 20, 0));
 
         BookingSlot found = repository
-                .findFirstByRestaurantIdAndStartsAtLessThanEqualAndEndsAtGreaterThanOrderByStartsAtDesc(
+                .findFirstByRestaurantIdAndStartsAtLessThanEqualAndEndsAtGreaterThanAndBookableTrueOrderByStartsAtDesc(
                         restaurantId, now, now)
                 .orElseThrow();
 

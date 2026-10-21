@@ -10,6 +10,8 @@ import java.util.UUID;
 public interface BookingSlotPort {
     List<BookingSlotCapacity> findSlotCapacities(UUID restaurantId, Instant startsAt, Instant endsAt);
 
+    List<BookingSlotState> findSlotsForSynchronization(UUID restaurantId, Instant startsAt, Instant endsAt);
+
     Optional<BookingSlotData> findByRestaurantIdAndStartsAt(UUID restaurantId, Instant startsAt);
 
     boolean hasAvailableCapacity(UUID slotId, int partySize);
@@ -23,6 +25,10 @@ public interface BookingSlotPort {
     boolean lockByIdAndRestaurantId(UUID slotId, UUID restaurantId);
 
     void saveGeneratedSlots(UUID restaurantId, List<BookingSlotCandidate> slots, int capacityTotal);
+
+    void setBookable(List<UUID> slotIds, boolean bookable);
+
+    void updateCapacityTotal(List<UUID> slotIds, int capacityTotal);
 
     int deleteUnreferencedSlots(UUID restaurantId, Instant startsAt, Instant endsAt);
 }

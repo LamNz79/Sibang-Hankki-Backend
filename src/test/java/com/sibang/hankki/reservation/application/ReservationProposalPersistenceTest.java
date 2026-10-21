@@ -11,6 +11,7 @@ import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -264,12 +265,13 @@ class ReservationProposalPersistenceTest {
     @Transactional
     void slotRegenerationKeepsSlotsReferencedByReservationsAndProposals() {
         createProposal();
+        bookingSlotPort.setBookable(List.of(originalSlotId, proposedSlotId, requestedSlotId), false);
 
         int deleted = bookingSlotPort.deleteUnreferencedSlots(
-                restaurantId, ORIGINAL_START.minusSeconds(1), PROPOSED_START.plusSeconds(1));
+                restaurantId, ORIGINAL_START.minusSeconds(1), REQUESTED_START.plusSeconds(1));
 
-        assertEquals(0, deleted);
-        assertEquals(3, jdbcTemplate.queryForObject(
+        assertEquals(1, deleted);
+        assertEquals(2, jdbcTemplate.queryForObject(
                 "select count(*) from booking_slots where restaurant_id = ?", Integer.class, restaurantId));
     }
 

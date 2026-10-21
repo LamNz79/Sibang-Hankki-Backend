@@ -4,6 +4,7 @@ import com.sibang.hankki.restaurant.adapter.out.persistence.entity.BookingSlot;
 import com.sibang.hankki.restaurant.adapter.out.persistence.repository.BookingSlotRepository;
 import com.sibang.hankki.restaurant.application.port.out.BookingSlotPort;
 import com.sibang.hankki.restaurant.application.port.out.BookingSlotData;
+import com.sibang.hankki.restaurant.application.port.out.BookingSlotState;
 import com.sibang.hankki.restaurant.domain.booking.BookingSlotCandidate;
 import com.sibang.hankki.restaurant.domain.booking.BookingSlotCapacity;
 import java.time.Instant;
@@ -23,17 +24,27 @@ public class BookingSlotPersistenceAdapter implements BookingSlotPort {
 
     @Override
     public List<BookingSlotCapacity> findSlotCapacities(UUID restaurantId, Instant startsAt, Instant endsAt) {
+        return repository.findBookableSlotCapacities(restaurantId, startsAt, endsAt)
+                .stream()
+                .map(slot -> new BookingSlotCapacity(
+                        slot.getStartsAt(), slot.getCapacityTotal(), Math.toIntExact(slot.getCapacityReserved())))
+                .toList();
+    }
+
+    @Override
+    public List<BookingSlotState> findSlotsForSynchronization(
+            UUID restaurantId, Instant startsAt, Instant endsAt) {
         return repository.findByRestaurantIdAndStartsAtGreaterThanEqualAndStartsAtLessThanOrderByStartsAt(
                         restaurantId, startsAt, endsAt)
                 .stream()
-                .map(slot -> new BookingSlotCapacity(
-                        slot.getStartsAt(), slot.getCapacityTotal(), slot.getCapacityReserved()))
+                .map(slot -> new BookingSlotState(
+                        slot.getId(), slot.getStartsAt(), slot.getEndsAt(), slot.isBookable()))
                 .toList();
     }
 
     @Override
     public Optional<BookingSlotData> findByRestaurantIdAndStartsAt(UUID restaurantId, Instant startsAt) {
-        return repository.findByRestaurantIdAndStartsAt(restaurantId, startsAt)
+        return repository.findByRestaurantIdAndStartsAtAndBookableTrue(restaurantId, startsAt)
                 .map(this::toData);
     }
 
@@ -45,7 +56,7 @@ public class BookingSlotPersistenceAdapter implements BookingSlotPort {
     @Override
     public Optional<BookingSlotData> findLatestActive(UUID restaurantId, Instant now) {
         return repository
-                .findFirstByRestaurantIdAndStartsAtLessThanEqualAndEndsAtGreaterThanOrderByStartsAtDesc(
+                .findFirstByRestaurantIdAndStartsAtLessThanEqualAndEndsAtGreaterThanAndBookableTrueOrderByStartsAtDesc(
                         restaurantId, now, now)
                 .map(this::toData);
     }
@@ -71,6 +82,20 @@ public class BookingSlotPersistenceAdapter implements BookingSlotPort {
                 .map(slot -> new BookingSlot(
                         restaurantId, slot.startsAt(), slot.endsAt(), capacityTotal, 0))
                 .toList());
+    }
+
+    @Override
+    public void setBookable(List<UUID> slotIds, boolean bookable) {
+        if (!slotIds.isEmpty()) {
+            repository.setBookable(slotIds, bookable);
+        }
+    }
+
+    @Override
+    public void updateCapacityTotal(List<UUID> slotIds, int capacityTotal) {
+        if (!slotIds.isEmpty()) {
+            repository.updateCapacityTotal(slotIds, capacityTotal);
+        }
     }
 
     @Override

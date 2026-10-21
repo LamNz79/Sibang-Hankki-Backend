@@ -19,15 +19,46 @@ public interface BookingSlotRepository extends JpaRepository<BookingSlot, UUID> 
             Instant startsAt,
             Instant endsAt);
 
-    Optional<BookingSlot> findByRestaurantIdAndStartsAt(UUID restaurantId, Instant startsAt);
+    @Query(value = """
+            select active.starts_at as "startsAt",
+                   active.capacity_total as "capacityTotal",
+                   coalesce(sum(slot.capacity_reserved), 0) as "capacityReserved"
+            from booking_slots active
+            join booking_slots slot
+              on slot.restaurant_id = active.restaurant_id
+             and slot.starts_at = active.starts_at
+            where active.restaurant_id = :restaurantId
+              and active.starts_at >= :startsAt
+              and active.starts_at < :endsAt
+              and active.bookable = true
+            group by active.id, active.starts_at, active.capacity_total
+            order by active.starts_at
+            """, nativeQuery = true)
+    List<SlotCapacityProjection> findBookableSlotCapacities(
+            @Param("restaurantId") UUID restaurantId,
+            @Param("startsAt") Instant startsAt,
+            @Param("endsAt") Instant endsAt);
 
-    @Query("select count(slot) > 0 from BookingSlot slot "
-            + "where slot.id = :slotId "
-            + "and slot.capacityTotal > 0 "
-            + "and slot.capacityTotal - slot.capacityReserved >= :partySize")
+    Optional<BookingSlot> findByRestaurantIdAndStartsAtAndBookableTrue(UUID restaurantId, Instant startsAt);
+
+    @Query(value = """
+            select exists (
+                select 1
+                from booking_slots active
+                where active.id = :slotId
+                  and active.bookable = true
+                  and active.capacity_total > 0
+                  and active.capacity_total - (
+                      select coalesce(sum(slot.capacity_reserved), 0)
+                      from booking_slots slot
+                      where slot.restaurant_id = active.restaurant_id
+                        and slot.starts_at = active.starts_at
+                  ) >= :partySize
+            )
+            """, nativeQuery = true)
     boolean hasAvailableCapacity(@Param("slotId") UUID slotId, @Param("partySize") int partySize);
 
-    Optional<BookingSlot> findFirstByRestaurantIdAndStartsAtLessThanEqualAndEndsAtGreaterThanOrderByStartsAtDesc(
+    Optional<BookingSlot> findFirstByRestaurantIdAndStartsAtLessThanEqualAndEndsAtGreaterThanAndBookableTrueOrderByStartsAtDesc(
             UUID restaurantId, Instant startsAt, Instant endsAt);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
@@ -36,13 +67,22 @@ public interface BookingSlotRepository extends JpaRepository<BookingSlot, UUID> 
             @Param("slotId") UUID slotId, @Param("restaurantId") UUID restaurantId);
 
     @Modifying
-    @Query("""
-            update BookingSlot slot
-            set slot.capacityReserved = slot.capacityReserved + :partySize,
-                slot.updatedAt = CURRENT_TIMESTAMP
-            where slot.id = :slotId
-              and slot.capacityTotal - slot.capacityReserved >= :partySize
-            """)
+    @Query(value = """
+            update booking_slots active
+            set capacity_reserved = active.capacity_reserved + :partySize,
+                updated_at = current_timestamp
+            where active.id = :slotId
+              and active.bookable = true
+              and active.capacity_total
+                  - active.capacity_reserved
+                  - (
+                  select coalesce(sum(slot.capacity_reserved), 0)
+                  from booking_slots slot
+                  where slot.restaurant_id = active.restaurant_id
+                    and slot.starts_at = active.starts_at
+                    and slot.id <> active.id
+              ) >= :partySize
+            """, nativeQuery = true)
     int reserveCapacity(@Param("slotId") UUID slotId, @Param("partySize") int partySize);
 
     @Modifying
@@ -56,11 +96,22 @@ public interface BookingSlotRepository extends JpaRepository<BookingSlot, UUID> 
     int releaseCapacity(@Param("slotId") UUID slotId, @Param("partySize") int partySize);
 
     @Modifying
+    @Query("update BookingSlot slot set slot.bookable = :bookable, slot.updatedAt = CURRENT_TIMESTAMP "
+            + "where slot.id in :slotIds")
+    int setBookable(@Param("slotIds") List<UUID> slotIds, @Param("bookable") boolean bookable);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("update BookingSlot slot set slot.capacityTotal = :capacityTotal, slot.updatedAt = CURRENT_TIMESTAMP "
+            + "where slot.id in :slotIds")
+    int updateCapacityTotal(@Param("slotIds") List<UUID> slotIds, @Param("capacityTotal") int capacityTotal);
+
+    @Modifying
     @Query(value = """
             delete from booking_slots slot
             where slot.restaurant_id = :restaurantId
               and slot.starts_at >= :startsAt
               and slot.starts_at < :endsAt
+              and slot.bookable = false
               and not exists (
                   select 1 from reservations reservation
                   where reservation.booking_slot_id = slot.id
@@ -74,4 +125,12 @@ public interface BookingSlotRepository extends JpaRepository<BookingSlot, UUID> 
             @Param("restaurantId") UUID restaurantId,
             @Param("startsAt") Instant startsAt,
             @Param("endsAt") Instant endsAt);
+
+    interface SlotCapacityProjection {
+        Instant getStartsAt();
+
+        int getCapacityTotal();
+
+        long getCapacityReserved();
+    }
 }

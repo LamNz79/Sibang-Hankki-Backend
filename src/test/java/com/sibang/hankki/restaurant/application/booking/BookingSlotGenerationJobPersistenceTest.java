@@ -62,7 +62,7 @@ class BookingSlotGenerationJobPersistenceTest {
     }
 
     @Test
-    void generatesPrototypeSlotsIdempotentlyWithoutOverwritingCapacity() {
+    void generatesPrototypeSlotsIdempotentlyAndSynchronizesTotalCapacity() {
         int firstRun = job.run();
         entityManager.flush();
         List<BookingSlot> generated = slotsInRange();
@@ -85,7 +85,7 @@ class BookingSlotGenerationJobPersistenceTest {
         assertEquals(0, job.run());
         entityManager.flush();
         assertEquals(300, slotsInRange().size());
-        assertEquals(99, jdbcTemplate.queryForObject(
+        assertEquals(20, jdbcTemplate.queryForObject(
                 "select capacity_total from booking_slots where restaurant_id = ? and starts_at = ?",
                 Integer.class, restaurantId, timestamp(startsAt)));
         assertEquals(5, jdbcTemplate.queryForObject(

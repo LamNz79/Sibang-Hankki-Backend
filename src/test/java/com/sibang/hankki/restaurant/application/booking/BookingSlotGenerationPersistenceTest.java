@@ -5,8 +5,14 @@ import com.sibang.hankki.restaurant.adapter.out.persistence.repository.BookingSl
 import com.sibang.hankki.restaurant.adapter.out.persistence.repository.RestaurantBookingSettingsRepository;
 import com.sibang.hankki.restaurant.application.exception.BookingSettingsNotConfiguredException;
 import com.sibang.hankki.restaurant.application.exception.RestaurantNotFoundException;
+import com.sibang.hankki.restaurant.application.port.out.BookingSlotPort;
 import com.sibang.hankki.restaurant.domain.booking.BookingSlotCandidate;
+import com.sibang.hankki.restaurant.domain.booking.BookingSlotCapacity;
 import com.sibang.hankki.restaurant.domain.model.ConfirmationMode;
+import com.sibang.hankki.reservation.application.CreateReservationService;
+import com.sibang.hankki.reservation.application.OwnerReservationReadService;
+import com.sibang.hankki.reservation.application.exception.ReservationSlotNotFoundException;
+import com.sibang.hankki.reservation.application.port.in.CreateReservationCommand;
 
 import jakarta.persistence.EntityManager;
 import java.time.Clock;
@@ -57,6 +63,15 @@ class BookingSlotGenerationPersistenceTest {
     @Autowired
     private EntityManager entityManager;
 
+    @Autowired
+    private CreateReservationService createReservationService;
+
+    @Autowired
+    private OwnerReservationReadService ownerReservationReadService;
+
+    @Autowired
+    private BookingSlotPort bookingSlotPort;
+
     private UUID restaurantId;
     private LocalDate generationDate;
 
@@ -98,16 +113,17 @@ class BookingSlotGenerationPersistenceTest {
     }
 
     @Test
-    void runningGenerationAgainDoesNotOverwriteExistingCapacityValues() {
+    void regenerationDecreasesTotalCapacityButPreservesReservedCapacity() {
         settingsRepository.saveAndFlush(settings(20));
         List<BookingSlotCandidate> generated = generationService.generateSlots(restaurantId, generationDate, generationDate);
         entityManager.flush();
         Instant startsAt = generated.get(0).startsAt();
         assertEquals(1, jdbcTemplate.update("""
                 update booking_slots
-                set capacity_total = 99, capacity_reserved = 5
+                set capacity_reserved = 5
                 where restaurant_id = ? and starts_at = ?
                 """, restaurantId, timestamp(startsAt)));
+        updateSettings(10, 90);
         entityManager.clear();
 
         generationService.generateSlots(restaurantId, generationDate, generationDate);
@@ -118,8 +134,69 @@ class BookingSlotGenerationPersistenceTest {
         Integer capacityReserved = jdbcTemplate.queryForObject(
                 "select capacity_reserved from booking_slots where restaurant_id = ? and starts_at = ?",
                 Integer.class, restaurantId, timestamp(startsAt));
-        assertEquals(99, capacityTotal);
+        assertEquals(10, capacityTotal);
         assertEquals(5, capacityReserved);
+    }
+
+    @Test
+    void regenerationIncreasesTotalCapacityButPreservesReservedCapacity() {
+        settingsRepository.saveAndFlush(settings(10));
+        Instant startsAt = generationService.generateSlots(restaurantId, generationDate, generationDate)
+                .get(0).startsAt();
+        entityManager.flush();
+        assertEquals(1, jdbcTemplate.update("""
+                update booking_slots
+                set capacity_reserved = 5
+                where restaurant_id = ? and starts_at = ?
+                """, restaurantId, timestamp(startsAt)));
+        updateSettings(30, 90);
+        entityManager.clear();
+
+        generationService.generateSlots(restaurantId, generationDate, generationDate);
+
+        BookingSlot slot = slotRepository.findByRestaurantIdAndStartsAtAndBookableTrue(restaurantId, startsAt)
+                .orElseThrow();
+        assertEquals(30, slot.getCapacityTotal());
+        assertEquals(5, slot.getCapacityReserved());
+    }
+
+    @Test
+    void replacementSlotAccountsForReservedCapacityOnReferencedPreviousDuration() {
+        settingsRepository.saveAndFlush(settings(20));
+        Instant startsAt = generationService.generateSlots(restaurantId, generationDate, generationDate)
+                .get(0).startsAt();
+        BookingSlot original = slotRepository.findByRestaurantIdAndStartsAtAndBookableTrue(restaurantId, startsAt)
+                .orElseThrow();
+        assertEquals(1, jdbcTemplate.update(
+                "update booking_slots set capacity_reserved = 6 where id = ?", original.getId()));
+        UUID reservationId = insertConfirmedReservation(original, 6);
+
+        updateSettings(20, 60);
+        BookingSlotGenerationService.GenerationResult result = generationService.regenerateSlots(
+                restaurantId, generationDate, generationDate);
+        entityManager.flush();
+        entityManager.clear();
+
+        BookingSlot retained = slotRepository.findById(original.getId()).orElseThrow();
+        BookingSlot replacement = slotRepository.findByRestaurantIdAndStartsAtAndBookableTrue(restaurantId, startsAt)
+                .orElseThrow();
+        assertEquals(false, retained.isBookable());
+        assertEquals(6, retained.getCapacityReserved());
+        assertEquals(60 * 60, replacement.getEndsAt().getEpochSecond() - replacement.getStartsAt().getEpochSecond());
+        assertEquals(0, replacement.getCapacityReserved());
+        assertEquals(1, result.generatedSlots().stream().filter(slot -> slot.startsAt().equals(startsAt)).count());
+
+        BookingSlotCapacity effectiveCapacity = bookingSlotPort.findSlotCapacities(
+                        restaurantId, startsAt, startsAt.plusSeconds(1))
+                .get(0);
+        assertEquals(20, effectiveCapacity.capacityTotal());
+        assertEquals(6, effectiveCapacity.capacityReserved());
+        assertEquals(false, bookingSlotPort.hasAvailableCapacity(replacement.getId(), 15));
+        assertEquals(true, bookingSlotPort.hasAvailableCapacity(replacement.getId(), 14));
+        assertEquals(false, bookingSlotPort.reserveCapacity(replacement.getId(), 15));
+        assertEquals(true, bookingSlotPort.reserveCapacity(replacement.getId(), 14));
+        assertEquals(false, bookingSlotPort.reserveCapacity(replacement.getId(), 1));
+        assertEquals(reservationId, ownerReservationReadService.findById(reservationId, restaurantId).id());
     }
 
     @Test
@@ -132,6 +209,126 @@ class BookingSlotGenerationPersistenceTest {
     void reportsUnknownRestaurant() {
         assertThrows(RestaurantNotFoundException.class,
                 () -> generationService.generateSlots(UUID.randomUUID(), generationDate, generationDate));
+    }
+
+    @Test
+    void regenerationRemovesObsoleteAvailabilityButPreservesReferencedHistory() {
+        settingsRepository.saveAndFlush(settings(20));
+        replaceBusinessHours("07:30", "11:00");
+        BookingSlotGenerationService.GenerationResult initial = generationService.regenerateSlots(
+                restaurantId, generationDate, generationDate);
+        assertEquals(3, initial.generatedSlots().size());
+
+        BookingSlot obsoleteReferenced = slotsInRange().get(0);
+        UUID reservationId = insertPendingReservation(obsoleteReferenced);
+
+        replaceBusinessHours("11:30", "22:00");
+        BookingSlotGenerationService.GenerationResult regenerated = generationService.regenerateSlots(
+                restaurantId, generationDate, generationDate);
+        entityManager.flush();
+        entityManager.clear();
+
+        BookingSlot retained = slotRepository.findById(obsoleteReferenced.getId()).orElseThrow();
+        assertEquals(false, retained.isBookable());
+        assertEquals(1, jdbcTemplate.queryForObject("""
+                select count(*) from booking_slots
+                where restaurant_id = ? and starts_at < ?
+                """, Integer.class, restaurantId,
+                timestamp(generationDate.atTime(11, 30)
+                        .atZone(BookingSlotGenerationService.RESTAURANT_TIME_ZONE).toInstant())));
+        assertEquals(10, regenerated.generatedSlots().size());
+        assertEquals(List.of("11:30", "12:30", "13:30", "14:30", "15:30",
+                        "16:30", "17:30", "18:30", "19:30", "20:30"),
+                slotsInRange().stream()
+                        .filter(BookingSlot::isBookable)
+                        .map(slot -> slot.getStartsAt()
+                                .atZone(BookingSlotGenerationService.RESTAURANT_TIME_ZONE)
+                                .toLocalTime().toString())
+                        .toList());
+        assertEquals(reservationId, ownerReservationReadService.findById(reservationId, restaurantId).id());
+        assertThrows(ReservationSlotNotFoundException.class, () -> createReservationService.create(
+                new CreateReservationCommand(
+                        "obsolete-slot-" + reservationId,
+                        "anan-saigon",
+                        generationDate.toString(),
+                        "07:30",
+                        2,
+                        "Minh Lam",
+                        "0900000000",
+                        null,
+                        null,
+                        null)));
+
+        assertEquals(0, generationService.regenerateSlots(
+                restaurantId, generationDate, generationDate).generatedSlots().size());
+        assertEquals(11, slotsInRange().size());
+    }
+
+    private void replaceBusinessHours(String opensAt, String closesAt) {
+        jdbcTemplate.update(
+                "delete from restaurant_business_hours where restaurant_id = ? and day_of_week = ?",
+                restaurantId, generationDate.getDayOfWeek().getValue());
+        jdbcTemplate.update("""
+                insert into restaurant_business_hours
+                    (id, restaurant_id, day_of_week, opens_at, closes_at)
+                values (?, ?, ?, cast(? as time), cast(? as time))
+                """, UUID.randomUUID(), restaurantId, generationDate.getDayOfWeek().getValue(), opensAt, closesAt);
+        entityManager.flush();
+        entityManager.clear();
+    }
+
+    private UUID insertPendingReservation(BookingSlot slot) {
+        UUID reservationId = UUID.randomUUID();
+        jdbcTemplate.update("""
+                insert into reservations (
+                    id, reference, idempotency_key, request_fingerprint, restaurant_id, booking_slot_id,
+                    customer_name, customer_phone, starts_at, ends_at, party_size, status,
+                    capacity_override, version
+                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', false, 0)
+                """,
+                reservationId,
+                "SHK-STALE-" + reservationId.toString().substring(0, 8),
+                "stale-" + reservationId,
+                "0".repeat(64),
+                restaurantId,
+                slot.getId(),
+                "Historical Guest",
+                "0900000000",
+                timestamp(slot.getStartsAt()),
+                timestamp(slot.getEndsAt()),
+                2);
+        return reservationId;
+    }
+
+    private UUID insertConfirmedReservation(BookingSlot slot, int partySize) {
+        UUID reservationId = UUID.randomUUID();
+        jdbcTemplate.update("""
+                insert into reservations (
+                    id, reference, idempotency_key, request_fingerprint, restaurant_id, booking_slot_id,
+                    customer_name, customer_phone, starts_at, ends_at, party_size, status, visit_status,
+                    capacity_override, version
+                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'CONFIRMED', 'EXPECTED', false, 0)
+                """,
+                reservationId,
+                "SHK-RESERVED-" + reservationId.toString().substring(0, 8),
+                "reserved-" + reservationId,
+                "1".repeat(64),
+                restaurantId,
+                slot.getId(),
+                "Confirmed Guest",
+                "0900000001",
+                timestamp(slot.getStartsAt()),
+                timestamp(slot.getEndsAt()),
+                partySize);
+        return reservationId;
+    }
+
+    private void updateSettings(int capacity, int durationMinutes) {
+        RestaurantBookingSettings current = settingsRepository.findById(restaurantId).orElseThrow();
+        current.updateOwnerSettings(
+                capacity, 60, durationMinutes, ConfirmationMode.AUTO, null,
+                30, 1, 6, 7, 120, 15);
+        settingsRepository.saveAndFlush(current);
     }
 
     private List<BookingSlot> slotsInRange() {
