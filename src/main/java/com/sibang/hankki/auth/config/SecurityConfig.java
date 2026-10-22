@@ -37,6 +37,7 @@ public class SecurityConfig {
                                 "/api/auth/csrf", "/api/auth/login", "/api/auth/register", "/api/locations/**")
                         .permitAll()
                         .requestMatchers("/api/auth/me", "/api/auth/password").authenticated()
+                        .requestMatchers("/api/account/preferences").authenticated()
                         .requestMatchers("/api/customer/favorites", "/api/customer/favorites/**")
                         .hasRole("CUSTOMER")
                         .requestMatchers("/api/customer/account/**").hasRole("CUSTOMER")
