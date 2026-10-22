@@ -47,8 +47,9 @@ memory for 24 hours, and falls back in this order when the upstream is temporari
 1. stale in-memory cache;
 2. the complete bundled Vietnam province/ward snapshot.
 
-The snapshot is only a cold-start fallback and never prevents a later upstream refresh. HTTP client settings
-can be overridden per deployment:
+The snapshot is only a cold-start fallback. Snapshot and stale fallback results are cached for 60 seconds to
+avoid repeating slow retries during an outage; after that short TTL, the service tries the upstream again.
+Successful upstream responses keep the normal 24-hour TTL. HTTP client settings can be overridden per deployment:
 
 ```bash
 APP_LOCATION_API_BASE_URL=https://provinces.open-api.vn/api/v2

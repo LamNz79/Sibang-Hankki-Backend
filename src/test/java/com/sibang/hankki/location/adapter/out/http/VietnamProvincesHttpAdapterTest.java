@@ -12,6 +12,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sibang.hankki.location.application.port.out.LocationCatalogPort.SourceUnavailableException;
+import java.net.SocketTimeoutException;
 import java.time.Duration;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
@@ -94,10 +95,12 @@ class VietnamProvincesHttpAdapterTest {
         server.expect(org.springframework.test.web.client.ExpectedCount.times(3),
                         requestTo("https://locations.test/p/"))
                 .andRespond(request -> {
-                    throw new ResourceAccessException("timed out");
+                    throw new ResourceAccessException("timed out", new SocketTimeoutException("read timed out"));
                 });
 
-        assertThatThrownBy(adapter::fetchProvinces).isInstanceOf(SourceUnavailableException.class);
+        assertThatThrownBy(adapter::fetchProvinces)
+                .isInstanceOf(SourceUnavailableException.class)
+                .hasCauseInstanceOf(SocketTimeoutException.class);
         server.verify();
     }
 

@@ -91,19 +91,21 @@ public class VietnamProvincesHttpAdapter implements LocationCatalogPort {
                 return request.get();
             } catch (ResourceAccessException exception) {
                 boolean retrying = attempt <= maxRetries;
+                Throwable rootCause = rootCause(exception);
                 LOGGER.warn(
                         "Location upstream request failed: type={}, endpoint={}, exception={}, attempt={}, retrying={}",
-                        dataType, endpoint, exception.getClass().getSimpleName(), attempt, retrying);
+                        dataType, endpoint, rootCause.getClass().getSimpleName(), attempt, retrying);
                 if (!retrying) {
-                    throw unavailable(dataType, endpoint, attempt, exception);
+                    throw unavailable(dataType, endpoint, attempt, rootCause);
                 }
                 pause(dataType, endpoint, attempt, exception);
                 attempt++;
             } catch (RestClientException exception) {
+                Throwable rootCause = rootCause(exception);
                 LOGGER.warn(
                         "Location upstream request failed without retry: type={}, endpoint={}, exception={}, attempt=1",
-                        dataType, endpoint, exception.getClass().getSimpleName());
-                throw unavailable(dataType, endpoint, 1, exception);
+                        dataType, endpoint, rootCause.getClass().getSimpleName());
+                throw unavailable(dataType, endpoint, 1, rootCause);
             }
         }
     }
@@ -118,9 +120,17 @@ public class VietnamProvincesHttpAdapter implements LocationCatalogPort {
     }
 
     private SourceUnavailableException unavailable(
-            String dataType, String endpoint, int attempt, RestClientException exception) {
+            String dataType, String endpoint, int attempt, Throwable exception) {
         return new SourceUnavailableException(
                 "Location source request failed", exception, dataType, endpoint, attempt);
+    }
+
+    private Throwable rootCause(Throwable exception) {
+        Throwable cause = exception;
+        while (cause.getCause() != null && cause.getCause() != cause) {
+            cause = cause.getCause();
+        }
+        return cause;
     }
 
     private List<ProvincePayload> readSnapshot(ObjectMapper objectMapper) {

@@ -20,6 +20,7 @@ public class LocationCatalogService implements LocationCatalogUseCase {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(LocationCatalogService.class);
     private static final Duration CACHE_TTL = Duration.ofHours(24);
+    private static final Duration FALLBACK_CACHE_TTL = Duration.ofSeconds(60);
 
     private final LocationCatalogPort catalogPort;
     private final Clock clock;
@@ -48,15 +49,17 @@ public class LocationCatalogService implements LocationCatalogUseCase {
             }
             try {
                 List<Province> fetched = List.copyOf(catalogPort.fetchProvinces());
-                provinces = new Cached<>(fetched, now);
+                provinces = cached(fetched, now, CACHE_TTL);
                 return fetched;
             } catch (SourceUnavailableException exception) {
                 if (cached != null) {
+                    provinces = cached(cached.value(), now, FALLBACK_CACHE_TTL);
                     logFallback(exception, "stale-cache");
                     return cached.value();
                 }
                 List<Province> snapshot = List.copyOf(catalogPort.snapshotProvinces());
                 if (!snapshot.isEmpty()) {
+                    provinces = cached(snapshot, now, FALLBACK_CACHE_TTL);
                     logFallback(exception, "bundled-snapshot");
                     return snapshot;
                 }
@@ -85,15 +88,17 @@ public class LocationCatalogService implements LocationCatalogUseCase {
             }
             try {
                 List<Ward> fetched = List.copyOf(catalogPort.fetchWards(provinceCode));
-                wardsByProvince.put(provinceCode, new Cached<>(fetched, now));
+                wardsByProvince.put(provinceCode, cached(fetched, now, CACHE_TTL));
                 return fetched;
             } catch (SourceUnavailableException exception) {
                 if (cached != null) {
+                    wardsByProvince.put(provinceCode, cached(cached.value(), now, FALLBACK_CACHE_TTL));
                     logFallback(exception, "stale-cache");
                     return cached.value();
                 }
                 List<Ward> snapshot = List.copyOf(catalogPort.snapshotWards(provinceCode));
                 if (!snapshot.isEmpty()) {
+                    wardsByProvince.put(provinceCode, cached(snapshot, now, FALLBACK_CACHE_TTL));
                     logFallback(exception, "bundled-snapshot");
                     return snapshot;
                 }
@@ -116,9 +121,13 @@ public class LocationCatalogService implements LocationCatalogUseCase {
     }
 
     private boolean isFresh(Cached<?> cached, Instant now) {
-        return cached != null && now.isBefore(cached.fetchedAt().plus(CACHE_TTL));
+        return cached != null && now.isBefore(cached.expiresAt());
     }
 
-    private record Cached<T>(T value, Instant fetchedAt) {
+    private <T> Cached<T> cached(T value, Instant now, Duration ttl) {
+        return new Cached<>(value, now.plus(ttl));
+    }
+
+    private record Cached<T>(T value, Instant expiresAt) {
     }
 }

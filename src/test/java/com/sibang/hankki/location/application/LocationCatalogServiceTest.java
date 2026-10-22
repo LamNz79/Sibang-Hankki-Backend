@@ -102,8 +102,32 @@ class LocationCatalogServiceTest {
         assertThat(service.findProvinces()).containsExactly(PROVINCE);
         assertThat(service.findWards(79)).containsExactly(WARD);
 
-        verify(port, times(2)).fetchProvinces();
+        verify(port).fetchProvinces();
         verify(port).fetchWards(79);
+    }
+
+    @Test
+    void cachesFallbackBrieflyBeforeRetryingTheSource() {
+        Instant withinFallbackTtl = NOW.plusSeconds(30);
+        Instant afterFallbackTtl = NOW.plusSeconds(61);
+        given(clock.instant()).willReturn(
+                NOW, NOW,
+                withinFallbackTtl, withinFallbackTtl,
+                afterFallbackTtl, afterFallbackTtl);
+        given(port.fetchProvinces())
+                .willThrow(new SourceUnavailableException("down", new RuntimeException()));
+        given(port.snapshotProvinces()).willReturn(List.of(PROVINCE));
+        given(port.fetchWards(79))
+                .willThrow(new SourceUnavailableException("down", new RuntimeException()));
+        given(port.snapshotWards(79)).willReturn(List.of(WARD));
+        var service = new LocationCatalogService(port, clock);
+
+        assertThat(service.findWards(79)).containsExactly(WARD);
+        assertThat(service.findWards(79)).containsExactly(WARD);
+        assertThat(service.findWards(79)).containsExactly(WARD);
+
+        verify(port, times(2)).fetchProvinces();
+        verify(port, times(2)).fetchWards(79);
     }
 
     @Test
