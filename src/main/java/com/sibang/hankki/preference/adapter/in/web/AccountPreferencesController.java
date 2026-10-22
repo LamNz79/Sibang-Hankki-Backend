@@ -35,7 +35,7 @@ public class AccountPreferencesController {
         UpdatePreferencesCommand command = request == null
                 ? null
                 : new UpdatePreferencesCommand(
-                        request.themePreset(),
+                        request.themeColor(),
                         request.displayDensity(),
                         request.tablePageSize(),
                         request.dateFormat(),
@@ -50,7 +50,7 @@ public class AccountPreferencesController {
     }
 
     record PreferencesRequest(
-            String themePreset,
+            String themeColor,
             String displayDensity,
             Integer tablePageSize,
             String dateFormat,

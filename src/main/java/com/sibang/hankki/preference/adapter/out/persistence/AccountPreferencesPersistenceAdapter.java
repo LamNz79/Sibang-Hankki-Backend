@@ -26,13 +26,13 @@ public class AccountPreferencesPersistenceAdapter implements AccountPreferencesP
         UserPreferencesEntity entity = repository.findById(userId)
                 .orElseGet(() -> new UserPreferencesEntity(
                         userId,
-                        preferences.themePreset(),
+                        preferences.themeColor(),
                         preferences.displayDensity(),
                         preferences.tablePageSize(),
                         preferences.dateFormat(),
                         preferences.locale()));
         entity.replace(
-                preferences.themePreset(),
+                preferences.themeColor(),
                 preferences.displayDensity(),
                 preferences.tablePageSize(),
                 preferences.dateFormat(),
@@ -47,7 +47,7 @@ public class AccountPreferencesPersistenceAdapter implements AccountPreferencesP
 
     private PreferencesData toData(UserPreferencesEntity entity) {
         return new PreferencesData(
-                entity.getThemePreset(),
+                entity.getThemeColor(),
                 entity.getDisplayDensity(),
                 entity.getTablePageSize(),
                 entity.getDateFormat(),

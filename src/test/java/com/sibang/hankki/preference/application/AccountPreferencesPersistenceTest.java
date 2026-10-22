@@ -35,14 +35,14 @@ class AccountPreferencesPersistenceTest {
     void createsThenUpdatesOnePersistentRowAcrossServiceInstances() {
         UUID userId = customer("preferences-persistent").getId();
 
-        service.update(userId, command("ROSE", "COMFORTABLE", 10, "DD_MM_YYYY", "vi"));
-        service.update(userId, command("BLUE", "COMPACT", 50, "MM_DD_YYYY", "en"));
+        service.update(userId, command("#C45870", "COMFORTABLE", 10, "DD_MM_YYYY", "vi"));
+        service.update(userId, command("#2563EB", "COMPACT", 50, "MM_DD_YYYY", "en"));
         entityManager.flush();
         entityManager.clear();
 
         assertThat(rowCount(userId)).isEqualTo(1);
         AccountPreferencesService restartedService = new AccountPreferencesService(port);
-        assertThat(restartedService.get(userId).themePreset()).isEqualTo("BLUE");
+        assertThat(restartedService.get(userId).themeColor()).isEqualTo("#2563EB");
         assertThat(restartedService.get(userId).tablePageSize()).isEqualTo(50);
         assertThat(restartedService.get(userId).locale()).isEqualTo("en");
     }
@@ -51,17 +51,21 @@ class AccountPreferencesPersistenceTest {
     void usersAreIsolatedAndDeleteIsIdempotent() {
         UUID first = customer("preferences-first").getId();
         UUID second = customer("preferences-second").getId();
-        service.update(first, command("TEAL", "COMPACT", 10, "MM_DD_YYYY", "en"));
-        service.update(second, command("ROSE", "COMFORTABLE", 50, "DD_MM_YYYY", "vi"));
+        service.update(first, command("#3a7c6e", "COMPACT", 10, "MM_DD_YYYY", "en"));
+        service.update(second, command("#C45870", "COMFORTABLE", 50, "DD_MM_YYYY", "vi"));
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThat(storedThemeColor(first)).isEqualTo("#3A7C6E");
 
         service.delete(first);
         service.delete(first);
         entityManager.flush();
         entityManager.clear();
 
-        assertThat(service.get(first).themePreset()).isEqualTo("CORAL");
+        assertThat(service.get(first).themeColor()).isEqualTo("#B84A2F");
         assertThat(service.get(first).tablePageSize()).isEqualTo(20);
-        assertThat(service.get(second).themePreset()).isEqualTo("ROSE");
+        assertThat(service.get(second).themeColor()).isEqualTo("#C45870");
         assertThat(rowCount(first)).isZero();
         assertThat(rowCount(second)).isEqualTo(1);
     }
@@ -79,5 +83,10 @@ class AccountPreferencesPersistenceTest {
     private int rowCount(UUID userId) {
         return jdbcTemplate.queryForObject(
                 "select count(*) from user_preferences where user_id = ?", Integer.class, userId);
+    }
+
+    private String storedThemeColor(UUID userId) {
+        return jdbcTemplate.queryForObject(
+                "select theme_color from user_preferences where user_id = ?", String.class, userId);
     }
 }

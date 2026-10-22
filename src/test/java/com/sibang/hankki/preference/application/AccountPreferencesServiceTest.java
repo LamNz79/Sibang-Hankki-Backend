@@ -38,18 +38,30 @@ class AccountPreferencesServiceTest {
 
         assertThat(service.get(USER_ID))
                 .isEqualTo(new com.sibang.hankki.preference.application.port.in.AccountPreferencesUseCase.Preferences(
-                        "CORAL", "COMFORTABLE", 20, "DD_MM_YYYY", "vi"));
+                        "#B84A2F", "COMFORTABLE", 20, "DD_MM_YYYY", "vi"));
         verify(port, never()).save(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
     }
 
     @Test
     void replacesCompletePreferences() {
         UpdatePreferencesCommand command = validCommand();
-        PreferencesData data = new PreferencesData("TEAL", "COMPACT", 50, "MM_DD_YYYY", "en");
+        PreferencesData data = new PreferencesData("#3A7C6E", "COMPACT", 50, "MM_DD_YYYY", "en");
         given(port.save(USER_ID, data)).willReturn(data);
 
-        assertThat(service.update(USER_ID, command).themePreset()).isEqualTo("TEAL");
+        assertThat(service.update(USER_ID, command).themeColor()).isEqualTo("#3A7C6E");
         verify(port).save(USER_ID, data);
+    }
+
+    @Test
+    void normalizesLowercaseThemeColorBeforePersistenceAndResponse() {
+        UpdatePreferencesCommand command = new UpdatePreferencesCommand(
+                "#b84a2f", "COMFORTABLE", 20, "DD_MM_YYYY", "vi");
+        PreferencesData normalized = new PreferencesData(
+                "#B84A2F", "COMFORTABLE", 20, "DD_MM_YYYY", "vi");
+        given(port.save(USER_ID, normalized)).willReturn(normalized);
+
+        assertThat(service.update(USER_ID, command).themeColor()).isEqualTo("#B84A2F");
+        verify(port).save(USER_ID, normalized);
     }
 
     @ParameterizedTest
@@ -72,24 +84,29 @@ class AccountPreferencesServiceTest {
         return Stream.of(
                 null,
                 new UpdatePreferencesCommand(null, valid.displayDensity(), 20, valid.dateFormat(), valid.locale()),
-                new UpdatePreferencesCommand("PURPLE", valid.displayDensity(), 20, valid.dateFormat(), valid.locale()),
-                new UpdatePreferencesCommand(valid.themePreset(), null, 20, valid.dateFormat(), valid.locale()),
-                new UpdatePreferencesCommand(valid.themePreset(), "DENSE", 20, valid.dateFormat(), valid.locale()),
+                new UpdatePreferencesCommand("#FFF", valid.displayDensity(), 20, valid.dateFormat(), valid.locale()),
+                new UpdatePreferencesCommand("B84A2F", valid.displayDensity(), 20, valid.dateFormat(), valid.locale()),
+                new UpdatePreferencesCommand("#B84A2G", valid.displayDensity(), 20, valid.dateFormat(), valid.locale()),
+                new UpdatePreferencesCommand("#B84A2FFF", valid.displayDensity(), 20, valid.dateFormat(), valid.locale()),
+                new UpdatePreferencesCommand("coral", valid.displayDensity(), 20, valid.dateFormat(), valid.locale()),
+                new UpdatePreferencesCommand("rgb(184,74,47)", valid.displayDensity(), 20, valid.dateFormat(), valid.locale()),
+                new UpdatePreferencesCommand(valid.themeColor(), null, 20, valid.dateFormat(), valid.locale()),
+                new UpdatePreferencesCommand(valid.themeColor(), "DENSE", 20, valid.dateFormat(), valid.locale()),
                 new UpdatePreferencesCommand(
-                        valid.themePreset(), valid.displayDensity(), null, valid.dateFormat(), valid.locale()),
+                        valid.themeColor(), valid.displayDensity(), null, valid.dateFormat(), valid.locale()),
                 new UpdatePreferencesCommand(
-                        valid.themePreset(), valid.displayDensity(), 25, valid.dateFormat(), valid.locale()),
+                        valid.themeColor(), valid.displayDensity(), 25, valid.dateFormat(), valid.locale()),
                 new UpdatePreferencesCommand(
-                        valid.themePreset(), valid.displayDensity(), 20, null, valid.locale()),
+                        valid.themeColor(), valid.displayDensity(), 20, null, valid.locale()),
                 new UpdatePreferencesCommand(
-                        valid.themePreset(), valid.displayDensity(), 20, "YYYY_MM_DD", valid.locale()),
+                        valid.themeColor(), valid.displayDensity(), 20, "YYYY_MM_DD", valid.locale()),
                 new UpdatePreferencesCommand(
-                        valid.themePreset(), valid.displayDensity(), 20, valid.dateFormat(), null),
+                        valid.themeColor(), valid.displayDensity(), 20, valid.dateFormat(), null),
                 new UpdatePreferencesCommand(
-                        valid.themePreset(), valid.displayDensity(), 20, valid.dateFormat(), "ko"));
+                        valid.themeColor(), valid.displayDensity(), 20, valid.dateFormat(), "ko"));
     }
 
     private static UpdatePreferencesCommand validCommand() {
-        return new UpdatePreferencesCommand("TEAL", "COMPACT", 50, "MM_DD_YYYY", "en");
+        return new UpdatePreferencesCommand("#3A7C6E", "COMPACT", 50, "MM_DD_YYYY", "en");
     }
 }

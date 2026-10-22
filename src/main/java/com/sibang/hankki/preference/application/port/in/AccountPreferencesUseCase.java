@@ -11,7 +11,7 @@ public interface AccountPreferencesUseCase {
     void delete(UUID userId);
 
     record UpdatePreferencesCommand(
-            String themePreset,
+            String themeColor,
             String displayDensity,
             Integer tablePageSize,
             String dateFormat,
@@ -19,7 +19,7 @@ public interface AccountPreferencesUseCase {
     }
 
     record Preferences(
-            String themePreset,
+            String themeColor,
             String displayDensity,
             int tablePageSize,
             String dateFormat,

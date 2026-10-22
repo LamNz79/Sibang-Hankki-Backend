@@ -1,14 +1,14 @@
 create table user_preferences (
     user_id uuid primary key references users (id) on delete cascade,
-    theme_preset varchar(20) not null,
+    theme_color varchar(7) not null,
     display_density varchar(20) not null,
     table_page_size integer not null,
     date_format varchar(20) not null,
     locale varchar(10) not null,
     created_at timestamptz not null default current_timestamp,
     updated_at timestamptz not null default current_timestamp,
-    constraint user_preferences_theme_preset_check
-        check (theme_preset in ('CORAL', 'ROSE', 'TEAL', 'BLUE')),
+    constraint user_preferences_theme_color_check
+        check (theme_color ~ '^#[0-9A-F]{6}$'),
     constraint user_preferences_display_density_check
         check (display_density in ('COMFORTABLE', 'COMPACT')),
     constraint user_preferences_table_page_size_check

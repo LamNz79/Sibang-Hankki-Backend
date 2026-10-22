@@ -77,7 +77,7 @@ class AccountPreferencesControllerTest {
 
             mockMvc.perform(get("/api/account/preferences").session(login(userid)))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.themePreset").value("CORAL"))
+                    .andExpect(jsonPath("$.themeColor").value("#B84A2F"))
                     .andExpect(jsonPath("$.displayDensity").value("COMFORTABLE"))
                     .andExpect(jsonPath("$.tablePageSize").value(20))
                     .andExpect(jsonPath("$.dateFormat").value("DD_MM_YYYY"))
@@ -100,19 +100,19 @@ class AccountPreferencesControllerTest {
 
         UUID userId = USER_IDS.get("customer");
         given(useCase.update(userId, new UpdatePreferencesCommand(
-                        "TEAL", "COMPACT", 50, "MM_DD_YYYY", "en")))
-                .willReturn(new Preferences("TEAL", "COMPACT", 50, "MM_DD_YYYY", "en"));
+                        "#b84a2f", "COMPACT", 50, "MM_DD_YYYY", "en")))
+                .willReturn(new Preferences("#B84A2F", "COMPACT", 50, "MM_DD_YYYY", "en"));
         mockMvc.perform(put("/api/account/preferences")
                         .with(csrf())
                         .session(session)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.themePreset").value("TEAL"))
+                .andExpect(jsonPath("$.themeColor").value("#B84A2F"))
                 .andExpect(jsonPath("$.tablePageSize").value(50));
 
         verify(useCase).update(userId, new UpdatePreferencesCommand(
-                "TEAL", "COMPACT", 50, "MM_DD_YYYY", "en"));
+                "#b84a2f", "COMPACT", 50, "MM_DD_YYYY", "en"));
     }
 
     @Test
@@ -166,13 +166,13 @@ class AccountPreferencesControllerTest {
     }
 
     private Preferences defaults() {
-        return new Preferences("CORAL", "COMFORTABLE", 20, "DD_MM_YYYY", "vi");
+        return new Preferences("#B84A2F", "COMFORTABLE", 20, "DD_MM_YYYY", "vi");
     }
 
     private String validJson() {
         return """
                 {
-                  "themePreset": "TEAL",
+                  "themeColor": "#b84a2f",
                   "displayDensity": "COMPACT",
                   "tablePageSize": 50,
                   "dateFormat": "MM_DD_YYYY",

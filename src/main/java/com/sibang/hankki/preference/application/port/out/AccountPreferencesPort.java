@@ -12,7 +12,7 @@ public interface AccountPreferencesPort {
     void deleteByUserId(UUID userId);
 
     record PreferencesData(
-            String themePreset,
+            String themeColor,
             String displayDensity,
             int tablePageSize,
             String dateFormat,

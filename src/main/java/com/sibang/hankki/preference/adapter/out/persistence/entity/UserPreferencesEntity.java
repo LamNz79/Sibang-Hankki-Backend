@@ -16,8 +16,8 @@ public class UserPreferencesEntity {
     @Id
     private UUID userId;
 
-    @Column(nullable = false, length = 20)
-    private String themePreset;
+    @Column(nullable = false, length = 7)
+    private String themeColor;
 
     @Column(nullable = false, length = 20)
     private String displayDensity;
@@ -44,30 +44,30 @@ public class UserPreferencesEntity {
 
     public UserPreferencesEntity(
             UUID userId,
-            String themePreset,
+            String themeColor,
             String displayDensity,
             int tablePageSize,
             String dateFormat,
             String locale) {
         this.userId = userId;
-        replace(themePreset, displayDensity, tablePageSize, dateFormat, locale);
+        replace(themeColor, displayDensity, tablePageSize, dateFormat, locale);
     }
 
     public void replace(
-            String themePreset,
+            String themeColor,
             String displayDensity,
             int tablePageSize,
             String dateFormat,
             String locale) {
-        this.themePreset = themePreset;
+        this.themeColor = themeColor;
         this.displayDensity = displayDensity;
         this.tablePageSize = tablePageSize;
         this.dateFormat = dateFormat;
         this.locale = locale;
     }
 
-    public String getThemePreset() {
-        return themePreset;
+    public String getThemeColor() {
+        return themeColor;
     }
 
     public String getDisplayDensity() {
