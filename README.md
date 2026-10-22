@@ -18,9 +18,11 @@ environment must enable it explicitly so the rolling booking window is generated
 and refreshed daily at 00:05 in `Asia/Ho_Chi_Minh`. Generation is idempotent and preserves slots referenced
 by existing reservations and proposals.
 
-An optional CUSTOMER bootstrap is available for repeatable staging/E2E testing. It creates the account only
-when the userid is absent; an existing account is never modified. Keep the password in the deployment secret
-manager rather than source control or deployment manifests.
+An optional CUSTOMER bootstrap is available for repeatable staging/E2E testing. The canonical staging-only
+account is `customer` / `CustomerTest@2026!`. The runner creates it only when the userid is absent; an existing
+account is accepted only when it is already an active, restaurant-independent CUSTOMER and its BCrypt password
+matches the configured password. It never overwrites an existing account. Do not use this known demo credential
+in production; supply deployment credentials through the environment or secret manager.
 
 ```bash
 BOOKING_SLOT_GENERATION_ENABLED=true
@@ -28,10 +30,14 @@ BOOKING_SLOT_GENERATION_CRON="0 5 0 * * *"
 
 APP_BOOTSTRAP_CUSTOMER_ENABLED=true
 APP_BOOTSTRAP_CUSTOMER_USERID=customer
-APP_BOOTSTRAP_CUSTOMER_PASSWORD=<secret>
+APP_BOOTSTRAP_CUSTOMER_PASSWORD=CustomerTest@2026!
 APP_BOOTSTRAP_CUSTOMER_NAME="MVP Test Customer"
 APP_BOOTSTRAP_CUSTOMER_EMAIL=customer@example.com
 ```
+
+Legacy `testUser` data is intentionally not migrated, deleted, or repurposed. If it exists, a system administrator
+may suspend it or reset its password manually. The obsolete `APP_BOOTSTRAP_TEST_USER_USERID` and
+`APP_BOOTSTRAP_TEST_USER_PASSWORD` variables are not supported or required.
 
 ## Public restaurant location filters
 
