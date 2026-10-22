@@ -181,6 +181,35 @@ System administrators can reset a non-ADMIN user's password with `PATCH
 sessions become unauthorized on their next request. Both endpoints return `204 No Content` and never
 return or log plaintext passwords or password hashes. ADMIN accounts must use the self-service endpoint.
 
+## Account UI preferences
+
+Every authenticated CUSTOMER, OWNER, STAFF, or ADMIN can manage only their own display preferences:
+
+```http
+GET /api/account/preferences
+
+PUT /api/account/preferences
+Content-Type: application/json
+X-CSRF-TOKEN: <token>
+
+{
+  "themePreset": "CORAL",
+  "displayDensity": "COMFORTABLE",
+  "tablePageSize": 20,
+  "dateFormat": "DD_MM_YYYY",
+  "locale": "vi"
+}
+
+DELETE /api/account/preferences
+X-CSRF-TOKEN: <token>
+```
+
+Supported values are `CORAL`, `ROSE`, `TEAL`, or `BLUE` for `themePreset`; `COMFORTABLE` or
+`COMPACT` for `displayDensity`; `10`, `20`, or `50` for `tablePageSize`; `DD_MM_YYYY` or
+`MM_DD_YYYY` for `dateFormat`; and `vi` or `en` for `locale`. When no row is stored, GET returns
+the defaults shown above without inserting data. PUT replaces the complete preference record and DELETE
+returns `204` even when no row exists. The frontend currently exposes these preferences only to System Admin.
+
 ## Reservation persistence foundation
 
 Flyway V7 introduces the `reservations` and append-only `reservation_events` tables. It enforces canonical reservation statuses (`PENDING`, `ALTERNATIVE_PROPOSED`, `CONFIRMED`, `DECLINED`, `EXPIRED`, `CANCELLED`) and visit statuses (`EXPECTED`, `ARRIVED`, `SEATED`, `COMPLETED`, `NO_SHOW`), referential integrity, idempotency keys, event command IDs, optimistic-lock versions, and query indexes.
