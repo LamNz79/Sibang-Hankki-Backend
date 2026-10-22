@@ -39,6 +39,29 @@ Legacy `testUser` data is intentionally not migrated, deleted, or repurposed. If
 may suspend it or reset its password manually. The obsolete `APP_BOOTSTRAP_TEST_USER_USERID` and
 `APP_BOOTSTRAP_TEST_USER_PASSWORD` variables are not supported or required.
 
+### Location catalog resilience
+
+The public location catalog prefers `https://provinces.open-api.vn/api/v2`, keeps successful responses in
+memory for 24 hours, and falls back in this order when the upstream is temporarily unavailable:
+
+1. stale in-memory cache;
+2. the complete bundled Vietnam province/ward snapshot.
+
+The snapshot is only a cold-start fallback. Snapshot and stale fallback results are cached for 60 seconds to
+avoid repeating slow retries during an outage; after that short TTL, the service tries the upstream again.
+Successful upstream responses keep the normal 24-hour TTL. HTTP client settings can be overridden per deployment:
+
+```bash
+APP_LOCATION_API_BASE_URL=https://provinces.open-api.vn/api/v2
+APP_LOCATION_API_CONNECT_TIMEOUT=3s
+APP_LOCATION_API_READ_TIMEOUT=10s
+APP_LOCATION_API_MAX_RETRIES=2
+APP_LOCATION_API_RETRY_DELAY=200ms
+```
+
+Only temporary connect/read failures are retried. HTTP 4xx responses are not retried, and the retry count is
+limited to two retries after the initial request.
+
 ## Public restaurant location filters
 
 The public restaurant list remains backward compatible and accepts optional Vietnamese administrative
