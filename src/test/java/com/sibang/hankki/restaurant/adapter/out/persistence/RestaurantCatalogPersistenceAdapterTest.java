@@ -170,12 +170,15 @@ class RestaurantCatalogPersistenceAdapterTest {
         assertEquals(
                 java.util.Set.of("han-river-dining"),
                 slugs(catalogAdapter.findAllActiveRestaurants(48, null)));
-        assertEquals(0, jdbcTemplate.queryForObject("""
+        assertEquals(1, jdbcTemplate.queryForObject("""
                 select count(*) from restaurants
                 where slug in ('anan-saigon', 'royal-pavilion', 'refinery', 'mori-teppan',
                     'hanoi-hearth', 'han-river-dining')
                     and ward_code is not null
                 """, Integer.class));
+        assertEquals(26740, jdbcTemplate.queryForObject(
+                "select ward_code from restaurants where slug = 'royal-pavilion'",
+                Integer.class));
     }
 
     private TestRestaurant insertRestaurant(String approvalStatus, boolean deleted) {
