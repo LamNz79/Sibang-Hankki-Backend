@@ -14,10 +14,14 @@ class LocationHttpConfiguration {
     RestClient locationRestClient(
             RestClient.Builder builder,
             @Value("${app.location-api.base-url:${APP_LOCATION_API_BASE_URL:https://provinces.open-api.vn/api/v2}}")
-                    String baseUrl) {
+                    String baseUrl,
+            @Value("${app.location-api.connect-timeout:${APP_LOCATION_API_CONNECT_TIMEOUT:3s}}")
+                    Duration connectTimeout,
+            @Value("${app.location-api.read-timeout:${APP_LOCATION_API_READ_TIMEOUT:10s}}")
+                    Duration readTimeout) {
         var requestFactory = new SimpleClientHttpRequestFactory();
-        requestFactory.setConnectTimeout(Duration.ofSeconds(3));
-        requestFactory.setReadTimeout(Duration.ofSeconds(5));
+        requestFactory.setConnectTimeout(connectTimeout);
+        requestFactory.setReadTimeout(readTimeout);
         return builder.baseUrl(baseUrl).requestFactory(requestFactory).build();
     }
 }

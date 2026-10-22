@@ -9,7 +9,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import com.sibang.hankki.location.application.exception.InvalidProvinceCodeException;
-import com.sibang.hankki.location.application.exception.LocationCatalogUnavailableException;
 import com.sibang.hankki.location.application.port.in.LocationCatalogUseCase.Province;
 import com.sibang.hankki.location.application.port.in.LocationCatalogUseCase.Ward;
 import com.sibang.hankki.location.application.port.out.LocationCatalogPort;
@@ -73,15 +72,38 @@ class LocationCatalogServiceTest {
     }
 
     @Test
-    void failsClearlyWhenSourceIsDownAndNoCacheExists() {
-        given(clock.instant()).willReturn(NOW);
+    void returnsStaleWardCacheWhenRefreshFails() {
+        Instant expired = NOW.plusSeconds(24 * 60 * 60 + 1L);
+        given(clock.instant()).willReturn(NOW, NOW, expired, expired);
         given(port.fetchProvinces()).willReturn(List.of(PROVINCE));
         given(port.fetchWards(79))
+                .willReturn(List.of(WARD))
                 .willThrow(new SourceUnavailableException("down", new RuntimeException()));
         var service = new LocationCatalogService(port, clock);
 
-        assertThatThrownBy(() -> service.findWards(79))
-                .isInstanceOf(LocationCatalogUnavailableException.class);
+        assertThat(service.findWards(79)).containsExactly(WARD);
+        assertThat(service.findWards(79)).containsExactly(WARD);
+
+        verify(port, times(2)).fetchProvinces();
+        verify(port, times(2)).fetchWards(79);
+    }
+
+    @Test
+    void usesBundledSnapshotWhenSourceIsDownAndNoCacheExists() {
+        given(clock.instant()).willReturn(NOW, NOW);
+        given(port.fetchProvinces())
+                .willThrow(new SourceUnavailableException("down", new RuntimeException()));
+        given(port.snapshotProvinces()).willReturn(List.of(PROVINCE));
+        given(port.fetchWards(79))
+                .willThrow(new SourceUnavailableException("down", new RuntimeException()));
+        given(port.snapshotWards(79)).willReturn(List.of(WARD));
+        var service = new LocationCatalogService(port, clock);
+
+        assertThat(service.findProvinces()).containsExactly(PROVINCE);
+        assertThat(service.findWards(79)).containsExactly(WARD);
+
+        verify(port, times(2)).fetchProvinces();
+        verify(port).fetchWards(79);
     }
 
     @Test
@@ -119,6 +141,16 @@ class LocationCatalogServiceTest {
                     return List.of(WARD);
                 }
                 return List.of(new Ward(1, "phuong_khac", "Phường khác", "phường", provinceCode));
+            }
+
+            @Override
+            public List<Province> snapshotProvinces() {
+                return List.of(PROVINCE, OTHER_PROVINCE);
+            }
+
+            @Override
+            public List<Ward> snapshotWards(int provinceCode) {
+                return List.of();
             }
         };
         var service = new LocationCatalogService(blockingPort, Clock.fixed(NOW, Clock.systemUTC().getZone()));

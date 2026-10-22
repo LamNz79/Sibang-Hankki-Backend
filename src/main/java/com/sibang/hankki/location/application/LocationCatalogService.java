@@ -11,11 +11,14 @@ import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 @Service
 public class LocationCatalogService implements LocationCatalogUseCase {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(LocationCatalogService.class);
     private static final Duration CACHE_TTL = Duration.ofHours(24);
 
     private final LocationCatalogPort catalogPort;
@@ -49,9 +52,15 @@ public class LocationCatalogService implements LocationCatalogUseCase {
                 return fetched;
             } catch (SourceUnavailableException exception) {
                 if (cached != null) {
+                    logFallback(exception, "stale-cache");
                     return cached.value();
                 }
-                throw new LocationCatalogUnavailableException();
+                List<Province> snapshot = List.copyOf(catalogPort.snapshotProvinces());
+                if (!snapshot.isEmpty()) {
+                    logFallback(exception, "bundled-snapshot");
+                    return snapshot;
+                }
+                throw unavailable(exception);
             }
         }
     }
@@ -80,11 +89,30 @@ public class LocationCatalogService implements LocationCatalogUseCase {
                 return fetched;
             } catch (SourceUnavailableException exception) {
                 if (cached != null) {
+                    logFallback(exception, "stale-cache");
                     return cached.value();
                 }
-                throw new LocationCatalogUnavailableException();
+                List<Ward> snapshot = List.copyOf(catalogPort.snapshotWards(provinceCode));
+                if (!snapshot.isEmpty()) {
+                    logFallback(exception, "bundled-snapshot");
+                    return snapshot;
+                }
+                throw unavailable(exception);
             }
         }
+    }
+
+    private void logFallback(SourceUnavailableException exception, String fallback) {
+        Throwable cause = exception.getCause() == null ? exception : exception.getCause();
+        LOGGER.warn(
+                "Location upstream unavailable: type={}, endpoint={}, exception={}, attempt={}, fallback={}",
+                exception.dataType(), exception.endpoint(), cause.getClass().getSimpleName(),
+                exception.attempt(), fallback);
+    }
+
+    private LocationCatalogUnavailableException unavailable(SourceUnavailableException exception) {
+        logFallback(exception, "none");
+        return new LocationCatalogUnavailableException();
     }
 
     private boolean isFresh(Cached<?> cached, Instant now) {
