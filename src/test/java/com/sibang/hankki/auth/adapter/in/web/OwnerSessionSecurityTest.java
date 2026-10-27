@@ -69,11 +69,14 @@ class OwnerSessionSecurityTest {
     @BeforeEach
     void configureUsers() {
         UserEntity owner = user(OWNER_ID, "owner", "OWNER", RESTAURANT_ID);
+        UserEntity staff = user(UUID.randomUUID(), "staff", "STAFF", RESTAURANT_ID);
         UserEntity customer = user(UUID.randomUUID(), "customer", "CUSTOMER", null);
         given(repository.findByUseridAndStatusAndDeletedAtIsNull("owner", "ACTIVE"))
                 .willReturn(Optional.of(owner));
         given(repository.findByUseridAndStatusAndDeletedAtIsNull("customer", "ACTIVE"))
                 .willReturn(Optional.of(customer));
+        given(repository.findByUseridAndStatusAndDeletedAtIsNull("staff", "ACTIVE"))
+                .willReturn(Optional.of(staff));
     }
 
     @Test
@@ -211,6 +214,22 @@ class OwnerSessionSecurityTest {
     @Test
     void customerCannotAccessOwnerApi() throws Exception {
         mockMvc.perform(get("/api/owner/probe").session(login("customer")))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void staffCannotAccessOwnerContentManagement() throws Exception {
+        MockHttpSession session = login("staff");
+
+        mockMvc.perform(get("/api/owner/menu/probe").session(session))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/owner/menu").session(session))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/owner/media/probe").session(session))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/owner/media").session(session))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/owner/settings/probe").session(session))
                 .andExpect(status().isForbidden());
     }
 
@@ -359,7 +378,7 @@ class OwnerSessionSecurityTest {
 
     @RestController
     @RequestMapping("/api/owner")
-    static class OwnerProbeController {
+    public static class OwnerProbeController {
 
         @GetMapping("/probe")
         String probe() {

@@ -43,6 +43,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/customer/account/**").hasRole("CUSTOMER")
                         .requestMatchers("/api/customer/profile").hasRole("CUSTOMER")
                         .requestMatchers("/api/owner/settings/**").hasRole("OWNER")
+                        .requestMatchers("/api/owner/menu/**", "/api/owner/media/**").hasRole("OWNER")
                         .requestMatchers("/api/owner/**").hasAnyRole("OWNER", "STAFF")
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .anyRequest().permitAll())

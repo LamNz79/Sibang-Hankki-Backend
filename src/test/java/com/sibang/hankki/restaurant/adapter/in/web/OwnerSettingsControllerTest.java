@@ -31,7 +31,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
-@WebMvcTest(OwnerSettingsController.class)
+@WebMvcTest({OwnerSettingsController.class, OwnerRestaurantContextController.class})
 @Import({SecurityConfig.class, OwnerSessionUserDetailsService.class})
 class OwnerSettingsControllerTest {
 
@@ -69,6 +69,28 @@ class OwnerSettingsControllerTest {
                 .andExpect(jsonPath("$.noShowGraceMinutes").value(15));
 
         verify(useCase).get(RESTAURANT_ID);
+    }
+
+    @Test
+    void staffReadsOnlyItsRestaurantContext() throws Exception {
+        given(useCase.get(RESTAURANT_ID)).willReturn(settings());
+
+        mockMvc.perform(get("/api/owner/restaurant-context").session(login("staff")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.restaurantId").value(RESTAURANT_ID.toString()))
+                .andExpect(jsonPath("$.slug").value("royal-pavilion"))
+                .andExpect(jsonPath("$.name").value("The Royal Pavilion"))
+                .andExpect(jsonPath("$.timezone").value("Asia/Ho_Chi_Minh"))
+                .andExpect(jsonPath("$.guestCapacity").doesNotExist())
+                .andExpect(jsonPath("$.confirmationMode").doesNotExist());
+
+        verify(useCase).get(RESTAURANT_ID);
+    }
+
+    @Test
+    void staffCannotReadOwnerSettings() throws Exception {
+        mockMvc.perform(get("/api/owner/settings").session(login("staff")))
+                .andExpect(status().isForbidden());
     }
 
     @Test
