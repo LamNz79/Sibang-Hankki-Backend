@@ -18,6 +18,8 @@ public interface SystemAdminRestaurantPort {
 
     boolean hasNonDeletedUsers(UUID restaurantId);
 
+    boolean hasBookingSlots(UUID restaurantId);
+
     boolean hasReservations(UUID restaurantId);
 
     void archive(UUID restaurantId, Instant deletedAt);

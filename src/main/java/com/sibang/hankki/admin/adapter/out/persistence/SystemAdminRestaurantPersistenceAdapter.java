@@ -75,6 +75,11 @@ public class SystemAdminRestaurantPersistenceAdapter implements SystemAdminResta
     }
 
     @Override
+    public boolean hasBookingSlots(UUID restaurantId) {
+        return repository.hasBookingSlots(restaurantId);
+    }
+
+    @Override
     public boolean hasReservations(UUID restaurantId) {
         return repository.hasReservations(restaurantId);
     }

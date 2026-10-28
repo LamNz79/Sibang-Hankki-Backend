@@ -92,6 +92,8 @@ returns `timezone`, while owner, customer, guest, and system-admin reservation r
 `restaurantTimezone`. Slot generation, availability boundaries and formatting, reservation creation, and slot
 regeneration all use this value; reservation instants continue to be stored as UTC. The system-admin reservation
 report date filters remain based on the separate `app.reporting.time-zone` setting.
+For data safety, System Admin may change a restaurant timezone only before that restaurant has booking slots or
+reservations. Once booking setup has started, the profile update returns HTTP `409 Conflict`.
 
 ## System-admin restaurant review lifecycle
 

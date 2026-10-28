@@ -83,6 +83,11 @@ public class SystemAdminRestaurantService implements SystemAdminRestaurantUseCas
                 command.name(), command.description(), command.cuisineType(), command.cuisineLabel(),
                 command.address(), command.phone(), command.email(), command.timezone(), command.priceRange(),
                 location, current.area());
+        if (!current.timezone().equals(profile.timezone())
+                && (restaurantPort.hasBookingSlots(restaurantId) || restaurantPort.hasReservations(restaurantId))) {
+            throw new AdminRestaurantConflictException(
+                    "Restaurant timezone cannot be changed after booking setup has started");
+        }
         return toDetail(restaurantPort.update(restaurantId, profile));
     }
 

@@ -15,6 +15,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.sibang.hankki.admin.application.exception.AdminResourceNotFoundException;
+import com.sibang.hankki.admin.application.exception.AdminRestaurantConflictException;
 import com.sibang.hankki.admin.application.exception.InvalidAdminQueryException;
 import com.sibang.hankki.admin.application.exception.InvalidAdminStatusTransitionException;
 import com.sibang.hankki.admin.application.port.in.SystemAdminReadUseCase;
@@ -307,6 +308,21 @@ class SystemAdminControllerTest {
                 .andExpect(status().isNoContent());
 
         verify(restaurantUseCase).archive(RESTAURANT_ID);
+    }
+
+    @Test
+    void timezoneChangeAfterBookingSetupReturnsConflict() throws Exception {
+        given(restaurantUseCase.update(eq(RESTAURANT_ID), any(UpdateRestaurantCommand.class)))
+                .willThrow(new AdminRestaurantConflictException(
+                        "Restaurant timezone cannot be changed after booking setup has started"));
+
+        mockMvc.perform(put("/api/admin/restaurants/{id}", RESTAURANT_ID)
+                        .with(user("admin").roles("ADMIN"))
+                        .with(csrf())
+                        .contentType("application/json")
+                        .content(updateRequest().replace("Asia/Ho_Chi_Minh", "Asia/Seoul")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.status").value(409));
     }
 
     @Test

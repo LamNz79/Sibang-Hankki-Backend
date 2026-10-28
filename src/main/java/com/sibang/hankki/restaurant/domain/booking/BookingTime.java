@@ -12,7 +12,7 @@ public final class BookingTime {
 
     public static ZoneId restaurantTimeZone(String value) {
         if (value == null || value.isBlank()) {
-            return RESTAURANT_TIME_ZONE;
+            throw new BookingRuleViolationException("Restaurant timezone is required");
         }
         try {
             return ZoneId.of(value);
