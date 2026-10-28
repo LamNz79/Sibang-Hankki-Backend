@@ -206,7 +206,7 @@ X-CSRF-TOKEN: <token>
 
 `themeColor` must use canonical `#RRGGBB` HEX format. Lowercase HEX input is accepted and returned/stored
 in uppercase. Supported values are `COMFORTABLE` or `COMPACT` for `displayDensity`; `10`, `20`, or `50`
-for `tablePageSize`; `DD_MM_YYYY` or `MM_DD_YYYY` for `dateFormat`; and `vi` or `en` for `locale`.
+for `tablePageSize`; `DD_MM_YYYY` or `MM_DD_YYYY` for `dateFormat`; and `vi`, `en`, or `ko` for `locale`.
 When no row is stored, GET returns the defaults shown above without inserting data. PUT replaces the complete
 preference record and DELETE returns `204` even when no row exists. The frontend currently exposes these
 preferences only to System Admin.

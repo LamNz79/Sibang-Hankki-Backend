@@ -36,7 +36,7 @@ class AccountPreferencesPersistenceTest {
         UUID userId = customer("preferences-persistent").getId();
 
         service.update(userId, command("#C45870", "COMFORTABLE", 10, "DD_MM_YYYY", "vi"));
-        service.update(userId, command("#2563EB", "COMPACT", 50, "MM_DD_YYYY", "en"));
+        service.update(userId, command("#2563EB", "COMPACT", 50, "MM_DD_YYYY", "ko"));
         entityManager.flush();
         entityManager.clear();
 
@@ -44,7 +44,8 @@ class AccountPreferencesPersistenceTest {
         AccountPreferencesService restartedService = new AccountPreferencesService(port);
         assertThat(restartedService.get(userId).themeColor()).isEqualTo("#2563EB");
         assertThat(restartedService.get(userId).tablePageSize()).isEqualTo(50);
-        assertThat(restartedService.get(userId).locale()).isEqualTo("en");
+        assertThat(restartedService.get(userId).locale()).isEqualTo("ko");
+        assertThat(storedLocale(userId)).isEqualTo("ko");
     }
 
     @Test
@@ -88,5 +89,10 @@ class AccountPreferencesPersistenceTest {
     private String storedThemeColor(UUID userId) {
         return jdbcTemplate.queryForObject(
                 "select theme_color from user_preferences where user_id = ?", String.class, userId);
+    }
+
+    private String storedLocale(UUID userId) {
+        return jdbcTemplate.queryForObject(
+                "select locale from user_preferences where user_id = ?", String.class, userId);
     }
 }

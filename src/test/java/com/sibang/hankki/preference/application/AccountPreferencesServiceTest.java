@@ -10,7 +10,6 @@ import com.sibang.hankki.preference.application.exception.InvalidAccountPreferen
 import com.sibang.hankki.preference.application.port.in.AccountPreferencesUseCase.UpdatePreferencesCommand;
 import com.sibang.hankki.preference.application.port.out.AccountPreferencesPort;
 import com.sibang.hankki.preference.application.port.out.AccountPreferencesPort.PreferencesData;
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Stream;
@@ -45,7 +44,7 @@ class AccountPreferencesServiceTest {
     @Test
     void replacesCompletePreferences() {
         UpdatePreferencesCommand command = validCommand();
-        PreferencesData data = new PreferencesData("#3A7C6E", "COMPACT", 50, "MM_DD_YYYY", "en");
+        PreferencesData data = new PreferencesData("#3A7C6E", "COMPACT", 50, "MM_DD_YYYY", "ko");
         given(port.save(USER_ID, data)).willReturn(data);
 
         assertThat(service.update(USER_ID, command).themeColor()).isEqualTo("#3A7C6E");
@@ -103,10 +102,10 @@ class AccountPreferencesServiceTest {
                 new UpdatePreferencesCommand(
                         valid.themeColor(), valid.displayDensity(), 20, valid.dateFormat(), null),
                 new UpdatePreferencesCommand(
-                        valid.themeColor(), valid.displayDensity(), 20, valid.dateFormat(), "ko"));
+                        valid.themeColor(), valid.displayDensity(), 20, valid.dateFormat(), "ja"));
     }
 
     private static UpdatePreferencesCommand validCommand() {
-        return new UpdatePreferencesCommand("#3A7C6E", "COMPACT", 50, "MM_DD_YYYY", "en");
+        return new UpdatePreferencesCommand("#3A7C6E", "COMPACT", 50, "MM_DD_YYYY", "ko");
     }
 }
