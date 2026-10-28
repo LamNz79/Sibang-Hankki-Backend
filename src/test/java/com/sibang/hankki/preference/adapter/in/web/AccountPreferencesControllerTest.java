@@ -100,8 +100,8 @@ class AccountPreferencesControllerTest {
 
         UUID userId = USER_IDS.get("customer");
         given(useCase.update(userId, new UpdatePreferencesCommand(
-                        "#b84a2f", "COMPACT", 50, "MM_DD_YYYY", "en")))
-                .willReturn(new Preferences("#B84A2F", "COMPACT", 50, "MM_DD_YYYY", "en"));
+                        "#b84a2f", "COMPACT", 50, "MM_DD_YYYY", "ko")))
+                .willReturn(new Preferences("#B84A2F", "COMPACT", 50, "MM_DD_YYYY", "ko"));
         mockMvc.perform(put("/api/account/preferences")
                         .with(csrf())
                         .session(session)
@@ -109,10 +109,11 @@ class AccountPreferencesControllerTest {
                         .content(body))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.themeColor").value("#B84A2F"))
-                .andExpect(jsonPath("$.tablePageSize").value(50));
+                .andExpect(jsonPath("$.tablePageSize").value(50))
+                .andExpect(jsonPath("$.locale").value("ko"));
 
         verify(useCase).update(userId, new UpdatePreferencesCommand(
-                "#b84a2f", "COMPACT", 50, "MM_DD_YYYY", "en"));
+                "#b84a2f", "COMPACT", 50, "MM_DD_YYYY", "ko"));
     }
 
     @Test
@@ -176,7 +177,7 @@ class AccountPreferencesControllerTest {
                   "displayDensity": "COMPACT",
                   "tablePageSize": 50,
                   "dateFormat": "MM_DD_YYYY",
-                  "locale": "en",
+                  "locale": "ko",
                   "userId": "90000000-0000-0000-0000-000000000099"
                 }
                 """;

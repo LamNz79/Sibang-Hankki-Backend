@@ -18,7 +18,7 @@ public class AccountPreferencesService implements AccountPreferencesUseCase {
     private static final Set<String> DISPLAY_DENSITIES = Set.of("COMFORTABLE", "COMPACT");
     private static final Set<Integer> TABLE_PAGE_SIZES = Set.of(10, 20, 50);
     private static final Set<String> DATE_FORMATS = Set.of("DD_MM_YYYY", "MM_DD_YYYY");
-    private static final Set<String> LOCALES = Set.of("vi", "en");
+    private static final Set<String> LOCALES = Set.of("vi", "en", "ko");
     private static final Preferences DEFAULTS = new Preferences(
             "#B84A2F", "COMFORTABLE", 20, "DD_MM_YYYY", "vi");
 
