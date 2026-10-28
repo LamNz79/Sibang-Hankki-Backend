@@ -10,6 +10,8 @@ public interface OwnerReservationReadUseCase {
 
     Reservation findById(UUID id, UUID restaurantId);
 
+    String restaurantTimezone(UUID restaurantId);
+
     OwnerReservationPage findPage(
             UUID restaurantId,
             int page,

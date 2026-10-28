@@ -17,6 +17,7 @@ public interface CustomerAccountReservationUseCase {
     record CustomerAccountReservation(
             Reservation reservation,
             String restaurantSlug,
-            String restaurantName) {
+            String restaurantName,
+            String restaurantTimezone) {
     }
 }

@@ -116,7 +116,8 @@ class RestaurantControllerTest {
                 .andExpect(jsonPath("$.bookingPolicy.bookingWindowDays").value(30))
                 .andExpect(jsonPath("$.bookingPolicy.minimumPartySize").value(2))
                 .andExpect(jsonPath("$.bookingPolicy.maximumOnlinePartySize").value(10))
-                .andExpect(jsonPath("$.bookingPolicy.largePartyThreshold").value(11));
+                .andExpect(jsonPath("$.bookingPolicy.largePartyThreshold").value(11))
+                .andExpect(jsonPath("$.timezone").value("Asia/Ho_Chi_Minh"));
     }
 
     @Test
@@ -147,6 +148,7 @@ class RestaurantControllerTest {
                                 UUID.fromString("30000000-0000-0000-0000-000000000001"),
                                 "Grilled beef", "With vegetables", new BigDecimal("250000"),
                                 "VND", "https://example.test/beef.jpg")))),
+                "Asia/Ho_Chi_Minh",
                 new RestaurantResponse.BookingPolicy(30, 2, 10, 11));
     }
 }

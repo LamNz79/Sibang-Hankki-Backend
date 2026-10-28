@@ -91,6 +91,25 @@ class SystemAdminRestaurantPersistenceTest {
                 .isInstanceOf(AdminRestaurantConflictException.class);
     }
 
+    @Test
+    void rejectsTimezoneChangeAfterBookingSlotsExist() {
+        var created = restaurantService.create(createCommand(uniqueSlug()));
+        jdbcTemplate.update("""
+                insert into booking_slots (
+                    id, restaurant_id, starts_at, ends_at, capacity_total, capacity_reserved
+                ) values (?, ?, current_timestamp + interval '1 day',
+                    current_timestamp + interval '1 day 90 minutes', 20, 0)
+                """, UUID.randomUUID(), created.id());
+
+        assertThatThrownBy(() -> restaurantService.update(created.id(), new UpdateRestaurantCommand(
+                "Restaurant", null, "Vietnamese", "Vietnamese", null, null, null,
+                "Asia/Seoul", null, 79, 26734)))
+                .isInstanceOf(AdminRestaurantConflictException.class)
+                .hasMessageContaining("timezone cannot be changed");
+
+        assertThat(restaurantService.findById(created.id()).timezone()).isEqualTo("Asia/Ho_Chi_Minh");
+    }
+
     private CreateRestaurantCommand createCommand(String slug) {
         return new CreateRestaurantCommand(
                 slug, "Restaurant", null, "Vietnamese", "Vietnamese", null, null, null, null, null, 79, 26734);

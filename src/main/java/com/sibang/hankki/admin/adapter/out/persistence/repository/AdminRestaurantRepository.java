@@ -25,6 +25,9 @@ public interface AdminRestaurantRepository
             nativeQuery = true)
     boolean hasNonDeletedUsers(@Param("id") UUID id);
 
+    @Query(value = "select exists(select 1 from booking_slots where restaurant_id = :id)", nativeQuery = true)
+    boolean hasBookingSlots(@Param("id") UUID id);
+
     @Query(value = "select exists(select 1 from reservations where restaurant_id = :id)", nativeQuery = true)
     boolean hasReservations(@Param("id") UUID id);
 }

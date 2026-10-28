@@ -29,6 +29,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 class RestaurantAvailabilityServiceTest {
@@ -102,10 +103,28 @@ class RestaurantAvailabilityServiceTest {
     }
 
     @Test
-    void rejectsPastDateBeforeRestaurantAndSettingsLookup() {
+    void rejectsPastDateAfterResolvingTheRestaurantTimezone() {
         assertBad(() -> service.availability("anan-saigon", TODAY.minusDays(1).toString(), 2));
 
-        verifyNoInteractions(restaurantCatalogPort, bookingSettingsPort, bookingSlotPort);
+        verify(restaurantCatalogPort).findActiveRestaurantBySlug("anan-saigon");
+        verifyNoInteractions(bookingSettingsPort, bookingSlotPort);
+    }
+
+    @Test
+    void queriesAndFormatsAvailabilityInThePersistedSeoulTimezone() {
+        given(restaurantCatalogPort.findActiveRestaurantBySlug("seoul-restaurant"))
+                .willReturn(Optional.of(restaurant("seoul-restaurant", "Asia/Seoul")));
+        Instant startsAt = Instant.parse("2026-09-28T11:30:00Z");
+        given(bookingSlotPort.findSlotCapacities(
+                restaurantId,
+                Instant.parse("2026-09-27T15:00:00Z"),
+                Instant.parse("2026-09-28T15:00:00Z")))
+                .willReturn(List.of(new BookingSlotCapacity(startsAt, 20, 0)));
+
+        RestaurantAvailabilityResponse response = service.availability(
+                "seoul-restaurant", "2026-09-28", 2);
+
+        assertEquals(List.of("20:30"), response.slots());
     }
 
     @Test
@@ -145,6 +164,15 @@ class RestaurantAvailabilityServiceTest {
         assertThrows(BookingSettingsNotConfiguredException.class, () -> service.availability("anan-saigon", TODAY.toString(), 2));
     }
 
+    @Test
+    void rejectsInvalidPersistedRestaurantTimezone() {
+        given(restaurantCatalogPort.findActiveRestaurantBySlug("invalid-timezone"))
+                .willReturn(Optional.of(restaurant("invalid-timezone", "Not/A_Timezone")));
+
+        assertBad(() -> service.availability("invalid-timezone", TODAY.toString(), 2));
+        verifyNoInteractions(bookingSettingsPort, bookingSlotPort);
+    }
+
     private void givenSlots(BookingSlotCapacity... slots) {
         given(bookingSlotPort.findSlotCapacities(eq(restaurantId), any(), any())).willReturn(List.of(slots));
     }
@@ -157,7 +185,12 @@ class RestaurantAvailabilityServiceTest {
     }
 
     private RestaurantData restaurant(String slug) {
-        return new RestaurantData(restaurantId, slug, "", "", "", "", "", "", "", "", "");
+        return restaurant(slug, "Asia/Ho_Chi_Minh");
+    }
+
+    private RestaurantData restaurant(String slug, String timezone) {
+        return new RestaurantData(
+                restaurantId, slug, "", "", "", "", "", "", "", "", "", timezone);
     }
 
     private BookingSettings settings(

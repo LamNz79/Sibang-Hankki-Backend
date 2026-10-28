@@ -18,6 +18,7 @@ import com.sibang.hankki.restaurant.application.port.out.BookingSettingsPort;
 import com.sibang.hankki.restaurant.application.port.out.BookingSlotPort;
 import com.sibang.hankki.restaurant.application.port.out.RestaurantCatalogPort;
 import com.sibang.hankki.restaurant.application.port.out.RestaurantData;
+import com.sibang.hankki.restaurant.domain.booking.BookingTime;
 import com.sibang.hankki.user.application.exception.CustomerProfileNotFoundException;
 import com.sibang.hankki.user.application.port.in.CustomerProfileUseCase;
 import java.time.Clock;
@@ -83,6 +84,14 @@ public class CustomerReservationService implements CustomerReservationUseCase, C
                         reservationId, tokenHash(reservationId, managementToken))
                 .orElseThrow(() -> new ReservationNotFoundException(reservationId));
         return issueCheckInToken(reservation);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public String restaurantTimezone(UUID restaurantId) {
+        RestaurantData restaurant = restaurantCatalogPort.findRestaurantById(restaurantId)
+                .orElseThrow(() -> new ReservationNotFoundException(restaurantId));
+        return BookingTime.restaurantTimeZone(restaurant.timezone()).getId();
     }
 
     @Override
@@ -183,7 +192,8 @@ public class CustomerReservationService implements CustomerReservationUseCase, C
     private CustomerAccountReservation accountReservation(Reservation reservation) {
         RestaurantData restaurant = restaurantCatalogPort.findRestaurantById(reservation.restaurantId())
                 .orElseThrow(() -> new ReservationNotFoundException(reservation.id()));
-        return new CustomerAccountReservation(reservation, restaurant.slug(), restaurant.name());
+        return new CustomerAccountReservation(
+                reservation, restaurant.slug(), restaurant.name(), restaurant.timezone());
     }
 
     private String tokenHash(UUID reservationId, String managementToken) {

@@ -7,6 +7,7 @@ import java.time.LocalTime;
 public record CreateReservationResult(
         Reservation reservation,
         String restaurantSlug,
+        String restaurantTimezone,
         LocalDate date,
         LocalTime time,
         boolean requiresRestaurantConfirmation,

@@ -10,4 +10,6 @@ public interface CustomerReservationUseCase {
     Reservation cancel(UUID reservationId, String managementToken);
 
     String issueCheckInToken(UUID reservationId, String managementToken);
+
+    String restaurantTimezone(UUID restaurantId);
 }

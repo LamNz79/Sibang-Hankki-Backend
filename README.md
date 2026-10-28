@@ -85,6 +85,16 @@ are `null`, `slotMatrix` is empty, and clients should use the date/party-size av
 Restaurant detail also exposes the persisted public booking limits as nullable `bookingPolicy`; list and favorite
 summaries remain unchanged and do not load booking settings.
 
+## Restaurant booking timezones
+
+Booking dates and times are interpreted in each restaurant's persisted IANA timezone. Public restaurant detail
+returns `timezone`, while owner, customer, guest, and system-admin reservation responses return
+`restaurantTimezone`. Slot generation, availability boundaries and formatting, reservation creation, and slot
+regeneration all use this value; reservation instants continue to be stored as UTC. The system-admin reservation
+report date filters remain based on the separate `app.reporting.time-zone` setting.
+For data safety, System Admin may change a restaurant timezone only before that restaurant has booking slots or
+reservations. Once booking setup has started, the profile update returns HTTP `409 Conflict`.
+
 ## System-admin restaurant review lifecycle
 
 An ADMIN changes restaurant approval state with:

@@ -108,7 +108,8 @@ class SystemAdminReservationReadServiceTest {
         var item = reservation();
         given(queryPort.findById(RESERVATION_ID)).willReturn(Optional.of(new AdminReservationDetailData(
                 item.id(), item.reference(), item.restaurantId(), item.restaurantName(), item.restaurantSlug(),
-                item.customerName(), item.customerEmail(), item.customerPhone(), item.startsAt(), item.endsAt(),
+                item.restaurantTimezone(), item.customerName(), item.customerEmail(), item.customerPhone(),
+                item.startsAt(), item.endsAt(),
                 item.partySize(), item.status(), item.visitStatus(), "Window seat", "No peanuts",
                 item.createdAt(), item.updatedAt(), proposal)));
 
@@ -116,6 +117,7 @@ class SystemAdminReservationReadServiceTest {
 
         assertThat(detail.specialRequest()).isEqualTo("Window seat");
         assertThat(detail.preOrderNote()).isEqualTo("No peanuts");
+        assertThat(detail.restaurantTimezone()).isEqualTo("Asia/Ho_Chi_Minh");
         assertThat(detail.alternativeProposal().message()).isEqualTo("Can you come later?");
         assertThat(detail.alternativeProposal().initiator()).isEqualTo("CUSTOMER");
     }
@@ -123,7 +125,7 @@ class SystemAdminReservationReadServiceTest {
     private AdminReservationData reservation() {
         return new AdminReservationData(
                 RESERVATION_ID, "SHK-0001", RESTAURANT_ID, "The Royal Pavilion", "royal-pavilion",
-                "Minh Lam", "minh@example.com", "0900000000",
+                "Asia/Ho_Chi_Minh", "Minh Lam", "minh@example.com", "0900000000",
                 Instant.parse("2026-10-01T11:30:00Z"), Instant.parse("2026-10-01T13:00:00Z"),
                 2, "CONFIRMED", "EXPECTED", Instant.parse("2026-09-01T00:00:00Z"),
                 Instant.parse("2026-09-01T00:00:00Z"));

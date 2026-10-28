@@ -71,7 +71,8 @@ public class SystemAdminReservationReadService implements SystemAdminReservation
         return new AdminReservationPage(
                 result.items().stream().map(item -> new AdminReservation(
                         item.id(), item.reference(), item.restaurantId(), item.restaurantName(),
-                        item.restaurantSlug(), item.customerName(), item.customerEmail(), item.customerPhone(),
+                        item.restaurantSlug(), item.restaurantTimezone(), item.customerName(),
+                        item.customerEmail(), item.customerPhone(),
                         item.startsAt(), item.endsAt(), item.partySize(), item.status(), item.visitStatus(),
                         item.createdAt(), item.updatedAt())).toList(),
                 page,
@@ -92,7 +93,8 @@ public class SystemAdminReservationReadService implements SystemAdminReservation
                 data.alternativeProposal().createdAt());
         return new AdminReservationDetail(
                 data.id(), data.reference(), data.restaurantId(), data.restaurantName(), data.restaurantSlug(),
-                data.customerName(), data.customerEmail(), data.customerPhone(), data.startsAt(), data.endsAt(),
+                data.restaurantTimezone(), data.customerName(), data.customerEmail(), data.customerPhone(),
+                data.startsAt(), data.endsAt(),
                 data.partySize(), data.status(), data.visitStatus(), data.specialRequest(), data.preOrderNote(),
                 data.createdAt(), data.updatedAt(), proposal);
     }

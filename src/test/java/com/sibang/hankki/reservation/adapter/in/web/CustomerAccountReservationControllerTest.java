@@ -87,6 +87,7 @@ class CustomerAccountReservationControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].restaurantSlug").value("the-royal-pavilion"))
                 .andExpect(jsonPath("$[0].restaurantName").value("The Royal Pavilion"))
+                .andExpect(jsonPath("$[0].restaurantTimezone").value("Asia/Ho_Chi_Minh"))
                 .andExpect(jsonPath("$[0].managementToken").doesNotExist());
         mockMvc.perform(get("/api/customer/account/reservations/{id}", RESERVATION_ID).session(session))
                 .andExpect(status().isOk())
@@ -262,7 +263,8 @@ class CustomerAccountReservationControllerTest {
                 startsAt.plusSeconds(90 * 60L), 2, status, false, visitStatus, "Window", "No peanuts",
                 null, null, null, null, 0, Instant.parse("2026-10-01T00:00:00Z"),
                 Instant.parse("2026-10-01T00:00:00Z"));
-        return new CustomerAccountReservation(reservation, "the-royal-pavilion", "The Royal Pavilion");
+        return new CustomerAccountReservation(
+                reservation, "the-royal-pavilion", "The Royal Pavilion", "Asia/Ho_Chi_Minh");
     }
 
     private ReservationProposal proposal(ReservationProposalStatus status) {

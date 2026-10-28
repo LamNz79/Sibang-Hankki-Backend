@@ -8,6 +8,7 @@ import com.sibang.hankki.restaurant.application.port.out.RestaurantData;
 import com.sibang.hankki.restaurant.domain.booking.BookingTime;
 import java.time.Clock;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,11 +37,10 @@ public class BookingSlotGenerationJob implements BookingSlotGenerationUseCase {
 
     @Override
     public int run() {
-        LocalDate today = LocalDate.now(clock.withZone(BookingTime.RESTAURANT_TIME_ZONE));
         List<RestaurantData> restaurants = restaurantCatalogPort.findAllActiveRestaurants();
         int generatedSlots = 0;
         int failures = 0;
-        log.info("event=booking_slot_generation_started date={} restaurants={}", today, restaurants.size());
+        log.info("event=booking_slot_generation_started restaurants={}", restaurants.size());
 
         for (RestaurantData restaurant : restaurants) {
             try {
@@ -50,6 +50,8 @@ public class BookingSlotGenerationJob implements BookingSlotGenerationUseCase {
                             restaurant.id(), restaurant.slug());
                     continue;
                 }
+                ZoneId timeZone = BookingTime.restaurantTimeZone(restaurant.timezone());
+                LocalDate today = LocalDate.now(clock.withZone(timeZone));
                 int created = generationService.regenerateSlots(
                         restaurant.id(), today, today.plusDays(settings.bookingWindowDays() - 1L))
                         .generatedSlots().size();
@@ -63,8 +65,8 @@ public class BookingSlotGenerationJob implements BookingSlotGenerationUseCase {
             }
         }
 
-        log.info("event=booking_slot_generation_completed date={} generatedSlots={} failures={}",
-                today, generatedSlots, failures);
+        log.info("event=booking_slot_generation_completed generatedSlots={} failures={}",
+                generatedSlots, failures);
         return generatedSlots;
     }
 }

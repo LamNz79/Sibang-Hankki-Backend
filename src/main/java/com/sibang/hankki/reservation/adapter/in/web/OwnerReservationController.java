@@ -39,7 +39,10 @@ public class OwnerReservationController {
 
     @GetMapping
     public List<OwnerReservationResponse> findAll(@AuthenticationPrincipal SessionUser user) {
-        return readUseCase.findAll(user.restaurantId()).stream().map(OwnerReservationResponse::from).toList();
+        String timeZone = readUseCase.restaurantTimezone(user.restaurantId());
+        return readUseCase.findAll(user.restaurantId()).stream()
+                .map(reservation -> OwnerReservationResponse.from(reservation, timeZone))
+                .toList();
     }
 
     @PostMapping("/walk-ins")
@@ -56,7 +59,8 @@ public class OwnerReservationController {
                 request.partySize(),
                 request.specialRequest()));
         return ResponseEntity.status(result.idempotentReplay() ? HttpStatus.OK : HttpStatus.CREATED)
-                .body(OwnerReservationResponse.from(result.reservation()));
+                .body(OwnerReservationResponse.from(
+                        result.reservation(), readUseCase.restaurantTimezone(user.restaurantId())));
     }
 
     @GetMapping("/paged")
@@ -68,8 +72,9 @@ public class OwnerReservationController {
             @RequestParam(required = false) String dateFrom,
             @RequestParam(required = false) String dateTo,
             @AuthenticationPrincipal SessionUser user) {
-        return OwnerReservationPageResponse.from(readUseCase.findPage(
-                user.restaurantId(), page, size, query, status, dateFrom, dateTo));
+        return OwnerReservationPageResponse.from(
+                readUseCase.findPage(user.restaurantId(), page, size, query, status, dateFrom, dateTo),
+                readUseCase.restaurantTimezone(user.restaurantId()));
     }
 
     @GetMapping("/{id}")
@@ -77,7 +82,8 @@ public class OwnerReservationController {
             @PathVariable UUID id, @AuthenticationPrincipal SessionUser user) {
         var reservation = readUseCase.findById(id, user.restaurantId());
         return OwnerReservationResponse.from(
-                reservation, proposalUseCase.findLatest(reservation.id()).orElse(null));
+                reservation, proposalUseCase.findLatest(reservation.id()).orElse(null),
+                readUseCase.restaurantTimezone(user.restaurantId()));
     }
 
     @PostMapping("/{id}/proposals")
@@ -88,7 +94,8 @@ public class OwnerReservationController {
         var result = proposalUseCase.create(new OwnerProposalCommand(
                 id, user.restaurantId(), user.id(), request.proposedDate(), request.proposedTime(),
                 request.message(), request.respondBy()));
-        return OwnerReservationResponse.from(result.reservation(), result.proposal());
+        return OwnerReservationResponse.from(
+                result.reservation(), result.proposal(), readUseCase.restaurantTimezone(user.restaurantId()));
     }
 
     @PostMapping("/{id}/change-requests/{requestId}/accept")
@@ -98,7 +105,8 @@ public class OwnerReservationController {
             @AuthenticationPrincipal SessionUser user) {
         var result = proposalUseCase.acceptChangeRequest(
                 id, requestId, user.restaurantId(), user.id());
-        return OwnerReservationResponse.from(result.reservation(), result.proposal());
+        return OwnerReservationResponse.from(
+                result.reservation(), result.proposal(), readUseCase.restaurantTimezone(user.restaurantId()));
     }
 
     @PostMapping("/{id}/change-requests/{requestId}/decline")
@@ -108,13 +116,16 @@ public class OwnerReservationController {
             @AuthenticationPrincipal SessionUser user) {
         var result = proposalUseCase.declineChangeRequest(
                 id, requestId, user.restaurantId(), user.id());
-        return OwnerReservationResponse.from(result.reservation(), result.proposal());
+        return OwnerReservationResponse.from(
+                result.reservation(), result.proposal(), readUseCase.restaurantTimezone(user.restaurantId()));
     }
 
     @PostMapping("/{id}/confirm")
     public OwnerReservationResponse confirm(
             @PathVariable UUID id, @AuthenticationPrincipal SessionUser user) {
-        return OwnerReservationResponse.from(commandUseCase.confirm(id, user.restaurantId(), user.id()));
+        return OwnerReservationResponse.from(
+                commandUseCase.confirm(id, user.restaurantId(), user.id()),
+                readUseCase.restaurantTimezone(user.restaurantId()));
     }
 
     @PostMapping("/{id}/decline")
@@ -123,7 +134,9 @@ public class OwnerReservationController {
             @RequestBody(required = false) DeclineReservationRequest request,
             @AuthenticationPrincipal SessionUser user) {
         String reason = request == null ? null : request.reason();
-        return OwnerReservationResponse.from(commandUseCase.decline(id, user.restaurantId(), user.id(), reason));
+        return OwnerReservationResponse.from(
+                commandUseCase.decline(id, user.restaurantId(), user.id(), reason),
+                readUseCase.restaurantTimezone(user.restaurantId()));
     }
 
     @PostMapping("/{id}/cancel")
@@ -132,31 +145,40 @@ public class OwnerReservationController {
             @RequestBody CancelReservationRequest request,
             @AuthenticationPrincipal SessionUser user) {
         return OwnerReservationResponse.from(
-                commandUseCase.cancel(id, user.restaurantId(), user.id(), request.reason()));
+                commandUseCase.cancel(id, user.restaurantId(), user.id(), request.reason()),
+                readUseCase.restaurantTimezone(user.restaurantId()));
     }
 
     @PostMapping("/{id}/check-in")
     public OwnerReservationResponse checkIn(
             @PathVariable UUID id, @AuthenticationPrincipal SessionUser user) {
-        return OwnerReservationResponse.from(commandUseCase.checkIn(id, user.restaurantId(), user.id()));
+        return OwnerReservationResponse.from(
+                commandUseCase.checkIn(id, user.restaurantId(), user.id()),
+                readUseCase.restaurantTimezone(user.restaurantId()));
     }
 
     @PostMapping("/{id}/seat")
     public OwnerReservationResponse seat(
             @PathVariable UUID id, @AuthenticationPrincipal SessionUser user) {
-        return OwnerReservationResponse.from(commandUseCase.seat(id, user.restaurantId(), user.id()));
+        return OwnerReservationResponse.from(
+                commandUseCase.seat(id, user.restaurantId(), user.id()),
+                readUseCase.restaurantTimezone(user.restaurantId()));
     }
 
     @PostMapping("/{id}/complete")
     public OwnerReservationResponse complete(
             @PathVariable UUID id, @AuthenticationPrincipal SessionUser user) {
-        return OwnerReservationResponse.from(commandUseCase.complete(id, user.restaurantId(), user.id()));
+        return OwnerReservationResponse.from(
+                commandUseCase.complete(id, user.restaurantId(), user.id()),
+                readUseCase.restaurantTimezone(user.restaurantId()));
     }
 
     @PostMapping("/{id}/no-show")
     public OwnerReservationResponse markNoShow(
             @PathVariable UUID id, @AuthenticationPrincipal SessionUser user) {
-        return OwnerReservationResponse.from(commandUseCase.markNoShow(id, user.restaurantId(), user.id()));
+        return OwnerReservationResponse.from(
+                commandUseCase.markNoShow(id, user.restaurantId(), user.id()),
+                readUseCase.restaurantTimezone(user.restaurantId()));
     }
 
     public record DeclineReservationRequest(String reason) {

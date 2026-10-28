@@ -78,6 +78,7 @@ class ReservationControllerTest {
                 .andExpect(jsonPath("$.time").value("18:30"))
                 .andExpect(jsonPath("$.partySize").value(2))
                 .andExpect(jsonPath("$.status").value("CONFIRMED"))
+                .andExpect(jsonPath("$.restaurantTimezone").value("Asia/Ho_Chi_Minh"))
                 .andExpect(jsonPath("$.requiresRestaurantConfirmation").value(false))
                 .andExpect(jsonPath("$.managementToken").value("raw-management-token"));
     }
@@ -157,7 +158,8 @@ class ReservationControllerTest {
                 null, null, null, null, null, null, 0,
                 Instant.parse("2026-10-01T00:00:00Z"), Instant.parse("2026-10-01T00:00:00Z"));
         return new CreateReservationResult(
-                reservation, "anan-saigon", LocalDate.of(2026, 10, 5), LocalTime.of(18, 30),
+                reservation, "anan-saigon", "Asia/Ho_Chi_Minh",
+                LocalDate.of(2026, 10, 5), LocalTime.of(18, 30),
                 false, replay, replay ? null : "raw-management-token");
     }
 

@@ -9,6 +9,7 @@ import com.sibang.hankki.reservation.application.port.out.ReservationPersistence
 import com.sibang.hankki.reservation.application.port.out.ReservationPersistencePort.OwnerReservationStatus;
 import com.sibang.hankki.reservation.domain.model.Reservation;
 import com.sibang.hankki.restaurant.application.port.out.RestaurantCatalogPort;
+import com.sibang.hankki.restaurant.domain.booking.BookingTime;
 import java.time.DateTimeException;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -47,6 +48,14 @@ public class OwnerReservationReadService implements OwnerReservationReadUseCase 
 
     @Override
     @Transactional(readOnly = true)
+    public String restaurantTimezone(UUID restaurantId) {
+        return BookingTime.restaurantTimeZone(restaurantCatalogPort.findTimezoneById(restaurantId)
+                        .orElseThrow(() -> new ReservationNotFoundException(restaurantId)))
+                .getId();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public OwnerReservationPage findPage(
             UUID restaurantId,
             int page,
@@ -64,8 +73,7 @@ public class OwnerReservationReadService implements OwnerReservationReadUseCase 
             throw new InvalidReservationRequestException("dateFrom must not be after dateTo");
         }
 
-        ZoneId timeZone = ZoneId.of(restaurantCatalogPort.findTimezoneById(restaurantId)
-                .orElseThrow(() -> new ReservationNotFoundException(restaurantId)));
+        ZoneId timeZone = BookingTime.restaurantTimeZone(restaurantTimezone(restaurantId));
         var result = reservationPersistencePort.findOwnerPage(
                 restaurantId,
                 page,

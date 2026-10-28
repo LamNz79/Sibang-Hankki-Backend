@@ -138,6 +138,54 @@ class SystemAdminRestaurantServiceTest {
     }
 
     @Test
+    void allowsTimezoneChangeBeforeBookingSetupStarts() {
+        RestaurantProfileData current = restaurant("DRAFT");
+        given(port.findByIdForUpdate(RESTAURANT_ID)).willReturn(Optional.of(current));
+        given(port.update(any(), any())).willAnswer(invocation -> {
+            RestaurantProfileUpdate update = invocation.getArgument(1);
+            return new RestaurantProfileData(
+                    RESTAURANT_ID, current.slug(), update.name(), update.description(), update.cuisineType(),
+                    update.cuisineLabel(), update.citySlug(), update.area(), update.district(), update.provinceCode(),
+                    update.provinceName(), update.wardCode(), update.wardName(), update.address(),
+                    update.phone(), update.email(), update.timezone(), update.priceRange(), current.approvalStatus(),
+                    current.createdAt(), NOW);
+        });
+
+        var result = service.update(RESTAURANT_ID, updateCommand("Restaurant", "Asia/Seoul"));
+
+        assertThat(result.timezone()).isEqualTo("Asia/Seoul");
+        verify(port).hasBookingSlots(RESTAURANT_ID);
+        verify(port).hasReservations(RESTAURANT_ID);
+    }
+
+    @Test
+    void rejectsTimezoneChangeAfterBookingSlotsExist() {
+        given(port.findByIdForUpdate(RESTAURANT_ID)).willReturn(Optional.of(restaurant("DRAFT")));
+        given(port.hasBookingSlots(RESTAURANT_ID)).willReturn(true);
+
+        assertThatThrownBy(() -> service.update(
+                RESTAURANT_ID, updateCommand("Restaurant", "Asia/Seoul")))
+                .isInstanceOf(AdminRestaurantConflictException.class)
+                .hasMessageContaining("timezone cannot be changed");
+
+        verify(port, never()).update(any(), any());
+    }
+
+    @Test
+    void rejectsTimezoneChangeAfterReservationsExist() {
+        given(port.findByIdForUpdate(RESTAURANT_ID)).willReturn(Optional.of(restaurant("DRAFT")));
+        given(port.hasBookingSlots(RESTAURANT_ID)).willReturn(false);
+        given(port.hasReservations(RESTAURANT_ID)).willReturn(true);
+
+        assertThatThrownBy(() -> service.update(
+                RESTAURANT_ID, updateCommand("Restaurant", "Asia/Seoul")))
+                .isInstanceOf(AdminRestaurantConflictException.class)
+                .hasMessageContaining("timezone cannot be changed");
+
+        verify(port, never()).update(any(), any());
+    }
+
+    @Test
     void findAndUpdateHideMissingOrArchivedRestaurants() {
         given(port.findById(RESTAURANT_ID)).willReturn(Optional.empty());
         given(port.findByIdForUpdate(RESTAURANT_ID)).willReturn(Optional.empty());
@@ -183,8 +231,12 @@ class SystemAdminRestaurantServiceTest {
     }
 
     private UpdateRestaurantCommand updateCommand(String name) {
+        return updateCommand(name, "Asia/Ho_Chi_Minh");
+    }
+
+    private UpdateRestaurantCommand updateCommand(String name, String timezone) {
         return new UpdateRestaurantCommand(
-                name, null, null, null, null, null, null, "Asia/Ho_Chi_Minh", null, 79, 26734);
+                name, null, null, null, null, null, null, timezone, null, 79, 26734);
     }
 
     private RestaurantProfileData restaurant(String status) {

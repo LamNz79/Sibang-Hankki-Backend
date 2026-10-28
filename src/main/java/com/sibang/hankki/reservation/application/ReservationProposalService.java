@@ -20,6 +20,8 @@ import com.sibang.hankki.reservation.domain.model.VisitStatus;
 import com.sibang.hankki.restaurant.application.port.out.BookingSlotData;
 import com.sibang.hankki.restaurant.application.port.out.BookingSlotPort;
 import com.sibang.hankki.restaurant.application.port.out.RestaurantCatalogPort;
+import com.sibang.hankki.restaurant.domain.booking.BookingRuleViolationException;
+import com.sibang.hankki.restaurant.domain.booking.BookingTime;
 import com.sibang.hankki.user.application.exception.CustomerProfileNotFoundException;
 import com.sibang.hankki.user.application.port.in.CustomerProfileUseCase;
 import java.time.Clock;
@@ -68,9 +70,7 @@ public class ReservationProposalService implements ReservationProposalUseCase {
     public ProposalResult create(OwnerProposalCommand command) {
         String message = normalizeMessage(command.message());
         Instant now = Instant.now(clock);
-        ZoneId timeZone = restaurantCatalogPort.findTimezoneById(command.restaurantId())
-                .map(ZoneId::of)
-                .orElseThrow(() -> new ReservationNotFoundException(command.restaurantId()));
+        ZoneId timeZone = restaurantTimeZone(command.restaurantId());
         Instant startsAt = parseProposedStartsAt(command.proposedDate(), command.proposedTime(), timeZone);
         if (!startsAt.isAfter(now)) {
             throw new InvalidReservationRequestException("Proposed time must be in the future");
@@ -325,9 +325,7 @@ public class ReservationProposalService implements ReservationProposalUseCase {
             UUID actorUserId,
             String requestedDate,
             String requestedTime) {
-        ZoneId timeZone = restaurantCatalogPort.findTimezoneById(reservation.restaurantId())
-                .map(ZoneId::of)
-                .orElseThrow(() -> new ReservationNotFoundException(reservation.restaurantId()));
+        ZoneId timeZone = restaurantTimeZone(reservation.restaurantId());
         Instant requestedStartsAt = parseStartsAt(requestedDate, requestedTime, timeZone, "requested");
         ReservationProposal proposal = proposalPort.findByIdAndReservationIdForUpdate(proposalId, reservation.id())
                 .orElseThrow(() -> new ReservationNotFoundException(proposalId));
@@ -371,9 +369,7 @@ public class ReservationProposalService implements ReservationProposalUseCase {
             String requestedTime,
             String requestedMessage) {
         String message = normalizeMessage(requestedMessage);
-        ZoneId timeZone = restaurantCatalogPort.findTimezoneById(reservation.restaurantId())
-                .map(ZoneId::of)
-                .orElseThrow(() -> new ReservationNotFoundException(reservation.restaurantId()));
+        ZoneId timeZone = restaurantTimeZone(reservation.restaurantId());
         Instant requestedStartsAt = parseStartsAt(requestedDate, requestedTime, timeZone, "requested");
         if (!requestedStartsAt.isAfter(Instant.now(clock))) {
             throw new InvalidReservationStateException("Requested time must be in the future");
@@ -579,6 +575,16 @@ public class ReservationProposalService implements ReservationProposalUseCase {
 
     private Instant parseProposedStartsAt(String date, String time, ZoneId timeZone) {
         return parseStartsAt(date, time, timeZone, "proposed");
+    }
+
+    private ZoneId restaurantTimeZone(UUID restaurantId) {
+        String timezone = restaurantCatalogPort.findTimezoneById(restaurantId)
+                .orElseThrow(() -> new ReservationNotFoundException(restaurantId));
+        try {
+            return BookingTime.restaurantTimeZone(timezone);
+        } catch (BookingRuleViolationException exception) {
+            throw new InvalidReservationRequestException(exception.getMessage());
+        }
     }
 
     private Instant parseStartsAt(String date, String time, ZoneId timeZone, String fieldPrefix) {

@@ -35,15 +35,14 @@ public class CustomerReservationController {
             @PathVariable UUID id,
             @RequestHeader(value = MANAGEMENT_TOKEN_HEADER, required = false) String managementToken) {
         var reservation = useCase.findById(id, managementToken);
-        return CustomerReservationResponse.from(
-                reservation, proposalUseCase.findLatest(reservation.id()).orElse(null));
+        return response(reservation, proposalUseCase.findLatest(reservation.id()).orElse(null));
     }
 
     @PostMapping("/{id}/cancel")
     public CustomerReservationResponse cancel(
             @PathVariable UUID id,
             @RequestHeader(value = MANAGEMENT_TOKEN_HEADER, required = false) String managementToken) {
-        return CustomerReservationResponse.from(useCase.cancel(id, managementToken));
+        return response(useCase.cancel(id, managementToken), null);
     }
 
     @PostMapping("/{id}/check-in-token")
@@ -59,7 +58,7 @@ public class CustomerReservationController {
             @PathVariable UUID proposalId,
             @RequestHeader(value = MANAGEMENT_TOKEN_HEADER, required = false) String managementToken) {
         var result = proposalUseCase.acceptForGuest(id, proposalId, managementToken);
-        return CustomerReservationResponse.from(result.reservation(), result.proposal());
+        return response(result.reservation(), result.proposal());
     }
 
     @PostMapping("/{id}/proposals/{proposalId}/decline")
@@ -68,7 +67,7 @@ public class CustomerReservationController {
             @PathVariable UUID proposalId,
             @RequestHeader(value = MANAGEMENT_TOKEN_HEADER, required = false) String managementToken) {
         var result = proposalUseCase.declineForGuest(id, proposalId, managementToken);
-        return CustomerReservationResponse.from(result.reservation(), result.proposal());
+        return response(result.reservation(), result.proposal());
     }
 
     @PostMapping("/{id}/proposals/{proposalId}/request-another-time")
@@ -77,8 +76,8 @@ public class CustomerReservationController {
             @PathVariable UUID proposalId,
             @RequestHeader(value = MANAGEMENT_TOKEN_HEADER, required = false) String managementToken,
             @RequestBody RequestAnotherTimeRequest request) {
-        return CustomerReservationResponse.from(proposalUseCase.requestAnotherTimeForGuest(
-                id, proposalId, managementToken, request.requestedDate(), request.requestedTime()));
+        return response(proposalUseCase.requestAnotherTimeForGuest(
+                id, proposalId, managementToken, request.requestedDate(), request.requestedTime()), null);
     }
 
     @PostMapping("/{id}/change-requests")
@@ -88,12 +87,18 @@ public class CustomerReservationController {
             @RequestBody ReservationChangeRequest request) {
         var result = proposalUseCase.requestChangeForGuest(
                 id, managementToken, request.requestedDate(), request.requestedTime(), request.message());
-        return CustomerReservationResponse.from(result.reservation(), result.proposal());
+        return response(result.reservation(), result.proposal());
+    }
+
+    private CustomerReservationResponse response(Reservation reservation, ReservationProposal proposal) {
+        return CustomerReservationResponse.from(
+                reservation, proposal, useCase.restaurantTimezone(reservation.restaurantId()));
     }
 
     public record CustomerReservationResponse(
             UUID id,
             String reference,
+            String restaurantTimezone,
             Instant startsAt,
             Instant endsAt,
             int partySize,
@@ -103,15 +108,12 @@ public class CustomerReservationController {
             Instant updatedAt,
             @JsonInclude(JsonInclude.Include.NON_NULL) AlternativeProposalResponse alternativeProposal) {
 
-        private static CustomerReservationResponse from(Reservation reservation) {
-            return from(reservation, null);
-        }
-
         private static CustomerReservationResponse from(
-                Reservation reservation, ReservationProposal proposal) {
+                Reservation reservation, ReservationProposal proposal, String restaurantTimezone) {
             return new CustomerReservationResponse(
                     reservation.id(),
                     reservation.reference(),
+                    restaurantTimezone,
                     reservation.startsAt(),
                     reservation.endsAt(),
                     reservation.partySize(),

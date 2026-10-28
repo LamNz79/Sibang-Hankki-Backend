@@ -31,6 +31,7 @@ public record RestaurantResponse(
         String summary,
         Map<String, Map<String, List<String>>> slotMatrix,
         List<MenuCategory> menuCategories,
+        String timezone,
         BookingPolicy bookingPolicy) {
 
     public record GalleryImage(String imageUrl, String imageAlt) {

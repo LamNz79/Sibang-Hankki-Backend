@@ -12,6 +12,7 @@ public record OwnerReservationResponse(
         String customerName,
         String customerEmail,
         String customerPhone,
+        String restaurantTimezone,
         Instant startsAt,
         Instant endsAt,
         int partySize,
@@ -23,17 +24,19 @@ public record OwnerReservationResponse(
         Instant updatedAt,
         @JsonInclude(JsonInclude.Include.NON_NULL) AlternativeProposalResponse alternativeProposal) {
 
-    static OwnerReservationResponse from(Reservation reservation) {
-        return from(reservation, null);
+    static OwnerReservationResponse from(Reservation reservation, String restaurantTimezone) {
+        return from(reservation, null, restaurantTimezone);
     }
 
-    static OwnerReservationResponse from(Reservation reservation, ReservationProposal proposal) {
+    static OwnerReservationResponse from(
+            Reservation reservation, ReservationProposal proposal, String restaurantTimezone) {
         return new OwnerReservationResponse(
                 reservation.id(),
                 reservation.reference(),
                 reservation.customerName(),
                 reservation.customerEmail(),
                 reservation.customerPhone(),
+                restaurantTimezone,
                 reservation.startsAt(),
                 reservation.endsAt(),
                 reservation.partySize(),
