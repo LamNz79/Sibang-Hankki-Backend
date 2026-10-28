@@ -124,6 +124,15 @@ class BookingSlotGenerationServiceTest {
     }
 
     @Test
+    void convertsLocalBusinessHoursUsingPersistedSeoulTimezone() {
+        configure(30, 30, List.of(hours(1, "20:30", "21:00")), "Asia/Seoul");
+
+        List<BookingSlotCandidate> slots = service.generateSlots(restaurantId, TODAY, TODAY);
+
+        assertEquals(Instant.parse("2026-09-28T11:30:00Z"), slots.get(0).startsAt());
+    }
+
+    @Test
     void administrationGenerationUsesSelectedTimezoneWithoutRequiringActiveStatus() {
         configure(30, 30, List.of(hours(1, "11:30", "12:00")));
 
@@ -161,12 +170,14 @@ class BookingSlotGenerationServiceTest {
 
     @Test
     void rejectsFromDateAfterToDate() {
+        configure(15, 30, List.of());
         assertThrows(IllegalArgumentException.class,
                 () -> service.generateSlots(restaurantId, TODAY.plusDays(1), TODAY));
     }
 
     @Test
     void rejectsDatesBeforeToday() {
+        configure(15, 30, List.of());
         assertThrows(IllegalArgumentException.class,
                 () -> service.generateSlots(restaurantId, TODAY.minusDays(1), TODAY));
     }
@@ -205,13 +216,19 @@ class BookingSlotGenerationServiceTest {
     @Test
     void rejectsRequiredInputs() {
         assertThrows(IllegalArgumentException.class, () -> service.generateSlots(null, TODAY, TODAY));
+        configure(15, 30, List.of());
         assertThrows(IllegalArgumentException.class, () -> service.generateSlots(restaurantId, null, TODAY));
         assertThrows(IllegalArgumentException.class, () -> service.generateSlots(restaurantId, TODAY, null));
     }
 
     private void configure(int interval, int duration, List<RestaurantBusinessHourData> hours) {
+        configure(interval, duration, hours, "Asia/Ho_Chi_Minh");
+    }
+
+    private void configure(
+            int interval, int duration, List<RestaurantBusinessHourData> hours, String timezone) {
         given(restaurantCatalogPort.findActiveRestaurantById(restaurantId))
-                .willReturn(Optional.of(restaurant()));
+                .willReturn(Optional.of(restaurant(timezone)));
         given(bookingSettingsPort.findByRestaurantId(restaurantId)).willReturn(Optional.of(new BookingSettings(
                 restaurantId, 20, interval, duration, ConfirmationMode.AUTO, null, 30, 1, 6, 7)));
         given(restaurantCatalogPort.findBusinessHoursByRestaurantIds(List.of(restaurantId))).willReturn(hours);
@@ -225,6 +242,11 @@ class BookingSlotGenerationServiceTest {
     }
 
     private RestaurantData restaurant() {
-        return new RestaurantData(restaurantId, "anan-saigon", "", "", "", "", "", "", "", "", "");
+        return restaurant("Asia/Ho_Chi_Minh");
+    }
+
+    private RestaurantData restaurant(String timezone) {
+        return new RestaurantData(
+                restaurantId, "anan-saigon", "", "", "", "", "", "", "", "", "", timezone);
     }
 }

@@ -82,6 +82,8 @@ class CreateReservationServiceTest {
                 customerProfileUseCase,
                 Clock.fixed(NOW, ZoneOffset.UTC));
         when(restaurantCatalogPort.findActiveRestaurantBySlug("anan-saigon")).thenReturn(Optional.of(restaurant()));
+        lenient().when(restaurantCatalogPort.findRestaurantById(RESTAURANT_ID))
+                .thenReturn(Optional.of(restaurant()));
         lenient().when(bookingSlotPort.findByRestaurantIdAndStartsAt(eq(RESTAURANT_ID), any()))
                 .thenReturn(Optional.of(slot()));
         lenient().when(reservationPersistencePort.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -236,6 +238,26 @@ class CreateReservationServiceTest {
         verify(bookingSlotPort, never()).findByRestaurantIdAndStartsAt(eq(RESTAURANT_ID), any());
     }
 
+    @Test
+    void createsReservationAtThePersistedSeoulLocalTime() {
+        when(restaurantCatalogPort.findActiveRestaurantBySlug("anan-saigon"))
+                .thenReturn(Optional.of(restaurant("Asia/Seoul")));
+        givenSettings(ConfirmationMode.AUTO, null);
+        Instant expectedStartsAt = Instant.parse("2026-10-25T11:30:00Z");
+        when(bookingSlotPort.findByRestaurantIdAndStartsAt(RESTAURANT_ID, expectedStartsAt))
+                .thenReturn(Optional.of(new BookingSlotData(
+                        SLOT_ID, RESTAURANT_ID, expectedStartsAt, expectedStartsAt.plusSeconds(90 * 60L))));
+        when(bookingSlotPort.reserveCapacity(SLOT_ID, 2)).thenReturn(true);
+
+        var result = service.create(new CreateReservationCommand(
+                "seoul-key", "anan-saigon", "2026-10-25", "20:30", 2,
+                "Minh Lam", "0900000000", null, null, null));
+
+        assertThat(result.reservation().startsAt()).isEqualTo(expectedStartsAt);
+        assertThat(result.restaurantTimezone()).isEqualTo("Asia/Seoul");
+        verify(bookingSlotPort).findByRestaurantIdAndStartsAt(RESTAURANT_ID, expectedStartsAt);
+    }
+
     private void givenSettings(ConfirmationMode mode, Integer manualThreshold) {
         when(bookingSettingsPort.findByRestaurantId(RESTAURANT_ID)).thenReturn(Optional.of(new BookingSettings(
                 RESTAURANT_ID, 20, 60, 90, mode, manualThreshold, 30, 1, 10, 11)));
@@ -264,7 +286,12 @@ class CreateReservationServiceTest {
     }
 
     private RestaurantData restaurant() {
-        return new RestaurantData(RESTAURANT_ID, "anan-saigon", "Anan", "", "", "", "", "", "", "", "");
+        return restaurant("Asia/Ho_Chi_Minh");
+    }
+
+    private RestaurantData restaurant(String timezone) {
+        return new RestaurantData(
+                RESTAURANT_ID, "anan-saigon", "Anan", "", "", "", "", "", "", "", "", timezone);
     }
 
     private BookingSlotData slot() {

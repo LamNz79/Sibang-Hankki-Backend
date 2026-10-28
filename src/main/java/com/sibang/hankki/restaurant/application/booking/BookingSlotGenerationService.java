@@ -9,6 +9,7 @@ import com.sibang.hankki.restaurant.application.port.out.BookingSettingsPort;
 import com.sibang.hankki.restaurant.application.port.out.BookingSlotPort;
 import com.sibang.hankki.restaurant.application.port.out.BookingSlotState;
 import com.sibang.hankki.restaurant.application.port.out.RestaurantCatalogPort;
+import com.sibang.hankki.restaurant.application.port.out.RestaurantData;
 import com.sibang.hankki.restaurant.domain.booking.BookingPolicy;
 import com.sibang.hankki.restaurant.domain.booking.BookingRuleViolationException;
 import com.sibang.hankki.restaurant.domain.booking.BookingSlotCandidate;
@@ -53,7 +54,8 @@ public class BookingSlotGenerationService {
 
     @Transactional
     public List<BookingSlotCandidate> generateSlots(UUID restaurantId, LocalDate fromDate, LocalDate toDate) {
-        return synchronize(restaurantId, fromDate, toDate, RESTAURANT_TIME_ZONE, true, false).generatedSlots();
+        return synchronize(restaurantId, fromDate, toDate, activeRestaurantTimeZone(restaurantId), false, false)
+                .generatedSlots();
     }
 
     @Transactional
@@ -64,7 +66,7 @@ public class BookingSlotGenerationService {
 
     @Transactional
     public GenerationResult regenerateSlots(UUID restaurantId, LocalDate fromDate, LocalDate toDate) {
-        return synchronize(restaurantId, fromDate, toDate, RESTAURANT_TIME_ZONE, true, true);
+        return synchronize(restaurantId, fromDate, toDate, activeRestaurantTimeZone(restaurantId), false, true);
     }
 
     @Transactional
@@ -152,6 +154,19 @@ public class BookingSlotGenerationService {
             bookingSlotPort.saveGeneratedSlots(restaurantId, missingSlots, policy.guestCapacity());
         }
         return new GenerationResult(deleted, missingSlots);
+    }
+
+    private ZoneId activeRestaurantTimeZone(UUID restaurantId) {
+        if (restaurantId == null) {
+            throw new InvalidBookingRequestException("restaurantId is required");
+        }
+        RestaurantData restaurant = restaurantCatalogPort.findActiveRestaurantById(restaurantId)
+                .orElseThrow(RestaurantNotFoundException::new);
+        try {
+            return BookingTime.restaurantTimeZone(restaurant.timezone());
+        } catch (BookingRuleViolationException exception) {
+            throw new InvalidBookingRequestException(exception.getMessage(), exception);
+        }
     }
 
     public record GenerationResult(int deletedSlots, List<BookingSlotCandidate> generatedSlots) {

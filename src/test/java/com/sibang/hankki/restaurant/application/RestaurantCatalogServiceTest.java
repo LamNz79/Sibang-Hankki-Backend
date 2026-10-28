@@ -86,6 +86,7 @@ class RestaurantCatalogServiceTest {
         assertThat(response.availableText()).isNull();
         assertThat(response.availableFrom()).isNull();
         assertThat(response.slotMatrix()).isEmpty();
+        assertThat(response.timezone()).isEqualTo("Asia/Ho_Chi_Minh");
         assertThat(response.bookingPolicy()).isEqualTo(new RestaurantResponse.BookingPolicy(45, 2, 10, 11));
         assertThat(response.menuCategories()).hasSize(1);
         assertThat(response.menuCategories().get(0).name()).isEqualTo("Main dishes");

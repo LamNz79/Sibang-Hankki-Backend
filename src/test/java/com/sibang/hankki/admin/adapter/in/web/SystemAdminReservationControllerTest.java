@@ -61,6 +61,7 @@ class SystemAdminReservationControllerTest {
                 .andExpect(jsonPath("$.items[0].restaurantId").value(RESTAURANT_ID.toString()))
                 .andExpect(jsonPath("$.items[0].restaurantName").value("The Royal Pavilion"))
                 .andExpect(jsonPath("$.items[0].restaurantSlug").value("royal-pavilion"))
+                .andExpect(jsonPath("$.items[0].restaurantTimezone").value("Asia/Ho_Chi_Minh"))
                 .andExpect(jsonPath("$.page").value(0))
                 .andExpect(jsonPath("$.size").value(20))
                 .andExpect(jsonPath("$.totalElements").value(1))
@@ -99,13 +100,15 @@ class SystemAdminReservationControllerTest {
                 "PENDING", "CUSTOMER", NOW.minusSeconds(1800));
         given(readUseCase.findById(RESERVATION_ID)).willReturn(new AdminReservationDetail(
                 item.id(), item.reference(), item.restaurantId(), item.restaurantName(), item.restaurantSlug(),
-                item.customerName(), item.customerEmail(), item.customerPhone(), item.startsAt(), item.endsAt(),
+                item.restaurantTimezone(), item.customerName(), item.customerEmail(), item.customerPhone(),
+                item.startsAt(), item.endsAt(),
                 item.partySize(), item.status(), item.visitStatus(), "Window seat", null,
                 item.createdAt(), item.updatedAt(), proposal));
 
         mockMvc.perform(get("/api/admin/reservations/{id}", RESERVATION_ID)
                         .with(user("admin").roles("ADMIN")))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.restaurantTimezone").value("Asia/Ho_Chi_Minh"))
                 .andExpect(jsonPath("$.alternativeProposal.initiator").value("CUSTOMER"));
     }
 
@@ -122,7 +125,8 @@ class SystemAdminReservationControllerTest {
     private AdminReservation item() {
         return new AdminReservation(
                 RESERVATION_ID, "SHK-0001", RESTAURANT_ID, "The Royal Pavilion", "royal-pavilion",
-                "Minh Lam", "minh@example.com", "0900000000", NOW, NOW.plusSeconds(5400), 2,
+                "Asia/Ho_Chi_Minh", "Minh Lam", "minh@example.com", "0900000000",
+                NOW, NOW.plusSeconds(5400), 2,
                 "CONFIRMED", "EXPECTED", NOW.minusSeconds(3600), NOW.minusSeconds(3600));
     }
 }

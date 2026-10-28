@@ -4,6 +4,8 @@ import com.sibang.hankki.restaurant.application.exception.BookingSettingsNotConf
 import com.sibang.hankki.restaurant.application.port.in.OwnerSlotRegenerationUseCase;
 import com.sibang.hankki.restaurant.application.port.out.BookingSettings;
 import com.sibang.hankki.restaurant.application.port.out.BookingSettingsPort;
+import com.sibang.hankki.restaurant.application.port.out.RestaurantCatalogPort;
+import com.sibang.hankki.restaurant.application.exception.RestaurantNotFoundException;
 import com.sibang.hankki.restaurant.domain.booking.BookingTime;
 import java.time.Clock;
 import java.time.LocalDate;
@@ -16,14 +18,17 @@ import org.springframework.transaction.annotation.Transactional;
 public class OwnerSlotRegenerationService implements OwnerSlotRegenerationUseCase {
 
     private final BookingSettingsPort settingsPort;
+    private final RestaurantCatalogPort restaurantCatalogPort;
     private final BookingSlotGenerationService generationService;
     private final Clock clock;
 
     public OwnerSlotRegenerationService(
             BookingSettingsPort settingsPort,
+            RestaurantCatalogPort restaurantCatalogPort,
             BookingSlotGenerationService generationService,
             Clock clock) {
         this.settingsPort = settingsPort;
+        this.restaurantCatalogPort = restaurantCatalogPort;
         this.generationService = generationService;
         this.clock = clock;
     }
@@ -31,7 +36,10 @@ public class OwnerSlotRegenerationService implements OwnerSlotRegenerationUseCas
     @Override
     @Transactional
     public Result regenerate(UUID restaurantId) {
-        return regenerate(restaurantId, BookingTime.RESTAURANT_TIME_ZONE, false);
+        ZoneId timeZone = BookingTime.restaurantTimeZone(restaurantCatalogPort.findActiveRestaurantById(restaurantId)
+                .orElseThrow(RestaurantNotFoundException::new)
+                .timezone());
+        return regenerate(restaurantId, timeZone, false);
     }
 
     @Override

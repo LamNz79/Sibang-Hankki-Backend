@@ -118,7 +118,8 @@ public class RestaurantCatalogPersistenceAdapter implements RestaurantCatalogPor
                 restaurant.getArea(),
                 restaurant.getDistrict(),
                 restaurant.getAddress(),
-                restaurant.getPriceRange());
+                restaurant.getPriceRange(),
+                restaurant.getTimezone());
     }
 
     private RestaurantTagData toRestaurantTagData(RestaurantTagEntity tag) {

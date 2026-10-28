@@ -9,6 +9,7 @@ import com.sibang.hankki.restaurant.application.port.out.BookingSettings;
 import com.sibang.hankki.restaurant.application.port.out.BookingSettingsPort;
 import com.sibang.hankki.restaurant.application.port.out.BookingSlotPort;
 import com.sibang.hankki.restaurant.application.port.out.RestaurantCatalogPort;
+import com.sibang.hankki.restaurant.application.port.out.RestaurantData;
 import com.sibang.hankki.restaurant.domain.booking.BookingPolicy;
 import com.sibang.hankki.restaurant.domain.booking.BookingRuleViolationException;
 import com.sibang.hankki.restaurant.domain.booking.BookingSlotCapacity;
@@ -16,6 +17,7 @@ import com.sibang.hankki.restaurant.domain.booking.BookingTime;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.List;
@@ -46,19 +48,20 @@ public class RestaurantAvailabilityService implements RestaurantAvailabilityUseC
     @Override
     public RestaurantAvailabilityResponse availability(String slug, String dateValue, int partySize) {
         LocalDate date = parseDate(dateValue);
-        LocalDate today = LocalDate.now(clock.withZone(BookingTime.RESTAURANT_TIME_ZONE));
+        RestaurantData restaurant = restaurantCatalogPort.findActiveRestaurantBySlug(slug)
+                .orElseThrow(RestaurantNotFoundException::new);
+        ZoneId timeZone = restaurantTimeZone(restaurant.timezone());
+        LocalDate today = LocalDate.now(clock.withZone(timeZone));
         validateBasicRequest(date, today, partySize);
 
-        UUID restaurantId = restaurantCatalogPort.findActiveRestaurantBySlug(slug)
-                .map(restaurant -> restaurant.id())
-                .orElseThrow(RestaurantNotFoundException::new);
+        UUID restaurantId = restaurant.id();
         BookingSettings settings = bookingSettingsPort.findByRestaurantId(restaurantId)
                 .orElseThrow(BookingSettingsNotConfiguredException::new);
         BookingPolicy policy = BookingDomainMapper.policy(settings);
         validateAvailabilityRequest(policy, date, today, partySize);
 
         List<String> slots = policy.supportsOnlineAvailability(partySize)
-                ? availableSlots(restaurantId, date, policy, partySize)
+                ? availableSlots(restaurantId, date, timeZone, policy, partySize)
                 : List.of();
         return new RestaurantAvailabilityResponse(
                 slug,
@@ -68,16 +71,25 @@ public class RestaurantAvailabilityService implements RestaurantAvailabilityUseC
                 policy.requiresRestaurantConfirmation(partySize));
     }
 
-    private List<String> availableSlots(UUID restaurantId, LocalDate date, BookingPolicy policy, int partySize) {
-        Instant start = date.atStartOfDay(BookingTime.RESTAURANT_TIME_ZONE).toInstant();
-        Instant end = date.plusDays(1).atStartOfDay(BookingTime.RESTAURANT_TIME_ZONE).toInstant();
+    private List<String> availableSlots(
+            UUID restaurantId, LocalDate date, ZoneId timeZone, BookingPolicy policy, int partySize) {
+        Instant start = date.atStartOfDay(timeZone).toInstant();
+        Instant end = date.plusDays(1).atStartOfDay(timeZone).toInstant();
         Instant now = Instant.now(clock);
         List<BookingSlotCapacity> capacities = bookingSlotPort.findSlotCapacities(restaurantId, start, end);
         return policy.availableSlots(capacities, partySize).stream()
                 .filter(slot -> slot.startsAt().isAfter(now))
                 .map(BookingSlotCapacity::startsAt)
-                .map(instant -> TIME.format(instant.atZone(BookingTime.RESTAURANT_TIME_ZONE)))
+                .map(instant -> TIME.format(instant.atZone(timeZone)))
                 .toList();
+    }
+
+    private ZoneId restaurantTimeZone(String value) {
+        try {
+            return BookingTime.restaurantTimeZone(value);
+        } catch (BookingRuleViolationException exception) {
+            throw new InvalidBookingRequestException(exception.getMessage(), exception);
+        }
     }
 
     private void validateBasicRequest(LocalDate date, LocalDate today, int partySize) {

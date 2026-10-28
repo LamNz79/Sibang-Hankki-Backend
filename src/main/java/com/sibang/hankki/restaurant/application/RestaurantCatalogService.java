@@ -142,6 +142,7 @@ public class RestaurantCatalogService implements RestaurantCatalogUseCase {
                 restaurant.description(),
                 Map.of(),
                 includeDetails ? publicMenu(menuPort.findAll(restaurant.id())) : List.of(),
+                includeDetails ? restaurant.timezone() : null,
                 includeDetails
                         ? bookingSettingsPort.findByRestaurantId(restaurant.id())
                                 .map(this::publicBookingPolicy)

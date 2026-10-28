@@ -11,9 +11,11 @@ public record OwnerReservationPageResponse(
         int totalPages,
         Summary summary) {
 
-    static OwnerReservationPageResponse from(OwnerReservationPage result) {
+    static OwnerReservationPageResponse from(OwnerReservationPage result, String restaurantTimezone) {
         return new OwnerReservationPageResponse(
-                result.items().stream().map(OwnerReservationResponse::from).toList(),
+                result.items().stream()
+                        .map(reservation -> OwnerReservationResponse.from(reservation, restaurantTimezone))
+                        .toList(),
                 result.page(),
                 result.size(),
                 result.totalElements(),

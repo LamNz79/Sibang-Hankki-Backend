@@ -5,6 +5,7 @@ import com.sibang.hankki.restaurant.adapter.out.persistence.repository.BookingSl
 import com.sibang.hankki.restaurant.adapter.out.persistence.repository.RestaurantBookingSettingsRepository;
 import com.sibang.hankki.restaurant.application.exception.BookingSettingsNotConfiguredException;
 import com.sibang.hankki.restaurant.application.exception.RestaurantNotFoundException;
+import com.sibang.hankki.restaurant.application.RestaurantAvailabilityService;
 import com.sibang.hankki.restaurant.application.port.out.BookingSlotPort;
 import com.sibang.hankki.restaurant.domain.booking.BookingSlotCandidate;
 import com.sibang.hankki.restaurant.domain.booking.BookingSlotCapacity;
@@ -46,7 +47,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 class BookingSlotGenerationPersistenceTest {
 
     private static final LocalDate TODAY = LocalDate.of(2026, 9, 28);
-    private static final LocalDate GENERATION_DATE = TODAY.plusDays(7);
+    private static final LocalDate GENERATION_DATE = TODAY.plusDays(26);
 
     @Autowired
     private BookingSlotGenerationService generationService;
@@ -67,6 +68,9 @@ class BookingSlotGenerationPersistenceTest {
     private CreateReservationService createReservationService;
 
     @Autowired
+    private RestaurantAvailabilityService availabilityService;
+
+    @Autowired
     private OwnerReservationReadService ownerReservationReadService;
 
     @Autowired
@@ -82,8 +86,20 @@ class BookingSlotGenerationPersistenceTest {
         generationDate = GENERATION_DATE;
         OffsetDateTime start = timestamp(generationDate.atStartOfDay(BookingSlotGenerationService.RESTAURANT_TIME_ZONE).toInstant());
         OffsetDateTime end = timestamp(generationDate.plusDays(1).atStartOfDay(BookingSlotGenerationService.RESTAURANT_TIME_ZONE).toInstant());
-        jdbcTemplate.update("delete from booking_slots where restaurant_id = ? and starts_at >= ? and starts_at < ?",
-                restaurantId, start, end);
+        jdbcTemplate.update("""
+                delete from booking_slots slot
+                where slot.restaurant_id = ?
+                  and slot.starts_at >= ?
+                  and slot.starts_at < ?
+                  and not exists (
+                      select 1 from reservations reservation
+                      where reservation.booking_slot_id = slot.id
+                  )
+                  and not exists (
+                      select 1 from reservation_proposals proposal
+                      where proposal.proposed_booking_slot_id = slot.id
+                  )
+                """, restaurantId, start, end);
         jdbcTemplate.update("delete from restaurant_booking_settings where restaurant_id = ?", restaurantId);
     }
 
@@ -98,6 +114,48 @@ class BookingSlotGenerationPersistenceTest {
         assertEquals(10, persisted.size());
         assertEquals(20, persisted.get(0).getCapacityTotal());
         assertEquals(0, persisted.get(0).getCapacityReserved());
+    }
+
+    @Test
+    void seoulTimezoneIsConsistentFromGenerationThroughReservationCreation() {
+        UUID seoulRestaurantId = UUID.randomUUID();
+        String slug = "seoul-timezone-" + seoulRestaurantId.toString().substring(0, 8);
+        LocalDate seoulDate = LocalDate.of(2026, 10, 25);
+        jdbcTemplate.update("""
+                insert into restaurants (id, slug, name, city_slug, timezone, approval_status)
+                values (?, ?, 'Seoul Timezone Restaurant', 'seoul', 'Asia/Seoul', 'ACTIVE')
+                """, seoulRestaurantId, slug);
+        jdbcTemplate.update("""
+                insert into restaurant_business_hours
+                    (id, restaurant_id, day_of_week, opens_at, closes_at)
+                values (?, ?, ?, cast('20:30' as time), cast('22:00' as time))
+                """, UUID.randomUUID(), seoulRestaurantId, seoulDate.getDayOfWeek().getValue());
+        settingsRepository.saveAndFlush(new RestaurantBookingSettings(
+                seoulRestaurantId, 20, (short) 60, (short) 90, (short) 10, 30,
+                ConfirmationMode.AUTO, null, (short) 30, (short) 1, (short) 10,
+                (short) 11, 120, 15));
+        entityManager.clear();
+
+        List<BookingSlotCandidate> generated = generationService.generateSlots(
+                seoulRestaurantId, seoulDate, seoulDate);
+        assertEquals(Instant.parse("2026-10-25T11:30:00Z"), generated.get(0).startsAt());
+        assertEquals(List.of("20:30"), availabilityService.availability(
+                slug, seoulDate.toString(), 2).slots());
+
+        var created = createReservationService.create(new CreateReservationCommand(
+                "seoul-full-path-" + seoulRestaurantId,
+                slug,
+                seoulDate.toString(),
+                "20:30",
+                2,
+                "Seoul Guest",
+                "0900000000",
+                null,
+                null,
+                null));
+
+        assertEquals(Instant.parse("2026-10-25T11:30:00Z"), created.reservation().startsAt());
+        assertEquals("Asia/Seoul", created.restaurantTimezone());
     }
 
     @Test

@@ -83,6 +83,7 @@ class OwnerReservationControllerTest {
                 .willReturn(Optional.of(staff));
         given(userRepository.findByUseridAndStatusAndDeletedAtIsNull("customer", "ACTIVE"))
                 .willReturn(Optional.of(customer));
+        given(readUseCase.restaurantTimezone(RESTAURANT_ID)).willReturn("Asia/Ho_Chi_Minh");
     }
 
     @Test
@@ -102,6 +103,7 @@ class OwnerReservationControllerTest {
                 .andExpect(jsonPath("$[0].customerName").value("Minh Lam"))
                 .andExpect(jsonPath("$[0].status").value("CONFIRMED"))
                 .andExpect(jsonPath("$[0].visitStatus").value("EXPECTED"))
+                .andExpect(jsonPath("$[0].restaurantTimezone").value("Asia/Ho_Chi_Minh"))
                 .andExpect(jsonPath("$[0].idempotencyKey").doesNotExist())
                 .andExpect(jsonPath("$[0].requestFingerprint").doesNotExist())
                 .andExpect(jsonPath("$[0].checkInTokenHash").doesNotExist())

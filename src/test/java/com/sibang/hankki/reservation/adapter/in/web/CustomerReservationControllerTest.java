@@ -1,6 +1,7 @@
 package com.sibang.hankki.reservation.adapter.in.web;
 
 import static org.mockito.BDDMockito.given;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -20,6 +21,7 @@ import com.sibang.hankki.reservation.domain.model.VisitStatus;
 import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
@@ -43,6 +45,11 @@ class CustomerReservationControllerTest {
     @MockitoBean
     private ReservationProposalUseCase proposalUseCase;
 
+    @BeforeEach
+    void configureTimezone() {
+        given(useCase.restaurantTimezone(any(UUID.class))).willReturn("Asia/Ho_Chi_Minh");
+    }
+
     @Test
     void readsCurrentStatusWithHeaderToken() throws Exception {
         given(useCase.findById(RESERVATION_ID, TOKEN))
@@ -52,7 +59,8 @@ class CustomerReservationControllerTest {
                         .header(CustomerReservationController.MANAGEMENT_TOKEN_HEADER, TOKEN))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("CONFIRMED"))
-                .andExpect(jsonPath("$.visitStatus").value("EXPECTED"));
+                .andExpect(jsonPath("$.visitStatus").value("EXPECTED"))
+                .andExpect(jsonPath("$.restaurantTimezone").value("Asia/Ho_Chi_Minh"));
     }
 
     @Test

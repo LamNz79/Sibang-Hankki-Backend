@@ -35,6 +35,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.HexFormat;
 import java.util.Objects;
 import java.util.UUID;
@@ -91,9 +92,13 @@ public class CreateReservationService implements CreateReservationUseCase {
             if (!previous.requestFingerprint().equals(fingerprint)) {
                 throw new ReservationIdempotencyConflictException();
             }
+            RestaurantData restaurant = restaurantCatalogPort.findRestaurantById(previous.restaurantId())
+                    .orElseThrow(() -> new ReservationNotFoundException(command.restaurantSlug()));
+            restaurantTimeZone(restaurant.timezone());
             return new CreateReservationResult(
                     previous,
                     command.restaurantSlug(),
+                    restaurant.timezone(),
                     date,
                     time,
                     previous.status() == ReservationStatus.PENDING,
@@ -101,10 +106,11 @@ public class CreateReservationService implements CreateReservationUseCase {
                     null);
         }
 
-        LocalDate today = LocalDate.now(clock.withZone(BookingTime.RESTAURANT_TIME_ZONE));
-        validateBasicRequest(date, today, command.partySize());
         RestaurantData restaurant = restaurantCatalogPort.findActiveRestaurantBySlug(command.restaurantSlug())
                 .orElseThrow(() -> new ReservationNotFoundException(command.restaurantSlug()));
+        ZoneId timeZone = restaurantTimeZone(restaurant.timezone());
+        LocalDate today = LocalDate.now(clock.withZone(timeZone));
+        validateBasicRequest(date, today, command.partySize());
         BookingSettings settings = bookingSettingsPort.findByRestaurantId(restaurant.id())
                 .orElseThrow(() -> new ReservationBookingSettingsNotConfiguredException(restaurant.slug()));
         BookingPolicy policy = BookingDomainMapper.policy(settings);
@@ -113,7 +119,7 @@ public class CreateReservationService implements CreateReservationUseCase {
             throw new InvalidReservationRequestException("partySize exceeds the maximum online party size");
         }
 
-        Instant startsAt = date.atTime(time).atZone(BookingTime.RESTAURANT_TIME_ZONE).toInstant();
+        Instant startsAt = date.atTime(time).atZone(timeZone).toInstant();
         if (!startsAt.isAfter(Instant.now(clock))) {
             throw new InvalidReservationRequestException("Reservation time must be in the future");
         }
@@ -160,7 +166,8 @@ public class CreateReservationService implements CreateReservationUseCase {
             appendEvent(saved, ReservationEventType.CONFIRMED, fingerprint, now.plusNanos(1_000));
         }
         return new CreateReservationResult(
-                saved, restaurant.slug(), date, time, requiresConfirmation, false, managementToken);
+                saved, restaurant.slug(), restaurant.timezone(), date, time,
+                requiresConfirmation, false, managementToken);
     }
 
     private void appendEvent(Reservation reservation, ReservationEventType type, String fingerprint, Instant now) {
@@ -192,6 +199,14 @@ public class CreateReservationService implements CreateReservationUseCase {
     private void validatePolicy(BookingPolicy policy, LocalDate date, LocalDate today, int partySize) {
         try {
             policy.validateAvailabilityRequest(date, today, partySize);
+        } catch (BookingRuleViolationException exception) {
+            throw new InvalidReservationRequestException(exception.getMessage());
+        }
+    }
+
+    private ZoneId restaurantTimeZone(String value) {
+        try {
+            return BookingTime.restaurantTimeZone(value);
         } catch (BookingRuleViolationException exception) {
             throw new InvalidReservationRequestException(exception.getMessage());
         }

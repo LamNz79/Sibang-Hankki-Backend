@@ -151,7 +151,7 @@ public class SystemAdminReservationQueryPersistenceAdapter implements SystemAdmi
     private AdminReservationData toData(ReservationEntity reservation, RestaurantEntity restaurant) {
         return new AdminReservationData(
                 reservation.getId(), reservation.getReference(), reservation.getRestaurantId(),
-                restaurant.getName(), restaurant.getSlug(), reservation.getCustomerName(),
+                restaurant.getName(), restaurant.getSlug(), restaurant.getTimezone(), reservation.getCustomerName(),
                 reservation.getCustomerEmail(), reservation.getCustomerPhone(), reservation.getStartsAt(),
                 reservation.getEndsAt(), reservation.getPartySize(), reservation.getStatus().name(),
                 reservation.getVisitStatus() == null ? null : reservation.getVisitStatus().name(),
@@ -165,7 +165,8 @@ public class SystemAdminReservationQueryPersistenceAdapter implements SystemAdmi
         AdminReservationData data = toData(reservation, restaurant);
         return new AdminReservationDetailData(
                 data.id(), data.reference(), data.restaurantId(), data.restaurantName(), data.restaurantSlug(),
-                data.customerName(), data.customerEmail(), data.customerPhone(), data.startsAt(), data.endsAt(),
+                data.restaurantTimezone(), data.customerName(), data.customerEmail(), data.customerPhone(),
+                data.startsAt(), data.endsAt(),
                 data.partySize(), data.status(), data.visitStatus(), reservation.getSpecialRequest(),
                 reservation.getPreOrderNote(), data.createdAt(), data.updatedAt(), proposal);
     }

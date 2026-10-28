@@ -92,8 +92,37 @@ class BookingSlotGenerationJobTest {
         verify(generationService).regenerateSlots(succeeding.id(), TODAY, TODAY);
     }
 
+    @Test
+    void calculatesEachRestaurantRangeInItsOwnTimezone() {
+        Instant instant = Instant.parse("2026-09-27T16:00:00Z");
+        RestaurantData vietnam = restaurant("vietnam", "Asia/Ho_Chi_Minh");
+        RestaurantData seoul = restaurant("seoul", "Asia/Seoul");
+        given(restaurantCatalogPort.findAllActiveRestaurants()).willReturn(List.of(vietnam, seoul));
+        given(bookingSettingsPort.findByRestaurantId(vietnam.id()))
+                .willReturn(Optional.of(settings(vietnam.id(), 1)));
+        given(bookingSettingsPort.findByRestaurantId(seoul.id()))
+                .willReturn(Optional.of(settings(seoul.id(), 1)));
+        given(generationService.regenerateSlots(any(), any(), any()))
+                .willReturn(new BookingSlotGenerationService.GenerationResult(0, List.of()));
+        job = new BookingSlotGenerationJob(
+                restaurantCatalogPort, bookingSettingsPort, generationService,
+                Clock.fixed(instant, ZoneOffset.UTC));
+
+        job.run();
+
+        verify(generationService).regenerateSlots(
+                vietnam.id(), LocalDate.of(2026, 9, 27), LocalDate.of(2026, 9, 27));
+        verify(generationService).regenerateSlots(
+                seoul.id(), LocalDate.of(2026, 9, 28), LocalDate.of(2026, 9, 28));
+    }
+
     private RestaurantData restaurant(String slug) {
-        return new RestaurantData(UUID.randomUUID(), slug, "", "", "", "", "", "", "", "", "");
+        return restaurant(slug, "Asia/Ho_Chi_Minh");
+    }
+
+    private RestaurantData restaurant(String slug, String timezone) {
+        return new RestaurantData(
+                UUID.randomUUID(), slug, "", "", "", "", "", "", "", "", "", timezone);
     }
 
     private BookingSettings settings(UUID restaurantId, int bookingWindowDays) {
