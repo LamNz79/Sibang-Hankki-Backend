@@ -5,6 +5,8 @@ import com.sibang.hankki.admin.application.exception.AdminRestaurantConflictExce
 import com.sibang.hankki.admin.application.exception.AdminUserConflictException;
 import com.sibang.hankki.admin.application.exception.InvalidAdminQueryException;
 import com.sibang.hankki.admin.application.exception.InvalidAdminStatusTransitionException;
+import com.sibang.hankki.home.application.exception.HomeContentConflictException;
+import com.sibang.hankki.home.application.exception.InvalidHomeContentException;
 import com.sibang.hankki.location.application.exception.InvalidProvinceCodeException;
 import com.sibang.hankki.location.application.exception.LocationCatalogUnavailableException;
 import com.sibang.hankki.restaurant.application.exception.BookingSettingsNotConfiguredException;
@@ -22,13 +24,14 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @RestControllerAdvice(assignableTypes = {
         SystemAdminController.class, SystemAdminUserController.class, RestaurantAssignmentController.class,
         SystemAdminReservationController.class, SystemAdminBookingConfigurationController.class,
-        SystemAdminMenuController.class, SystemAdminMediaController.class
+        SystemAdminMenuController.class, SystemAdminMediaController.class, SystemAdminHomeContentController.class
 })
 public class SystemAdminExceptionHandler {
 
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     @ExceptionHandler({
             InvalidAdminQueryException.class,
+            InvalidHomeContentException.class,
             InvalidProvinceCodeException.class,
             InvalidBookingRequestException.class
     })
@@ -52,6 +55,7 @@ public class SystemAdminExceptionHandler {
             InvalidAdminStatusTransitionException.class,
             AdminRestaurantConflictException.class,
             AdminUserConflictException.class,
+            HomeContentConflictException.class,
             BookingSettingsNotConfiguredException.class
     })
     ErrorResponse conflict(HttpServletRequest request) {

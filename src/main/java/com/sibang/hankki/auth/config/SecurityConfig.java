@@ -34,7 +34,8 @@ public class SecurityConfig {
                         "/api/customer/reservations/*/proposals/*/request-another-time"))
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(
-                                "/api/auth/csrf", "/api/auth/login", "/api/auth/register", "/api/locations/**")
+                                "/api/auth/csrf", "/api/auth/login", "/api/auth/register", "/api/locations/**",
+                                "/api/home-content")
                         .permitAll()
                         .requestMatchers("/api/auth/me", "/api/auth/password").authenticated()
                         .requestMatchers("/api/account/preferences").authenticated()
