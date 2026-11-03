@@ -5,6 +5,7 @@ import com.sibang.hankki.admin.application.exception.AdminRestaurantConflictExce
 import com.sibang.hankki.admin.application.exception.AdminUserConflictException;
 import com.sibang.hankki.admin.application.exception.InvalidAdminQueryException;
 import com.sibang.hankki.admin.application.exception.InvalidAdminStatusTransitionException;
+import com.sibang.hankki.home.application.exception.HomeContentConflictException;
 import com.sibang.hankki.home.application.exception.InvalidHomeContentException;
 import com.sibang.hankki.location.application.exception.InvalidProvinceCodeException;
 import com.sibang.hankki.location.application.exception.LocationCatalogUnavailableException;
@@ -54,6 +55,7 @@ public class SystemAdminExceptionHandler {
             InvalidAdminStatusTransitionException.class,
             AdminRestaurantConflictException.class,
             AdminUserConflictException.class,
+            HomeContentConflictException.class,
             BookingSettingsNotConfiguredException.class
     })
     ErrorResponse conflict(HttpServletRequest request) {

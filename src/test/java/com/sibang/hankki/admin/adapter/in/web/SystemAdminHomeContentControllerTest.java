@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.sibang.hankki.auth.OwnerSessionUserDetailsService;
 import com.sibang.hankki.auth.SessionUser;
 import com.sibang.hankki.auth.config.SecurityConfig;
+import com.sibang.hankki.home.application.exception.HomeContentConflictException;
 import com.sibang.hankki.home.application.exception.InvalidHomeContentException;
 import com.sibang.hankki.home.application.model.HomeContent;
 import com.sibang.hankki.home.application.port.in.HomeContentUseCase;
@@ -104,6 +105,18 @@ class SystemAdminHomeContentControllerTest {
                         .contentType(MediaType.APPLICATION_JSON).content(heroRequest()))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400));
+    }
+
+    @Test
+    void duplicateCitySlugUsesConflictResponse() throws Exception {
+        given(useCase.upsertCity(org.mockito.ArgumentMatchers.eq(79), any()))
+                .willThrow(new HomeContentConflictException("citySlug is already assigned to another province"));
+
+        mockMvc.perform(put("/api/admin/home-content/cities/79")
+                        .with(admin()).with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON).content(cityRequest()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.status").value(409));
     }
 
     private org.springframework.test.web.servlet.request.RequestPostProcessor admin() {

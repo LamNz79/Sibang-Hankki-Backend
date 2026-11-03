@@ -1,5 +1,6 @@
 package com.sibang.hankki.home.adapter.out.persistence;
 
+import com.sibang.hankki.home.application.exception.HomeContentConflictException;
 import com.sibang.hankki.home.application.model.HomeContent;
 import com.sibang.hankki.home.application.port.out.HomeContentPort;
 import java.sql.ResultSet;
@@ -8,6 +9,7 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
@@ -73,20 +75,24 @@ public class HomeContentJdbcAdapter implements HomeContentPort {
 
     @Override
     public HomeContent.City saveCity(HomeContent.City city, Instant now) {
-        jdbc.update("""
-                insert into home_city_images (
-                    province_code, city_slug, image_url, image_alt, sort_order, enabled, created_at, updated_at
-                ) values (?, ?, ?, ?, ?, ?, ?, ?)
-                on conflict (province_code) do update set
-                    city_slug = excluded.city_slug,
-                    image_url = excluded.image_url,
-                    image_alt = excluded.image_alt,
-                    sort_order = excluded.sort_order,
-                    enabled = excluded.enabled,
-                    updated_at = excluded.updated_at
-                """,
-                city.provinceCode(), city.citySlug(), city.imageUrl(), city.imageAlt(), city.sortOrder(),
-                city.enabled(), Timestamp.from(now), Timestamp.from(now));
+        try {
+            jdbc.update("""
+                    insert into home_city_images (
+                        province_code, city_slug, image_url, image_alt, sort_order, enabled, created_at, updated_at
+                    ) values (?, ?, ?, ?, ?, ?, ?, ?)
+                    on conflict (province_code) do update set
+                        city_slug = excluded.city_slug,
+                        image_url = excluded.image_url,
+                        image_alt = excluded.image_alt,
+                        sort_order = excluded.sort_order,
+                        enabled = excluded.enabled,
+                        updated_at = excluded.updated_at
+                    """,
+                    city.provinceCode(), city.citySlug(), city.imageUrl(), city.imageAlt(), city.sortOrder(),
+                    city.enabled(), Timestamp.from(now), Timestamp.from(now));
+        } catch (DataIntegrityViolationException exception) {
+            throw new HomeContentConflictException("citySlug is already assigned to another province");
+        }
         return city;
     }
 
