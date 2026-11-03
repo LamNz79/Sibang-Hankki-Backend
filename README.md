@@ -85,6 +85,30 @@ are `null`, `slotMatrix` is empty, and clients should use the date/party-size av
 Restaurant detail also exposes the persisted public booking limits as nullable `bookingPolicy`; list and favorite
 summaries remain unchanged and do not load booking settings.
 
+## Homepage content API
+
+The customer homepage reads localized, system-managed content without authentication:
+
+```http
+GET /api/home-content?locale=vi
+```
+
+Supported locales are `vi`, `en`, and `ko`; missing or invalid values default to English. Localized hero text
+falls back from the requested locale to English and then to the first non-blank translation. Disabled hero and
+city entries are omitted from the public response.
+
+System Admin manages the complete configuration through ADMIN-only endpoints:
+
+```http
+GET /api/admin/home-content
+PUT /api/admin/home-content/hero
+PUT /api/admin/home-content/cities/{provinceCode}
+```
+
+The two PUT endpoints require CSRF. Image URLs accept `http://`, `https://`, or safe root-relative `/images/`
+paths. Hero targets must be internal root-relative paths. Flyway V21 seeds the Royal Pavilion hero and the
+Ho Chi Minh City, Hanoi, and Da Nang city images using frontend-relative sample image paths.
+
 ## Restaurant booking timezones
 
 Booking dates and times are interpreted in each restaurant's persisted IANA timezone. Public restaurant detail
