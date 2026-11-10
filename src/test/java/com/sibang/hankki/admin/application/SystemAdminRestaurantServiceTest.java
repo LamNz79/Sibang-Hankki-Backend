@@ -115,6 +115,28 @@ class SystemAdminRestaurantServiceTest {
     }
 
     @Test
+    void validatesAndStoresCoordinatesAsAPair() {
+        given(port.create(any())).willAnswer(invocation -> invocation.getArgument(0));
+
+        var result = service.create(new CreateRestaurantCommand(
+                "mapped-restaurant", "Mapped Restaurant", null, null, null, null, null, null,
+                "Asia/Ho_Chi_Minh", null, 79, 26734, 10.7756, 106.7039));
+
+        assertThat(result.latitude()).isEqualTo(10.7756);
+        assertThat(result.longitude()).isEqualTo(106.7039);
+        assertThatThrownBy(() -> service.create(new CreateRestaurantCommand(
+                "missing-longitude", "Restaurant", null, null, null, null, null, null,
+                "Asia/Ho_Chi_Minh", null, 79, 26734, 10.7756, null)))
+                .isInstanceOf(InvalidAdminQueryException.class)
+                .hasMessageContaining("provided together");
+        assertThatThrownBy(() -> service.create(new CreateRestaurantCommand(
+                "invalid-latitude", "Restaurant", null, null, null, null, null, null,
+                "Asia/Ho_Chi_Minh", null, 79, 26734, 91.0, 106.7039)))
+                .isInstanceOf(InvalidAdminQueryException.class)
+                .hasMessageContaining("latitude");
+    }
+
+    @Test
     void updatesEditableFieldsWithoutChangingSlugOrApprovalStatus() {
         RestaurantProfileData current = restaurant("DRAFT");
         given(port.findByIdForUpdate(RESTAURANT_ID)).willReturn(Optional.of(current));

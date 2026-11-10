@@ -60,6 +60,20 @@ class RestaurantCatalogServiceTest {
     }
 
     @Test
+    void exposesCoordinatesInThePublicCatalog() {
+        RestaurantData restaurant = new RestaurantData(
+                UUID.randomUUID(), "mapped", "Mapped Restaurant", "Description", "vietnamese", "Vietnamese",
+                "ho-chi-minh", "District 1", "District 1", "Address", "150K - 350K",
+                "Asia/Ho_Chi_Minh", 10.7756, 106.7039);
+        given(catalogPort.findAllActiveRestaurants(null, null)).willReturn(List.of(restaurant));
+
+        var response = service.restaurants(null, null).get(0);
+
+        assertThat(response.latitude()).isEqualTo(10.7756);
+        assertThat(response.longitude()).isEqualTo(106.7039);
+    }
+
+    @Test
     void detailIncludesOnlyAvailableItemsAndHidesEmptyCategories() {
         RestaurantData restaurant = restaurant();
         UUID visibleCategoryId = UUID.randomUUID();

@@ -113,12 +113,14 @@ public class SystemAdminController {
             String timezone,
             String priceRange,
             Integer provinceCode,
-            Integer wardCode) {
+            Integer wardCode,
+            Double latitude,
+            Double longitude) {
 
         CreateRestaurantCommand toCommand() {
             return new CreateRestaurantCommand(
                     slug, name, description, cuisineType, cuisineLabel, address, phone, email, timezone, priceRange,
-                    provinceCode, wardCode);
+                    provinceCode, wardCode, latitude, longitude);
         }
     }
 
@@ -133,12 +135,14 @@ public class SystemAdminController {
             String timezone,
             String priceRange,
             Integer provinceCode,
-            Integer wardCode) {
+            Integer wardCode,
+            Double latitude,
+            Double longitude) {
 
         UpdateRestaurantCommand toCommand() {
             return new UpdateRestaurantCommand(
                     name, description, cuisineType, cuisineLabel, address, phone, email, timezone, priceRange,
-                    provinceCode, wardCode);
+                    provinceCode, wardCode, latitude, longitude);
         }
     }
 }

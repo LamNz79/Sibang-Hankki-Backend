@@ -16,7 +16,17 @@ public record RestaurantSummaryResponse(
         String availableText,
         String availableFrom,
         String priceKey,
-        List<String> benefits) {
+        List<String> benefits,
+        Double latitude,
+        Double longitude) {
+
+    public RestaurantSummaryResponse(
+            String slug, String name, String citySlug, String area, String cuisineLabel, String cuisineKey,
+            double rating, String heroAccent, String imageUrl, String imageAlt, String availableText,
+            String availableFrom, String priceKey, List<String> benefits) {
+        this(slug, name, citySlug, area, cuisineLabel, cuisineKey, rating, heroAccent, imageUrl, imageAlt,
+                availableText, availableFrom, priceKey, benefits, null, null);
+    }
 
     public static RestaurantSummaryResponse from(RestaurantResponse restaurant) {
         return new RestaurantSummaryResponse(
@@ -33,6 +43,8 @@ public record RestaurantSummaryResponse(
                 restaurant.availableText(),
                 restaurant.availableFrom(),
                 restaurant.priceKey(),
-                restaurant.benefits());
+                restaurant.benefits(),
+                restaurant.latitude(),
+                restaurant.longitude());
     }
 }

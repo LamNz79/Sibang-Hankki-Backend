@@ -32,7 +32,22 @@ public record RestaurantResponse(
         Map<String, Map<String, List<String>>> slotMatrix,
         List<MenuCategory> menuCategories,
         String timezone,
-        BookingPolicy bookingPolicy) {
+        BookingPolicy bookingPolicy,
+        Double latitude,
+        Double longitude) {
+
+    public RestaurantResponse(
+            String slug, String name, String citySlug, String area, String district, String cuisineLabel,
+            String cuisineKey, double rating, int ratingCount, String priceRangeLabel, String heroAccent,
+            String imageUrl, String imageAlt, String openHours, String address, String availableText,
+            String availableFrom, String priceKey, List<String> benefits, List<String> tags, int galleryCount,
+            List<GalleryImage> galleryImages, String summary, Map<String, Map<String, List<String>>> slotMatrix,
+            List<MenuCategory> menuCategories, String timezone, BookingPolicy bookingPolicy) {
+        this(slug, name, citySlug, area, district, cuisineLabel, cuisineKey, rating, ratingCount,
+                priceRangeLabel, heroAccent, imageUrl, imageAlt, openHours, address, availableText,
+                availableFrom, priceKey, benefits, tags, galleryCount, galleryImages, summary, slotMatrix,
+                menuCategories, timezone, bookingPolicy, null, null);
+    }
 
     public record GalleryImage(String imageUrl, String imageAlt) {
     }

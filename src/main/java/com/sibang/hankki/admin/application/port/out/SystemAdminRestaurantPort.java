@@ -45,7 +45,19 @@ public interface SystemAdminRestaurantPort {
             String priceRange,
             String approvalStatus,
             Instant createdAt,
-            Instant updatedAt) {
+            Instant updatedAt,
+            Double latitude,
+            Double longitude) {
+
+        public RestaurantProfileData(
+                UUID id, String slug, String name, String description, String cuisineType, String cuisineLabel,
+                String citySlug, String area, String district, Integer provinceCode, String provinceName,
+                Integer wardCode, String wardName, String address, String phone, String email, String timezone,
+                String priceRange, String approvalStatus, Instant createdAt, Instant updatedAt) {
+            this(id, slug, name, description, cuisineType, cuisineLabel, citySlug, area, district,
+                    provinceCode, provinceName, wardCode, wardName, address, phone, email, timezone,
+                    priceRange, approvalStatus, createdAt, updatedAt, null, null);
+        }
 
         public RestaurantProfileData(
                 UUID id, String slug, String name, String description, String cuisineType, String cuisineLabel,
@@ -53,7 +65,7 @@ public interface SystemAdminRestaurantPort {
                 String timezone, String priceRange, String approvalStatus, Instant createdAt, Instant updatedAt) {
             this(id, slug, name, description, cuisineType, cuisineLabel, citySlug, area, district,
                     null, null, null, null, address, phone, email, timezone, priceRange, approvalStatus,
-                    createdAt, updatedAt);
+                    createdAt, updatedAt, null, null);
         }
     }
 
@@ -73,6 +85,16 @@ public interface SystemAdminRestaurantPort {
             String phone,
             String email,
             String timezone,
-            String priceRange) {
+            String priceRange,
+            Double latitude,
+            Double longitude) {
+
+        public RestaurantProfileUpdate(
+                String name, String description, String cuisineType, String cuisineLabel, String citySlug,
+                String area, String district, Integer provinceCode, String provinceName, Integer wardCode,
+                String wardName, String address, String phone, String email, String timezone, String priceRange) {
+            this(name, description, cuisineType, cuisineLabel, citySlug, area, district, provinceCode,
+                    provinceName, wardCode, wardName, address, phone, email, timezone, priceRange, null, null);
+        }
     }
 }

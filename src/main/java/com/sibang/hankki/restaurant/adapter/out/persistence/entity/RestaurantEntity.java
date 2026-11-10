@@ -53,6 +53,10 @@ public class RestaurantEntity {
     @Column(columnDefinition = "text")
     private String address;
 
+    private Double latitude;
+
+    private Double longitude;
+
     @Column(length = 30)
     private String phone;
 
@@ -170,6 +174,14 @@ public class RestaurantEntity {
         return address;
     }
 
+    public Double getLatitude() {
+        return latitude;
+    }
+
+    public Double getLongitude() {
+        return longitude;
+    }
+
     public String getPhone() {
         return phone;
     }
@@ -243,7 +255,9 @@ public class RestaurantEntity {
             Integer provinceCode,
             String provinceName,
             Integer wardCode,
-            String wardName) {
+            String wardName,
+            Double latitude,
+            Double longitude) {
         this.name = name;
         this.description = description;
         this.cuisineType = cuisineType;
@@ -260,6 +274,8 @@ public class RestaurantEntity {
         this.provinceName = provinceName;
         this.wardCode = wardCode;
         this.wardName = wardName;
+        this.latitude = latitude;
+        this.longitude = longitude;
     }
 
     public void updateAdministrativeLocation(
@@ -268,6 +284,11 @@ public class RestaurantEntity {
         this.provinceName = provinceName;
         this.wardCode = wardCode;
         this.wardName = wardName;
+    }
+
+    public void updateCoordinates(Double latitude, Double longitude) {
+        this.latitude = latitude;
+        this.longitude = longitude;
     }
 
     public void archive(Instant deletedAt) {

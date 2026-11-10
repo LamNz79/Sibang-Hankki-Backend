@@ -63,12 +63,13 @@ public class SystemAdminRestaurantService implements SystemAdminRestaurantUseCas
                 command.name(), command.description(), command.cuisineType(), command.cuisineLabel(),
                 command.address(), command.phone(), command.email(), command.timezone() == null || command.timezone().isBlank()
                         ? DEFAULT_TIMEZONE : command.timezone(),
-                command.priceRange(), location, null);
+                command.priceRange(), location, null, command.latitude(), command.longitude());
         return toDetail(restaurantPort.create(new RestaurantProfileData(
                 UUID.randomUUID(), slug, profile.name(), profile.description(), profile.cuisineType(),
                 profile.cuisineLabel(), profile.citySlug(), profile.area(), profile.district(),
                 profile.provinceCode(), profile.provinceName(), profile.wardCode(), profile.wardName(), profile.address(),
-                profile.phone(), profile.email(), profile.timezone(), profile.priceRange(), "DRAFT", null, null)));
+                profile.phone(), profile.email(), profile.timezone(), profile.priceRange(), "DRAFT", null, null,
+                profile.latitude(), profile.longitude())));
     }
 
     @Override
@@ -82,7 +83,7 @@ public class SystemAdminRestaurantService implements SystemAdminRestaurantUseCas
         RestaurantProfileUpdate profile = profile(
                 command.name(), command.description(), command.cuisineType(), command.cuisineLabel(),
                 command.address(), command.phone(), command.email(), command.timezone(), command.priceRange(),
-                location, current.area());
+                location, current.area(), command.latitude(), command.longitude());
         if (!current.timezone().equals(profile.timezone())
                 && (restaurantPort.hasBookingSlots(restaurantId) || restaurantPort.hasReservations(restaurantId))) {
             throw new AdminRestaurantConflictException(
@@ -131,19 +132,34 @@ public class SystemAdminRestaurantService implements SystemAdminRestaurantUseCas
             String timezone,
             String priceRange,
             LocationSelection location,
-            String area) {
+            String area,
+            Double latitude,
+            Double longitude) {
         String normalizedTimezone = required(timezone, "timezone", 64);
         try {
             ZoneId.of(normalizedTimezone);
         } catch (RuntimeException exception) {
             throw invalid("timezone is invalid");
         }
+        validateCoordinates(latitude, longitude);
         return new RestaurantProfileUpdate(
                 required(name, "name", 200), optional(description, Integer.MAX_VALUE), optional(cuisineType, 160),
                 optional(cuisineLabel, 160), location.citySlug(), optional(area, 160), location.ward().name(),
                 location.province().code(), location.province().name(), location.ward().code(), location.ward().name(),
                 optional(address, Integer.MAX_VALUE), optional(phone, 30),
-                optional(email, 320), normalizedTimezone, optional(priceRange, 40));
+                optional(email, 320), normalizedTimezone, optional(priceRange, 40), latitude, longitude);
+    }
+
+    private void validateCoordinates(Double latitude, Double longitude) {
+        if ((latitude == null) != (longitude == null)) {
+            throw invalid("latitude and longitude must be provided together");
+        }
+        if (latitude != null && (!Double.isFinite(latitude) || latitude < -90 || latitude > 90)) {
+            throw invalid("latitude must be between -90 and 90");
+        }
+        if (longitude != null && (!Double.isFinite(longitude) || longitude < -180 || longitude > 180)) {
+            throw invalid("longitude must be between -180 and 180");
+        }
     }
 
     private LocationSelection resolveLocation(Integer provinceCode, Integer wardCode) {
@@ -190,7 +206,7 @@ public class SystemAdminRestaurantService implements SystemAdminRestaurantUseCas
                 restaurant.district(), restaurant.provinceCode(), restaurant.provinceName(), restaurant.wardCode(),
                 restaurant.wardName(), restaurant.address(), restaurant.phone(), restaurant.email(),
                 restaurant.timezone(), restaurant.priceRange(), restaurant.approvalStatus(), restaurant.createdAt(),
-                restaurant.updatedAt());
+                restaurant.updatedAt(), restaurant.latitude(), restaurant.longitude());
     }
 
     private record LocationSelection(Province province, Ward ward, String citySlug) {

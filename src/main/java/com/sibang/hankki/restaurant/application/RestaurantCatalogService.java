@@ -147,7 +147,9 @@ public class RestaurantCatalogService implements RestaurantCatalogUseCase {
                         ? bookingSettingsPort.findByRestaurantId(restaurant.id())
                                 .map(this::publicBookingPolicy)
                                 .orElse(null)
-                        : null);
+                        : null,
+                restaurant.latitude(),
+                restaurant.longitude());
     }
 
     private RestaurantResponse.BookingPolicy publicBookingPolicy(BookingSettings settings) {

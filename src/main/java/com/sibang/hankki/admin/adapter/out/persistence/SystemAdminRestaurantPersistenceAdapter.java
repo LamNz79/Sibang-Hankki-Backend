@@ -47,6 +47,7 @@ public class SystemAdminRestaurantPersistenceAdapter implements SystemAdminResta
                 data.timezone(), data.priceRange(), data.approvalStatus());
         restaurant.updateAdministrativeLocation(
                 data.provinceCode(), data.provinceName(), data.wardCode(), data.wardName());
+        restaurant.updateCoordinates(data.latitude(), data.longitude());
         try {
             entityManager.persist(restaurant);
             entityManager.flush();
@@ -65,7 +66,8 @@ public class SystemAdminRestaurantPersistenceAdapter implements SystemAdminResta
         restaurant.updateAdminProfile(
                 update.name(), update.description(), update.cuisineType(), update.cuisineLabel(), update.citySlug(),
                 update.area(), update.district(), update.address(), update.phone(), update.email(), update.timezone(),
-                update.priceRange(), update.provinceCode(), update.provinceName(), update.wardCode(), update.wardName());
+                update.priceRange(), update.provinceCode(), update.provinceName(), update.wardCode(), update.wardName(),
+                update.latitude(), update.longitude());
         return toData(repository.saveAndFlush(restaurant));
     }
 
@@ -99,7 +101,8 @@ public class SystemAdminRestaurantPersistenceAdapter implements SystemAdminResta
                 restaurant.getProvinceName(), restaurant.getWardCode(), restaurant.getWardName(),
                 restaurant.getAddress(), restaurant.getPhone(),
                 restaurant.getEmail(), restaurant.getTimezone(), restaurant.getPriceRange(),
-                restaurant.getApprovalStatus(), restaurant.getCreatedAt(), restaurant.getUpdatedAt());
+                restaurant.getApprovalStatus(), restaurant.getCreatedAt(), restaurant.getUpdatedAt(),
+                restaurant.getLatitude(), restaurant.getLongitude());
     }
 
     private boolean hasConstraintViolation(Throwable exception) {
