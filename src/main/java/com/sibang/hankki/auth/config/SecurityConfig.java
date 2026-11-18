@@ -26,6 +26,7 @@ public class SecurityConfig {
                 .addFilterAfter(new ActiveSessionFilter(userDetailsService), SecurityContextHolderFilter.class)
                 .csrf(csrf -> csrf.ignoringRequestMatchers(
                         "/api/reservations",
+                        "/api/payments/vnpay/reservations/*",
                         "/api/customer/reservations/*/cancel",
                         "/api/customer/reservations/*/check-in-token",
                         "/api/customer/reservations/*/change-requests",
