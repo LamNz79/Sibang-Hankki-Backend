@@ -2,9 +2,10 @@ package com.sibang.hankki.admin.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 import com.sibang.hankki.admin.application.exception.AdminUserConflictException;
 import com.sibang.hankki.admin.application.port.in.SystemAdminUserUseCase.CreateUserCommand;
@@ -60,6 +61,31 @@ class SystemAdminUserServiceTest {
     }
 
     @Test
+    void rejectsBlankCreatePasswordBeforeEncodingOrPersistence() {
+        var service = new SystemAdminUserService(port, passwordEncoder);
+
+        assertThatThrownBy(() -> service.create(new CreateUserCommand(
+                "customer01", null, "        ", "Customer", null)))
+                .isInstanceOf(com.sibang.hankki.admin.application.exception.InvalidAdminQueryException.class);
+
+        verify(passwordEncoder, never()).encode(anyString());
+        verify(port, never()).create(
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any(), anyString(),
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void rejectsCreatePasswordOver72Utf8BytesBeforeEncoding() {
+        var service = new SystemAdminUserService(port, passwordEncoder);
+
+        assertThatThrownBy(() -> service.create(new CreateUserCommand(
+                "customer01", null, "가".repeat(25), "Customer", null)))
+                .isInstanceOf(com.sibang.hankki.admin.application.exception.InvalidAdminQueryException.class);
+
+        verify(passwordEncoder, never()).encode(anyString());
+    }
+
+    @Test
     void adminProfileCannotBeUpdated() {
         given(port.findByIdForUpdate(USER_ID)).willReturn(Optional.of(user("ADMIN", null)));
         var service = new SystemAdminUserService(port, passwordEncoder);
@@ -90,6 +116,18 @@ class SystemAdminUserServiceTest {
         given(port.findByIdForUpdate(USER_ID)).willReturn(Optional.of(user("ADMIN", null)));
         assertThatThrownBy(() -> service.resetPassword(USER_ID, "TemporaryPassword@2026!"))
                 .isInstanceOf(AdminUserConflictException.class);
+        verify(port, never()).updatePasswordHash(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString());
+    }
+
+    @Test
+    void rejectsResetPasswordOver72Utf8BytesBeforeEncoding() {
+        var service = new SystemAdminUserService(port, passwordEncoder);
+
+        assertThatThrownBy(() -> service.resetPassword(USER_ID, "가".repeat(25)))
+                .isInstanceOf(com.sibang.hankki.admin.application.exception.InvalidAdminQueryException.class);
+
+        verify(passwordEncoder, never()).encode(anyString());
         verify(port, never()).updatePasswordHash(
                 org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString());
     }

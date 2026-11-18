@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 
 import com.sibang.hankki.user.adapter.out.persistence.entity.UserEntity;
@@ -13,7 +14,6 @@ import com.sibang.hankki.user.adapter.out.persistence.repository.UserAuthenticat
 import com.sibang.hankki.user.application.exception.DuplicateUseridException;
 import com.sibang.hankki.user.application.exception.InvalidCustomerRegistrationException;
 import com.sibang.hankki.user.application.port.in.RegisterCustomerUseCase.RegisterCustomerCommand;
-import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -35,7 +35,7 @@ class CustomerRegistrationServiceTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        passwordEncoder = new BCryptPasswordEncoder();
+        passwordEncoder = spy(new BCryptPasswordEncoder());
         service = new CustomerRegistrationService(repository, passwordEncoder);
     }
 
@@ -73,6 +73,7 @@ class CustomerRegistrationServiceTest {
     @MethodSource("invalidCommands")
     void invalidInputIsRejected(RegisterCustomerCommand command) {
         assertThrows(InvalidCustomerRegistrationException.class, () -> service.register(command));
+        verify(passwordEncoder, never()).encode(org.mockito.ArgumentMatchers.anyString());
         verify(repository, never()).saveAndFlush(org.mockito.ArgumentMatchers.any());
     }
 
@@ -82,7 +83,10 @@ class CustomerRegistrationServiceTest {
                 Arguments.of(new RegisterCustomerCommand("ab", "customer@example.com", "Name", "Customer@2026")),
                 Arguments.of(new RegisterCustomerCommand("customer01", "invalid", "Name", "Customer@2026")),
                 Arguments.of(new RegisterCustomerCommand("customer01", "customer@example.com", " ", "Customer@2026")),
-                Arguments.of(new RegisterCustomerCommand("customer01", "customer@example.com", "Name", "short")));
+                Arguments.of(new RegisterCustomerCommand("customer01", "customer@example.com", "Name", "short")),
+                Arguments.of(new RegisterCustomerCommand("customer01", "customer@example.com", "Name", "        ")),
+                Arguments.of(new RegisterCustomerCommand(
+                        "customer01", "customer@example.com", "Name", "가".repeat(25))));
     }
 
     private RegisterCustomerCommand validCommand() {

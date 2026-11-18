@@ -72,4 +72,17 @@ class PasswordManagementServiceTest {
                 USER_ID, new ChangePasswordCommand("OldPassword@2026!", "x".repeat(73))))
                 .isInstanceOf(InvalidPasswordRequestException.class);
     }
+
+    @Test
+    void rejectsNewPasswordOver72Utf8BytesBeforeEncoding() {
+        PasswordManagementService service = new PasswordManagementService(repository, passwordEncoder);
+
+        assertThatThrownBy(() -> service.change(
+                USER_ID, new ChangePasswordCommand("OldPassword@2026!", "가".repeat(25))))
+                .isInstanceOf(InvalidPasswordRequestException.class);
+
+        verify(repository, never()).findByIdAndStatusAndDeletedAtIsNull(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString());
+        verify(passwordEncoder, never()).encode(org.mockito.ArgumentMatchers.anyString());
+    }
 }
