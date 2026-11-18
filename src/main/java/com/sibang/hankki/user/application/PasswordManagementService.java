@@ -5,6 +5,7 @@ import com.sibang.hankki.user.adapter.out.persistence.repository.UserAuthenticat
 import com.sibang.hankki.user.application.exception.IncorrectCurrentPasswordException;
 import com.sibang.hankki.user.application.exception.InvalidPasswordRequestException;
 import com.sibang.hankki.user.application.port.in.ChangePasswordUseCase;
+import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -43,8 +44,9 @@ public class PasswordManagementService implements ChangePasswordUseCase {
         if (command.newPassword() == null
                 || command.newPassword().isBlank()
                 || command.newPassword().length() < 8
-                || command.newPassword().length() > 72) {
-            throw new InvalidPasswordRequestException("newPassword must be between 8 and 72 characters");
+                || command.newPassword().getBytes(StandardCharsets.UTF_8).length > 72) {
+            throw new InvalidPasswordRequestException(
+                    "newPassword must be at least 8 characters and at most 72 UTF-8 bytes");
         }
     }
 }

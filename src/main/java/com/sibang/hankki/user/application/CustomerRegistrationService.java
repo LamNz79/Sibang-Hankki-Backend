@@ -5,6 +5,7 @@ import com.sibang.hankki.user.adapter.out.persistence.repository.UserAuthenticat
 import com.sibang.hankki.user.application.exception.DuplicateUseridException;
 import com.sibang.hankki.user.application.exception.InvalidCustomerRegistrationException;
 import com.sibang.hankki.user.application.port.in.RegisterCustomerUseCase;
+import java.nio.charset.StandardCharsets;
 import java.util.regex.Pattern;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -61,8 +62,12 @@ public class CustomerRegistrationService implements RegisterCustomerUseCase {
         if (email == null || email.length() > 320 || !EMAIL.matcher(email).matches()) {
             throw new InvalidCustomerRegistrationException("email must be valid and at most 320 characters");
         }
-        if (password == null || password.length() < 8 || password.length() > 72) {
-            throw new InvalidCustomerRegistrationException("password must be between 8 and 72 characters");
+        if (password == null
+                || password.isBlank()
+                || password.length() < 8
+                || password.getBytes(StandardCharsets.UTF_8).length > 72) {
+            throw new InvalidCustomerRegistrationException(
+                    "password must be at least 8 characters and at most 72 UTF-8 bytes");
         }
     }
 

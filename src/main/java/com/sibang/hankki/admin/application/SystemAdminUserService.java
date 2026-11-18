@@ -7,6 +7,7 @@ import com.sibang.hankki.admin.application.port.in.SystemAdminReadUseCase.AdminU
 import com.sibang.hankki.admin.application.port.in.SystemAdminUserUseCase;
 import com.sibang.hankki.admin.application.port.out.SystemAdminQueryPort.AdminUserData;
 import com.sibang.hankki.admin.application.port.out.SystemAdminUserPort;
+import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 import java.util.regex.Pattern;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -47,8 +48,11 @@ public class SystemAdminUserService implements SystemAdminUserUseCase {
         String email = email(command.email());
         String phone = optional(command.phone(), 30);
         String password = command.password();
-        if (password == null || password.length() < 8 || password.length() > 72) {
-            throw invalid("password must be between 8 and 72 characters");
+        if (password == null
+                || password.isBlank()
+                || password.length() < 8
+                || password.getBytes(StandardCharsets.UTF_8).length > 72) {
+            throw invalid("password must be at least 8 characters and at most 72 UTF-8 bytes");
         }
         if (userPort.existsByUserid(userid)) {
             throw new AdminUserConflictException("userid already exists");
@@ -74,8 +78,11 @@ public class SystemAdminUserService implements SystemAdminUserUseCase {
     @Override
     @Transactional
     public void resetPassword(UUID userId, String newPassword) {
-        if (newPassword == null || newPassword.isBlank() || newPassword.length() < 8 || newPassword.length() > 72) {
-            throw invalid("newPassword must be between 8 and 72 characters");
+        if (newPassword == null
+                || newPassword.isBlank()
+                || newPassword.length() < 8
+                || newPassword.getBytes(StandardCharsets.UTF_8).length > 72) {
+            throw invalid("newPassword must be at least 8 characters and at most 72 UTF-8 bytes");
         }
         AdminUserData user = userPort.findByIdForUpdate(userId)
                 .orElseThrow(() -> new AdminResourceNotFoundException("User not found"));
